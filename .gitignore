@@ -1,0 +1,10 @@
+.nyc_output
+npm-debug.log
+papers
+node_modules
+todo.txt
+\temp_vectors
+info.txt
+\fonts
+*.map
+*.js

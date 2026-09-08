@@ -1,0 +1,76 @@
+import * as React from 'react';
+import { memo, useState } from 'react';
+
+
+interface Props {
+    value: number;
+    min?: number;
+    max?: number;
+    step?: number;
+    valueLabelDisplay?: 'auto' | 'on' | 'off';
+    'aria-labelledby'?: string;
+    onChange?: (
+        event: Event, value: number | number[], activeThumb: number) => void;
+}
+
+
+const Slider = memo(function SimpleSlider(props: Props) {
+    const {
+        value, min = 0, max = 100, step = 1,
+        valueLabelDisplay = 'off', onChange,
+    } = props;
+
+    const [active, setActive] = useState(false);
+
+    const percent = ((value - min) / (max - min)) * 100;
+    const showLabel =
+        valueLabelDisplay === 'on' ||
+        (valueLabelDisplay === 'auto' && active);
+
+    function handleChange(event: React.ChangeEvent<HTMLInputElement>) {
+        if (onChange !== undefined) {
+            onChange(event.nativeEvent, Number(event.target.value), 0);
+        }
+    }
+
+    return (
+        <div style={{ position: 'relative', padding: '6px 0' }}>
+            {showLabel &&
+                <span
+                    style={{
+                        position: 'absolute',
+                        top: '-16px',
+                        left: `${percent}%`,
+                        transform: 'translateX(-50%)',
+                        padding: '1px 5px',
+                        borderRadius: '3px',
+                        fontSize: '12px',
+                        background: '#1976d2',
+                        color: '#fff',
+                        pointerEvents: 'none',
+                        whiteSpace: 'nowrap',
+                    }}
+                >
+                    {value}
+                </span>
+            }
+            <input
+                type="range"
+                value={value}
+                min={min}
+                max={max}
+                step={step}
+                aria-labelledby={props['aria-labelledby']}
+                onChange={handleChange}
+                onMouseEnter={() => setActive(true)}
+                onMouseLeave={() => setActive(false)}
+                onFocus={() => setActive(true)}
+                onBlur={() => setActive(false)}
+                style={{ width: '100%' }}
+            />
+        </div>
+    );
+});
+
+
+export { Slider }

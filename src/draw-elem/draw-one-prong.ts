@@ -1,0 +1,25 @@
+import type { CpNode } from 'flo-mat';
+import { drawFs } from 'flo-draw';
+
+
+/** @hidden */
+function drawOneProng(
+        g: SVGGElement,
+        cpNode: CpNode,
+        classes?: string,
+        delay = 0,
+        scaleFactor = 1) {
+
+    // const cp = cpNode.cp;
+    const { pointOnShape: pos } = cpNode;
+    const { circle } = pos;
+
+    const $posP = drawFs.dot(g, pos.p, 0.02*scaleFactor, 'deeppink', delay);
+    const $circleCenter = drawFs.dot(g, circle.center, 0.01*scaleFactor, 'deeppink', delay);
+    const $circle = drawFs.circle(g, circle, 'deeppink thin5 nofill', delay);
+
+    return [...$posP, ...$circleCenter, ...$circle];
+}
+
+
+export { drawOneProng }

@@ -1,0 +1,58 @@
+pre {
+	padding: 3px;
+}
+
+.card {
+	font-family: "Helvetica Neue",Helvetica,Arial,sans-serif;
+    font-size: 16px;
+    margin: 0 0 15px 0;
+    border: 1px solid #fff;
+    -webkit-box-shadow: 0 0 0 1px #ccc;
+    box-shadow: 0 0 0 1px #ccc;
+    padding: 15px;
+    background-color: #efefef;
+	border-radius: 2px;
+}
+
+.card h2 {
+	margin-top: 0;
+}
+
+.card p.function-description {
+	white-space: pre-wrap
+}
+
+.card h2.name {
+	font-weight: bold;
+}
+
+.card .param-name {
+	font-style:italic;
+}
+
+.card .type {
+	font-weight:bold;
+}
+
+.card .returns {
+	font-style:italic;
+}
+
+.fake-link {
+	color: #337ab7;
+    cursor: pointer;
+}
+
+.fake-link:hover {
+	text-decoration: underline;
+}	
+
+.toggle-params {
+	margin-top:10px;
+	font-size:12px;
+}
+
+.toggle-impl-notes {
+	margin-top:10px;
+	font-size:12px;
+}

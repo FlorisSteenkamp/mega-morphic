@@ -1,0 +1,25 @@
+<?xml version="1.0"?>
+<svg 
+        xmlns="http://www.w3.org/2000/svg"
+        viewBox="0 -1000 1000 1000" 
+        version="1.1"
+        width="1000"
+        height="1000"
+>
+    <path 
+        class="shape"
+        d="
+           M 414 -10
+            C 381 -10 346 10 336 58 
+            L 229 560 
+            L 306 579 
+            L 414 75 
+            L 526 579 
+            L 604 559 
+            L 492 58 
+            C 482 14 456 -10 414 -10 
+            L 414 -10 
+            z
+        "
+    />
+</svg>

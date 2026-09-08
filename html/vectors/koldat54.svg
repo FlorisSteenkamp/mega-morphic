@@ -1,0 +1,17 @@
+<svg
+	xmlns="http://www.w3.org/2000/svg"
+    version="1.1"
+>
+    <path 
+        class="shape"
+        d="
+            M 903 965
+            Q 704 943  702 942 
+            Q 658 959  700 941 
+            L 537 948 
+            L 772 884 
+            L 903 965 
+            Z
+        "
+    />
+</svg>

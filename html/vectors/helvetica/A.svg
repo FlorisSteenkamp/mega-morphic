@@ -1,0 +1,11 @@
+<svg
+	xmlns="http://www.w3.org/2000/svg"
+    version="1.1"
+>
+    <path 
+        class="shape"
+        d="
+            M477 209l71 -209h106l-260 718h-110l-270 -718h100l75 209h288zM219 295l115 316h2l106 -316h-223z
+        "
+    />
+</svg>

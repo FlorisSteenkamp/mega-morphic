@@ -1,0 +1,236 @@
+
+body {
+	margin: 0px;
+	font-family: 'Roboto', sans-serif;
+	font-size: 16px;
+}
+
+
+h2.name {
+	font-size:18px;
+}
+
+/* For modals */
+.modal-label {
+	display:inline-block;
+	margin-bottom:15p;
+	width:100px;
+}
+
+h4 {
+	font-size:20px;
+	margin-top:20px;
+}
+
+h2 {
+	margin-top: 40px;
+}
+
+h2 > a {
+	color: black;
+	text-decoration: none;
+}
+h2 > a:hover {
+	color: black;
+	text-decoration: none;
+}	
+h1 > a {
+	color: black;
+	text-decoration: none;
+}
+h1 > a:hover {
+	color: black;
+	text-decoration: none;
+}
+
+.my-badge {
+	display:inline-block;
+	margin-bottom:15px;
+}
+
+/* SVG */
+
+.test {
+	stroke: blue;
+	stroke-width: 0.1%;
+	fill-opacity: 0.0;
+}
+
+.zoomrect {
+	stroke: #777;
+	stroke-width: 0.1%;
+	fill: none;
+	stroke-dasharray: 0.5%;
+}
+
+
+.node-fill1 { fill: red; }
+.node-fill2 { fill: green; }
+.node-fill3 { fill: blue; }
+
+.mattree circle {
+	fill: #fff;
+	stroke: steelblue;
+	stroke-width: 3px;
+}
+
+.testing {
+	fill-opacity: 0.0;
+	stroke: palevioletred;
+	stroke-width: 3px;
+}
+
+.redblack {
+	stroke: blue;
+	stroke-width: 1px;
+}
+.rb-red {
+	fill: #f00;
+}
+.rb-black {
+	fill: #000;
+}
+
+/*.node text { font: 28px sans-serif; }*/
+
+.link {
+	fill: none;
+	stroke: #ccc;
+	stroke-width: 2px;
+}
+
+.dot { stroke-width: 0.0; }
+
+.shape { 
+	fill:#ddd;stroke-width:0.01%;stroke:#777
+}
+
+.play-shape { 
+	fill:none;stroke-width:0.002%;stroke:#777
+}
+
+.poly-path { 
+	fill:none;stroke-width:0.2%;stroke:deeppink
+}
+
+.shape_ { 
+	fill:#aaa;stroke-width:0.002%;stroke:#444
+}
+
+.circles {
+	fill: #ba5;
+	stroke-width: 0.1;
+}
+.big {
+	stroke-width: 2;
+}
+
+.yellow    { stroke: #ffff00d0; fill: #ffff00d0; }
+.orange    { stroke: #ffa500d0; fill: #ffa500d0; }
+.blue1     { stroke: #0000ffd0; fill: #0000ffd0; }
+.blue2     { stroke: #5555ffd0; fill: #5555ffd0; }
+.blue3     { stroke: #9999ffd0; fill: #aaaaffd0; }
+.purple    { stroke: #a000a0d0; fill: #a000a0d0; }
+.gray      { stroke: #888888d0; fill: #888888d0; }
+.red       { stroke: #FF0000d0; fill: #FF0000d0; }
+.reddish   { stroke: #FF1111d0; fill: #FF1111d0; }
+.green     { stroke: #00FF00d0; fill: #00FF00d0; }
+.blue      { stroke: #0000FFd0; fill: #0000FFd0; }
+.blueish   { stroke: #1111FFd0; fill: #1111FFd0; }
+.cyan      { stroke: #00AAAAd0; fill: #00AAAAd0; }
+.pink      { stroke: #ffc0cbd0; fill: #ffc0cbd0; }
+.pinker    { stroke: #ff00ffd0; fill: #ff00ffd0;  }
+.deeppink  { stroke: #ff1493d0; fill: #ff1493d0; }
+.brown     { stroke: #a52a2ad0; fill: #a52a2ad0; }
+.black     { stroke: #000000d0; fill: #000000d0; }
+.darkgreen { stroke: #008800d0; fill: #008800d0; }
+
+.thin1  { stroke-width: 0.01%; }
+.thin2  { stroke-width: 0.02%; }
+.thin5  { stroke-width: 0.05%; }
+.thin10 { stroke-width: 0.10%; }
+.thin20 { stroke-width: 0.20%; }
+.thin35 { stroke-width: 0.35%; }
+.thin50 { stroke-width: 0.50%; }
+.thin100 { stroke-width: 1%; }
+.thin200 { stroke-width: 2%; }
+.thin500 { stroke-width: 5%; }
+.thin1k { stroke-width: 10%; }
+.thin2k { stroke-width: 20%; }
+
+.nofill { fill-opacity: 0.0; }
+.nostroke { fill-opacity: 1.0; stroke-width: 0px; }
+.fill25 { fill-opacity: 0.25; }
+
+
+.highlight {
+	stroke-width: 2;
+}
+
+
+/* NON SVG */
+
+.bold {
+	font-weight:bold;
+}
+
+.mylabel {
+	display:inline-block;
+	width:100px;
+}
+
+nav ul {
+	list-style-type:none;
+}
+
+.banner {
+	padding: 5px 10px 5px 20px;
+	font-size: 20px;
+	background-color: pink;
+}
+
+.test-mat-form > * {
+	margin-left: 20px;
+	margin-top: 5px;
+}
+
+.panel-group {
+	margin-bottom: 0px;
+}
+
+.panel-group div.panel.panel-default {
+	margin-top: 0px;
+}
+
+.thin-btn {
+	padding: 3px 15px 3px 15px;
+}
+
+
+/* -------------- */
+/*  button group  */
+/* -------------- */
+.btn-group button {
+	background-color: #dbffdc; 
+	border: 1px solid #91be91; 
+	color: black; 
+	padding: 6px 18px; 
+	cursor: pointer; 
+	float: left; 
+  }
+  
+  /* Clear floats (clearfix hack) */
+  .btn-group:after {
+	content: "";
+	clear: both;
+	display: table;
+  }
+  
+  .btn-group button:not(:last-child) {
+	border-right: none; /* Prevent double borders */
+  }
+  
+  /* Add a background color on hover */
+  .btn-group button:hover {
+	background-color: #3e8e41;
+  }

@@ -1,0 +1,56 @@
+<?xml version="1.0"?>
+<svg xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#" xmlns="http://www.w3.org/2000/svg" xmlns:cc="http://creativecommons.org/ns#" xmlns:dc="http://purl.org/dc/elements/1.1/" id="svg4009" viewBox="0 0 477.86 340.32" version="1.1">
+  <path
+    class="shape"
+    d=" M 0 100
+        C 55 100 100 55 100 0 
+        C 100 -55 55 -100 0 -100 
+        C -55 -100 -100 -55 -100 0 
+        C -100 55 -55 100 0 100 
+        z
+ 
+        M 0 50
+        C -27 50 -50 27 -50 0 
+        C -50 -27 -27 -50 0 -50 
+        C 27 -50 50 -27 50 0 
+        C 50 27 27 50 0 50 
+        z
+ 
+        M -25 25
+        C -52 25 -75 2 -75 -25 
+        C -75 -52 -52 -75 -25 -75 
+        C 2 -75 25 -52 25 -25 
+        C 25 2 2 25 -25 25 
+        z
+    "
+    />
+</svg>
+
+
+
+<!--
+<?xml version="1.0"?>
+<svg xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#" xmlns="http://www.w3.org/2000/svg" xmlns:cc="http://creativecommons.org/ns#" xmlns:dc="http://purl.org/dc/elements/1.1/" id="svg4009" viewBox="0 0 477.86 340.32" version="1.1">
+  <path
+    style="fill:#ddd; stroke:#000;stroke-width:0.02"
+    d="
+        M 457.1081000000 131.7653200000
+        C 457.1081000000 131.4501400000 456.8645900000 131.3427700000 456.5669800000 131.5267000000 
+        C 456.2693700000 131.7106300000 456.0259000000 131.9685000000 456.0259000000 132.0997400000 
+        C 456.0259000000 132.2309800000 456.2693700000 132.3383600000 456.5669800000 132.3383600000 
+        C 456.8645900000 132.3383600000 457.1081000000 132.0804900000 457.1081000000 131.7653200000 
+        z
+    "
+    />
+</svg>
+-->
+
+<!--
+TODO - put back
+import { circleToCubicBeziers } from '../circle-to-cubic-beziers';
+
+const antiClockwiseCircle = circleToCubicBeziers(100);
+const clockwiseCircle     = circleToCubicBeziers(70, false);
+
+export const circle_in_circle = antiClockwiseCircle + ' ' + clockwiseCircle;
+-->

@@ -1,0 +1,27 @@
+{
+    "compilerOptions": {
+        "strict": true,
+        "module": "esnext",
+        "esModuleInterop": true,
+        "allowSyntheticDefaultImports": true,
+        "moduleResolution": "bundler",
+        "target": "esnext",
+        "declaration": false,
+        "noEmitOnError": true,
+        "sourceMap": true,
+        "jsx": "react",
+        // "rootDir": "./src",
+        "rootDir": "..",
+        "outDir": "./dist",
+        "paths": {
+            "flo-mat": ["../mat/src/index.ts"],
+            // "flo-boolean": ["../boolean/src/index.tsx"]
+        },
+    },
+    "include": [
+        "./src/app.tsx"
+    ],
+    "exclude": [
+        "node_modules"
+    ]
+}

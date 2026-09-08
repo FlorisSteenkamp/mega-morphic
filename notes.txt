@@ -1,0 +1,20 @@
+Send new patch version to npm
+-----------------------------
+From cli
+1. update package versions (`ncu` or `ncu -u`or `ncu -u --reject typescript`)
+2. `npm install`
+3. `npm run dev
+4. `npm test (skip if coverage below will be run anyway)
+5. Commit changes locally and push
+
+
+Info
+====
+npm account name: floris / florissteenkamp
+
+
+TODO
+----
+* more accurate by adding 2-prongs at dull corners
+* more accurate by checking when adding 2 prongs that if they're close but
+points are quite opposing then don't fail them

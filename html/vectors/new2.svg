@@ -1,0 +1,21 @@
+<svg
+	xmlns="http://www.w3.org/2000/svg"
+    version="1.1"
+>
+    <path 
+        class="shape"
+        d=" 
+            M 18 14
+            L9 17
+            L5 17
+            L5 15.20
+              L6.56 15
+            L13 15
+              L6.88 15.20
+            L7 15
+            L7.84 15
+            L8.16 15
+            Z
+        "
+    />
+</svg>
