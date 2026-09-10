@@ -39,7 +39,7 @@ function loadDeducedProps(
             simplify,
             satScale,
             maxCurviness: 0.25,
-            maxLength: 100,
+            maxLength: 40,  // denser exact 2-prongs for the residual layer
             angleIncrement: 15,
             simplifyTolerance: 2**-5
         };

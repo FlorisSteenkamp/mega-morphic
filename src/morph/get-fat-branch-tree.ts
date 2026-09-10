@@ -142,6 +142,78 @@ function getSkeletonDepths(cpChain: CpNode[]): number[] {
 }
 
 
+/**
+ * The CpNodes whose mat curves form the fat branch's linear skeleton path,
+ * ordered from its leaf tip to its other end (each skeleton edge exactly
+ * once).
+ */
+function getSkeletonEdgeCps(fatBranch: FatBranch): CpNode[] {
+    return getSkeletonEdgeCpPairs(fatBranch).map(pair => pair.out);
+}
+
+
+/**
+ * Per skeleton edge of the fat branch's linear path (tip → other end): the
+ * chain CpNode walking it on the outbound boundary side (`out`, in skeleton
+ * direction) and the one walking it back on the other side (`back`, in
+ * REVERSE skeleton direction).
+ */
+function getSkeletonEdgeCpPairs(
+        fatBranch: FatBranch): { out: CpNode; back: CpNode }[] {
+
+    const cpChain = rotateAtTip(closeChain(fatBranch.cpChain));
+    const pairs: { out: CpNode; back: CpNode }[] = [];
+    const edgeIdx = new Map<string, number>();
+
+    for (let i = 0; i < cpChain.length - 1; i++) {
+        const cp = cpChain[i];
+
+        if (cpChain[i+1] === cp.next) {
+            // Skip self-edges: steps between two contacts on the SAME circle
+            // (leaf-tip caps) — boundary walks them once, and they are not
+            // skeleton edges (zero-length mat curves).
+            if (getCircleId(cp) === getCircleId(cp.next)) { continue; }
+
+            const key = getEdgeKey(cp, cp.next);
+            const idx = edgeIdx.get(key);
+            if (idx === undefined) {
+                edgeIdx.set(key, pairs.length);
+                pairs.push({ out: cp, back: undefined! });
+            } else {
+                pairs[idx].back = cp;
+            }
+        }
+    }
+
+    return pairs;
+}
+
+
+/**
+ * The fat branch's linear skeleton path as mat-curve beziers, ordered from
+ * its leaf tip to its other end (each skeleton edge exactly once).
+ */
+function getSkeletonBeziers(fatBranch: FatBranch): number[][][] {
+    return getSkeletonEdgeCps(fatBranch).map(cp => getMatCurveToNext(cp));
+}
+
+
+/**
+ * The maximal-disk radius at each skeleton segment boundary of the fat
+ * branch's linear skeleton path (`getSkeletonBeziers` order; length =
+ * segment count + 1).
+ */
+function getSkeletonRadii(fatBranch: FatBranch): number[] {
+    const cps = getSkeletonEdgeCps(fatBranch);
+    if (cps.length === 0) { return []; }
+
+    return [
+        cps[0].pointOnShape.circle.radius,
+        ...cps.map(cp => cp.next.pointOnShape.circle.radius)
+    ];
+}
+
+
 /** Total skeleton length of a fat branch chain (each edge counted once). */
 function getSkeletonLength(cpChain: CpNode[]): number {
     const seen = new Set<string>();
@@ -197,4 +269,7 @@ function dirAtEnd(ps: number[][]): number[] {
 }
 
 
-export { getFatBranchTree, getSkeletonLength }
+export {
+    getFatBranchTree, getSkeletonLength, getSkeletonBeziers, getSkeletonRadii,
+    getSkeletonEdgeCpPairs
+}

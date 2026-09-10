@@ -27,6 +27,7 @@ interface PageState {
     readonly glyph2Name: string;
     readonly viewbox1: number[][];
     readonly viewbox2: number[][];
+    readonly viewbox3: number[][];
     readonly showDelay: number;
     readonly clickFor : ClickFor;
     readonly satScale: number;

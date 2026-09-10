@@ -1,5 +1,4 @@
 import type { FatBranch, FatBranchEdge } from '../fat-branch.js';
-import { getSkeletonLength } from '../get-fat-branch-tree.js';
 
 
 /** A single fat branch of `tree1` matched to a single fat branch of `tree2`. */
@@ -18,8 +17,6 @@ interface MatchResult {
     readonly inserted: FatBranch[];
     /** the total edit cost of the matching */
     readonly cost: number;
-    /** true if `tree2`'s trunk orientation was flipped for the best match */
-    readonly flipped: boolean;
 }
 
 
@@ -77,9 +74,6 @@ interface Cost {
  * ordered forest edit distance on the edge features `distanceFromLeaf`,
  * `roundSalienceFromLeaf` and `angle` (normalized per tree so the weights and
  * cutoff are scale-free), then grandchildren of matched pairs, etc.
- *
- * Since a trunk's leaf tip choice is arbitrary, both orientations of `tree2`'s
- * trunk are tried and the cheaper match kept.
  */
 function matchTrees(
         tree1: FatBranch,
@@ -96,13 +90,7 @@ function matchTrees(
     const children1 = tree1.children ?? [];
     const children2 = tree2.children ?? [];
 
-    const normal = editForest(children1, children2, new Map(), cost);
-    const flipped = editForest(
-        children1, flipTrunkEdges(tree2), new Map(), cost
-    );
-
-    const useFlipped = flipped.cost < normal.cost;
-    const edit = useFlipped ? flipped : normal;
+    const edit = editForest(children1, children2, new Map(), cost);
 
     const pairs: MatchedPair[] = [[tree1, tree2]];
     const deleted: FatBranch[] = [];
@@ -113,7 +101,7 @@ function matchTrees(
         else { inserted.push(op.b.branch); }
     }
 
-    return { pairs, deleted, inserted, cost: edit.cost, flipped: useFlipped };
+    return { pairs, deleted, inserted, cost: edit.cost };
 }
 
 
@@ -155,30 +143,6 @@ function angleDist(x: number, y: number): number {
     const d = Math.abs(x - y) % (2*Math.PI);
 
     return d > Math.PI ? 2*Math.PI - d : d;
-}
-
-
-/**
- * Returns the trunk's child edges as seen from its other leaf tip: distances
- * and partial saliences measured from the opposite end, angles relative to
- * the reversed travel direction, and the (ordered) children reversed. Deeper
- * levels are unaffected - a child branch's own tip is intrinsic to it.
- */
-function flipTrunkEdges(trunk: FatBranch): FatBranchEdge[] {
-    const skeletonLength = getSkeletonLength(trunk.cpChain);
-
-    return (trunk.children ?? [])
-        .map((edge): FatBranchEdge => ({
-            branch: edge.branch,
-            distanceFromLeaf: skeletonLength - edge.distanceFromLeaf,
-            roundSalienceFromLeaf:
-                trunk.roundSalience - edge.roundSalienceFromLeaf,
-            // Reversing the travel direction maps θ to θ − sign(θ)·π.
-            angle: edge.angle > 0
-                ? edge.angle - Math.PI
-                : edge.angle + Math.PI
-        }))
-        .reverse();
 }
 
 

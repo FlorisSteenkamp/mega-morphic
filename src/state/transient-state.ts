@@ -11,6 +11,7 @@ interface TransientState {
     }
     viewboxStack1: number[][][],
     viewboxStack2: number[][][],
+    viewboxStack3: number[][][],
     zoomState: {
             mouseIsDown: boolean;
             prevViewboxXY: number[];

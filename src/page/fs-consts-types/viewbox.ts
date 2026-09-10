@@ -40,6 +40,15 @@ function getViewBoxForShape(bezierLoops: number[][][][]) {
 }
 
 
+/** The smallest viewbox containing both given viewboxes. */
+function unionViewbox(vb1: number[][], vb2: number[][]): number[][] {
+    return [
+        [Math.min(vb1[0][0], vb2[0][0]), Math.min(vb1[0][1], vb2[0][1])],
+        [Math.max(vb1[1][0], vb2[1][0]), Math.max(vb1[1][1], vb2[1][1])],
+    ];
+}
+
+
 function toViewBoxStr(viewbox: number[][]) {
     let [x,y] = viewbox[0];
     let w = viewbox[1][0] - x;
@@ -54,5 +63,6 @@ function toViewBoxStr(viewbox: number[][]) {
 
 export { 
     getViewBoxForShape,
-    toViewBoxStr
+    toViewBoxStr,
+    unionViewbox
 };

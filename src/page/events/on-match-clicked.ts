@@ -2,7 +2,7 @@ import type { PageData } from '../page-data.js';
 import type { FatBranch } from '../../morph/fat-branch.js';
 import { matchTrees } from '../../morph/match-trees/match-trees.js';
 import { matchColors } from './match-colors.js';
-import { getFatBranchTree } from '../../morph/get-fat-branch-tree.js';
+import { getFatBranchTree, getSkeletonBeziers } from '../../morph/get-fat-branch-tree.js';
 import { drawBeziersAsSinglePath } from '../../draw/draw-beziers-as-single-path.js';
 
 
@@ -13,8 +13,15 @@ function drawFatBranch(
         showDelay?: number) {
 
     const [$path] = drawBeziersAsSinglePath(g, branch.pss, `thin20 ${color} fill25`);
-    if ($path !== undefined && showDelay) {
-        setTimeout(() => $path.remove(), showDelay);
+    const [$medial] = drawBeziersAsSinglePath(
+        g, getSkeletonBeziers(branch), `thin10 ${color} nofill`
+    );
+    const $svgs = [$path, $medial];
+    // const $svgs = [$medial];
+    if (showDelay) {
+        for (const $p of $svgs) {
+            if ($p !== undefined) { setTimeout(() => $p.remove(), showDelay); }
+        }
     }
 }
 
@@ -46,7 +53,7 @@ function onMatchClicked(
     console.log(
         `matched ${r.pairs.length} pairs,`,
         `${r.deleted.length} deleted, ${r.inserted.length} inserted,`,
-        `cost ${r.cost}, flipped ${r.flipped}`
+        `cost ${r.cost}`
     );
 }
 

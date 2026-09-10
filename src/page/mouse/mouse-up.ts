@@ -6,7 +6,7 @@ function mouseUp(
         stateControl: StateControl,
         svgRef: React.RefObject<SVGSVGElement | null>,
         viewbox: number[][],
-        shapeIdx: 1|2) {
+        shapeIdx: 1|2|3) {
 
     return (event: React.MouseEvent<SVGSVGElement, MouseEvent>) => {
         if (event.shiftKey || event.ctrlKey || event.altKey) { return; }
@@ -24,12 +24,14 @@ function mouseUp(
 function clickedForNewViewboxSecond(
         stateControl: StateControl, 
         viewboxXY: number[],
-        shapeIdx: 1|2) {
+        shapeIdx: 1|2|3) {
 
     // Get info
     let { state, upd, transientState } = stateControl;
     let { pageState } = state.appState;
-    const viewbox = shapeIdx === 1 ? pageState.viewbox1 : pageState.viewbox2;
+    const viewbox = shapeIdx === 1 ? pageState.viewbox1
+        : shapeIdx === 2 ? pageState.viewbox2
+        : pageState.viewbox3;
     let { zoomState } = transientState;
     let { prevViewboxXY } = zoomState;
 
@@ -60,9 +62,12 @@ function clickedForNewViewboxSecond(
     if (shapeIdx === 1) {
         transientState.viewboxStack1.push(viewbox);
         upd(pageState, { viewbox1: newViewbox });
-    } else {
+    } else if (shapeIdx === 2) {
         transientState.viewboxStack2.push(viewbox);
         upd(pageState, { viewbox2: newViewbox });
+    } else {
+        transientState.viewboxStack3.push(viewbox);
+        upd(pageState, { viewbox3: newViewbox });
     }
 }
 

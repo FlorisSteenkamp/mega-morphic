@@ -81,17 +81,30 @@ function splitAtBreakpoints(
     return out;
 }
 
-/**
- * Resamples two branches so their mat-curve beziers correspond exactly: both
- * are split at the shared set of normalized arc-length breakpoints and elevated
- * to cubic, yielding equal bezier counts with matching control points.
- */
-function distributeBeziersEvenly(
-        branch1: CpNode[],
-        branch2: CpNode[]): [MorphBranch, MorphBranch] {
+/** Piecewise-linear radius at normalized arc-length position `u`. */
+function radiusAt(radii: number[], knots: number[], u: number): number {
+    let i = 0;
+    while (i < knots.length - 2 && knots[i + 1] <= u) { i++; }
 
-    const b1 = branchBeziers(branch1);
-    const b2 = branchBeziers(branch2);
+    const span = knots[i + 1] - knots[i];
+    const f = span <= EPS ? 0 : clamp01((u - knots[i]) / span);
+
+    return radii[i]*(1 - f) + radii[i + 1]*f;
+}
+
+/**
+ * Like `distributeBezierListsEvenly` but also resamples each branch's
+ * maximal-disk radii (given per segment boundary) at the shared breakpoints,
+ * so radii correspond index-for-index too. The shared normalized breakpoints
+ * (`us`, one per segment boundary) are included in each result.
+ */
+function distributeBezierListsWithRadii(
+        b1: number[][][],
+        r1: number[],
+        b2: number[][][],
+        r2: number[]): [
+            { beziers: number[][][]; radii: number[]; us: number[] },
+            { beziers: number[][][]; radii: number[]; us: number[] }] {
 
     const l1 = b1.map(ps => length([0, 1], ps));
     const l2 = b2.map(ps => length([0, 1], ps));
@@ -102,8 +115,57 @@ function distributeBeziersEvenly(
     const k2 = normalizedKnots(l2, L2);
     const breakpoints = unionKnots(k1, k2);
 
-    const beziers1 = splitAtBreakpoints(b1, l1, k1, L1, breakpoints);
-    const beziers2 = splitAtBreakpoints(b2, l2, k2, L2, breakpoints);
+    return [
+        {
+            beziers: splitAtBreakpoints(b1, l1, k1, L1, breakpoints),
+            radii: breakpoints.map(u => radiusAt(r1, k1, u)),
+            us: breakpoints,
+        },
+        {
+            beziers: splitAtBreakpoints(b2, l2, k2, L2, breakpoints),
+            radii: breakpoints.map(u => radiusAt(r2, k2, u)),
+            us: breakpoints,
+        },
+    ];
+}
+
+/**
+ * Resamples two bezier lists so they correspond exactly: both are split at
+ * the shared set of normalized arc-length breakpoints and elevated to cubic,
+ * yielding equal bezier counts with matching control points.
+ */
+function distributeBezierListsEvenly(
+        b1: number[][][],
+        b2: number[][][]): [number[][][], number[][][]] {
+
+    const l1 = b1.map(ps => length([0, 1], ps));
+    const l2 = b2.map(ps => length([0, 1], ps));
+    const L1 = sum(l1);
+    const L2 = sum(l2);
+
+    const k1 = normalizedKnots(l1, L1);
+    const k2 = normalizedKnots(l2, L2);
+    const breakpoints = unionKnots(k1, k2);
+
+    return [
+        splitAtBreakpoints(b1, l1, k1, L1, breakpoints),
+        splitAtBreakpoints(b2, l2, k2, L2, breakpoints),
+    ];
+}
+
+
+/**
+ * Resamples two branches so their mat-curve beziers correspond exactly: both
+ * are split at the shared set of normalized arc-length breakpoints and elevated
+ * to cubic, yielding equal bezier counts with matching control points.
+ */
+function distributeBeziersEvenly(
+        branch1: CpNode[],
+        branch2: CpNode[]): [MorphBranch, MorphBranch] {
+
+    const [beziers1, beziers2] = distributeBezierListsEvenly(
+        branchBeziers(branch1), branchBeziers(branch2)
+    );
 
     return [
         { cpNodes: branch1, beziers: beziers1 },
@@ -112,5 +174,9 @@ function distributeBeziersEvenly(
 }
 
 
-export { distributeBeziersEvenly }
+export {
+    distributeBeziersEvenly,
+    distributeBezierListsEvenly,
+    distributeBezierListsWithRadii
+}
 export type { MorphBranch }

@@ -1,6 +1,4 @@
-import { getLargestVertex, Mat } from "flo-mat";
 import { getShapeArea, getShapeCentroid, getPrincipalAxes } from 'flo-boolean';
-import { getBranchTree } from "./branch-tree/get-branch-tree.js";
 
 
 /** A coarse similarity-transform pose of a single Jordan-loop shape. */
@@ -22,12 +20,7 @@ interface Pose {
  * / reflection ambiguity is left for the finer, correspondence-based step.
  */
 function procrustes(
-        bezierLoop: (number[][])[],
-        mats: Mat[]): Pose {
-
-    // Kept for the upcoming correspondence-based (fine) step.
-    const cpNode = getLargestVertex(mats[0].cpNode);
-    const tree = getBranchTree(cpNode);
+        bezierLoop: (number[][])[]): Pose {
 
     const centroid = getShapeCentroid(bezierLoop);
     // getShapeArea is signed (negative for clockwise loops); use magnitude.

@@ -5,6 +5,7 @@ import type { ToDraw } from '../state/to-draw.js';
 import type { ClickFor } from '../state/page-state.js';
 import type { Props } from './props.js';
 import type { PageData } from './page-data.js';
+import type { MorphEntry } from './draw-morph.js';
 import { useRef, useEffect } from 'react';
 import { Slider } from '../components/simple/simple-slider.js';
 import { SimpleSelect } from '../components/simple/simple-select.js';
@@ -12,7 +13,7 @@ import { ButtonGroup } from '../components/simple/simple-button-group.js';
 import { Checkbox } from '../components/simple/simple-checkbox.js';
 import { loadDeducedProps } from './load-deduced-props.js';
 import { logSomeStuff } from './log/log-some-stuff.js';
-import { toViewBoxStr } from './fs-consts-types/viewbox.js';
+import { toViewBoxStr, unionViewbox } from './fs-consts-types/viewbox.js';
 import { onClick } from './mouse/on-click.js';
 import { toDrawKeyToText } from './fs-consts-types/to-draw-key-to-text.js';
 import { mouseMove } from './mouse/mouse-move.js';
@@ -54,7 +55,7 @@ function Page(props: Props) {
     const { stateControl, pageState } = props;
     const { upd, transientState } = stateControl;
     const { $svgs, $svgs2 } = transientState;
-    const { toDraw, viewbox1, viewbox2, deduced } = pageState;
+    const { toDraw, viewbox1, viewbox2, viewbox3, deduced } = pageState;
     const { mats1, mats2 } = deduced;
 
     // Hooks
@@ -68,8 +69,9 @@ function Page(props: Props) {
     // interpolates `a` → `b` at t; both are corresponded control-point-for-
     // control-point. Matched pairs go glyph1 → glyph2; a deleted branch retracts
     // into its attachment point (b is collapsed); an inserted branch grows out
-    // of its attachment point (a is collapsed).
-    const morphRef = useRef<{ a: number[][][]; b: number[][][]; classes: string }[] | null>(null);
+    // of its attachment point (a is collapsed). Entries may be glued to a
+    // parent entry so their junction stays attached throughout the morph.
+    const morphRef = useRef<MorphEntry[] | null>(null);
     const [morphT, setMorphT] = React.useState(0);  // slider value 0..100
 
     const refPageData = useRef<PageData>(null);
@@ -154,6 +156,7 @@ function Page(props: Props) {
         upd(stateControl.state.appState.pageState, {
             ...(changeViewbox ? { viewbox1 } : {}),
             ...(changeViewbox ? { viewbox2 } : {}),
+            ...(changeViewbox ? { viewbox3: unionViewbox(viewbox1, viewbox2) } : {}),
         });
     }
 
@@ -290,6 +293,24 @@ function Page(props: Props) {
                 </div>
                 <div style={{ display: 'flex' }}>
                     <button
+                        // onClick={() => onResidualClicked(refPageData)}
+                        style={{
+                            padding: '9px 20px',
+                            fontSize: '14px',
+                            fontWeight: 500,
+                            lineHeight: '1',
+                            color: '#fff',
+                            backgroundColor: '#1976d2',
+                            border: 'none',
+                            borderRadius: '4px',
+                            cursor: 'pointer',
+                        }}
+                    >
+                        residual
+                    </button>
+                </div>
+                <div style={{ display: 'flex' }}>
+                    <button
                         onClick={() => onMatchClicked(refPageData)}
                         style={{
                             padding: '9px 20px',
@@ -365,6 +386,19 @@ function Page(props: Props) {
             <span ref={refY} style={{ userSelect: 'none', position: 'fixed', bottom: '13px', left: '120px' }} />
             <div style={{ display: 'flex', gap: '16px', flex: 1, minHeight: 0 }}>
             <svg 
+                id="svg3"
+                ref={svgRef3}
+                xmlns="http://www.w3.org/2000/svg" version="1.1" x="0px"  y="0px"
+                viewBox={toViewBoxStr(viewbox3)}
+                style={{ width: '100%', height: '100%', minWidth: 0, border: '1px solid #ccc', display: pageState.showSvgs[2] ? undefined : 'none' }}
+                onMouseDown={mouseDown(stateControl, svgRef3, viewbox3)}
+                onMouseUp={mouseUp(stateControl, svgRef3, viewbox3, 3)}
+                onMouseMove={mouseMove(stateControl, svgRef3, refX, refY, 3)}
+                onClick={onClick(stateControl, svgRef3, 3)}
+            >
+                <g />
+            </svg>
+            <svg 
                 id="svg"
                 ref={svgRef1}
                 xmlns="http://www.w3.org/2000/svg" version="1.1" x="0px" y="0px"
@@ -381,7 +415,7 @@ function Page(props: Props) {
                     d={pageState.deduced.pathStr1}
                 />
                 <g />
-            </svg>
+        </svg>
             <svg 
                 id="svg2"
                 ref={svgRef2}
@@ -398,15 +432,6 @@ function Page(props: Props) {
                     className="shape"
                     d={pageState.deduced.pathStr2}
                 />
-                <g />
-            </svg>
-            <svg 
-                id="svg3"
-                ref={svgRef3}
-                xmlns="http://www.w3.org/2000/svg" version="1.1" x="0px"  y="0px"
-                viewBox={toViewBoxStr(viewbox1)}
-                style={{ width: '100%', height: '100%', minWidth: 0, border: '1px solid #ccc', display: pageState.showSvgs[2] ? undefined : 'none' }}
-            >
                 <g />
             </svg>
             </div>

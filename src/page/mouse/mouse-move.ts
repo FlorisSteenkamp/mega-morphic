@@ -7,7 +7,7 @@ function mouseMove(
         svgRef: React.RefObject<SVGSVGElement | null>,
         refX: React.RefObject<HTMLSpanElement | null>,
         refY: React.RefObject<HTMLSpanElement | null>,
-        shapeIdx: 1|2) {
+        shapeIdx: 1|2|3) {
 
     return (event: React.MouseEvent<SVGSVGElement, MouseEvent>) => {
         let svg$ = svgRef.current;
