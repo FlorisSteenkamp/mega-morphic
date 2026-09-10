@@ -1,11 +1,12 @@
 import type { CpNode } from "flo-mat";
+import type { FatBranch } from "./fat-branch.js";
 import {
     getAllOnCircle, getBoundaryBeziersToNext, getBranch,
     getRealProngCount, isOnSameCircle
 } from "flo-mat";
 import { getShapeArea } from "flo-boolean";
-import { getArcBeziersBetween, getRoundSaliencePss } from "./get-round-salience.js";
-import { FatBranch } from "./fat-branch.js";
+import { getFatSaliencePss } from "./get-fat-salience.js";
+import { getArcBeziersBetween } from "../fs/get-arc-beziers-between.js";
 
 
 interface HalfWalk {
@@ -161,7 +162,7 @@ function getFattestBranch(
 
     return {
         cpChain: bestChain,
-        pss: getRoundSaliencePss(bestChain),
+        pss: getFatSaliencePss(bestChain),
         roundSalience: bestArea
     };
 }

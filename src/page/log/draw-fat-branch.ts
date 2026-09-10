@@ -1,7 +1,7 @@
-import type { FatBranch } from "../../morph/fat-branch.js";
+import type { FatBranch } from "../../morph/fat-branch/fat-branch.js";
 import { drawFs } from 'flo-draw';
 import { drawBeziersAsSinglePath } from '../../draw/draw-beziers-as-single-path.js';
-import { getChainMatCurves } from '../../morph/get-chain-mat-curves.js';
+import { getChainMatCurves } from '../../morph/fat-branch/get-chain-mat-curves.js';
 
 
 function drawFatBranch(

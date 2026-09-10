@@ -1,19 +1,15 @@
-import type { FatBranch } from './fat-branch.js';
-import type { MorphEntry, EntryResiduals, SideRes, MutableMorphEntry } from './morph-entry.js';
+import type { FatBranch } from './fat-branch/fat-branch.js';
+import type { MorphEntry, MutableMorphEntry } from './morph-entry.js';
 import { matchTrees } from './match-trees/match-trees.js';
 import { distributeBezierListsWithRadii } from './distribute-beziers-evenly.js';
-import { getSkeletonBeziers, getSkeletonRadii } from './get-fat-branch-tree.js';
-import { getResidualProfile } from './boundary-residuals.js';
-import { getLastP } from './get-last-p.js';
+import { getSkeletonBeziers, getSkeletonRadii } from './fat-branch/get-fat-branch-tree.js';
+import { getLastP } from './fs/get-last-p.js';
 import { getParentMap } from './get-parent-map.js';
-import { evalProfileSide } from './eval-profile-side.js';
-import { ResidualProfile } from './residual-profile.js';
 import { matchColors } from '../page/events/match-colors.js';
-import { EntryLoc, placeTopology } from './place-topology.js';
-import { unionUs } from './union-us.js';
-import { boundaries } from './boundaries.js';
 import { nearestIdx } from './nearest-idx.js';
 
+
+type EntryLoc = { idx: number; side: 'a' | 'b' };
 
 /**
  * Matches the two fat branch trees and builds the full set of morph entries:
@@ -40,20 +36,23 @@ function buildMorphEntries(
         const bzB = getSkeletonBeziers(fbB);
         const rdA = getSkeletonRadii(fbA);
         const rdB = getSkeletonRadii(fbB);
-        const profA = getResidualProfile(fbA);
-        const profB = getResidualProfile(fbB);
 
         const [m1, m2] = distributeBezierListsWithRadii(bzA, rdA, bzB, rdB);
+
         entryLoc.set(fbA, { idx: entries.length, side: 'a' });
         entryLoc.set(fbB, { idx: entries.length, side: 'b' });
-        bnds.push({ a: boundaries(m1.beziers), b: boundaries(m2.beziers) });
+
+        bnds.push({
+            a: boundaries(m1.beziers),
+            b: boundaries(m2.beziers)
+        });
+
         entries.push({
             a: m1.beziers,
             b: m2.beziers,
             ra: m1.radii,
             rb: m2.radii,
             us: m1.us,
-            residuals: correspondResiduals(profA, profB, m1.us),
             classes: `${matchColors[i % matchColors.length]} thin35 nofill`,
         });
     });
@@ -65,15 +64,16 @@ function buildMorphEntries(
     // console.log(insertedSet.size);
 
     // Deleted branches (shape 1 only): retract into their attachment as t→1.
-    placeTopology(tree1, deletedSet, 'a', 'red thin35 nofill', entryLoc, bnds, entries);
+    // placeTopology(tree1, deletedSet, 'a', 'red thin35 nofill', entryLoc, bnds, entries);
 
     // Inserted branches (shape 2 only): grow out of their attachment as t→0.
-    placeTopology(tree2, insertedSet, 'b', 'green thin35 nofill', entryLoc, bnds, entries);
+    // placeTopology(tree2, insertedSet, 'b', 'green thin35 nofill', entryLoc, bnds, entries);
 
     // Glue each matched non-trunk pair to its parents (per frame) so its
     // junction rides the parents' drawn skeletons throughout the morph.
     const parent1 = getParentMap(tree1);
     const parent2 = getParentMap(tree2);
+
     matchedTrees.pairs.forEach(([fbA, fbB], i) => {
         if (i === 0) { return; }  // the trunk pair is the root — nothing to glue to
 
@@ -82,28 +82,13 @@ function buildMorphEntries(
         const at2 = getAttachment(fbB, parent2, entryLoc, bnds, getLastP(entries[idx].b));
         if (at1 === undefined || at2 === undefined) { return; }
 
-        entries[idx].glue = { e1: at1.e, k1: at1.k, e2: at2.e, k2: at2.k };
+        entries[idx].glue = {
+            e1: at1.e, k1: at1.k,
+            e2: at2.e, k2: at2.k
+        };
     });
 
     return entries as MorphEntry[];
-}
-
-
-/** Both shapes' profiles evaluated on a common position grid. */
-function correspondResiduals(
-        profA: ResidualProfile,
-        profB: ResidualProfile,
-        knots: number[]): EntryResiduals {
-
-    const us = unionUs(knots, profA.us, profB.us);
-
-    return {
-        us,
-        outA: us.map(u => evalProfileSide(profA.us, profA.out, u)),
-        backA: us.map(u => evalProfileSide(profA.us, profA.back, u)),
-        outB: us.map(u => evalProfileSide(profB.us, profB.out, u)),
-        backB: us.map(u => evalProfileSide(profB.us, profB.back, u)),
-    };
 }
 
 
@@ -120,12 +105,23 @@ function getAttachment(
 
     const parent = parentMap.get(fb);
     if (parent === undefined) { return undefined; }
+
     const loc = entryLoc.get(parent);
     if (loc === undefined) { return undefined; }
+
     const bn = bnds[loc.idx][loc.side];
     if (bn === undefined) { return undefined; }
 
-    return { e: loc.idx, k: nearestIdx(bn, junction) };
+    return {
+        e: loc.idx,
+        k: nearestIdx(bn, junction)
+    };
+}
+
+
+/** All resampled segment boundary points of a skeleton path. */
+function boundaries(g: number[][][]) {
+    return [...g.map(seg => seg[0]), getLastP(g)];
 }
 
 

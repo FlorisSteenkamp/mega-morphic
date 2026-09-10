@@ -1,4 +1,4 @@
-import type { FatBranch } from "./fat-branch";
+import type { FatBranch } from "./fat-branch/fat-branch";
 
 
 /**

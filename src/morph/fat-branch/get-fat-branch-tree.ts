@@ -7,7 +7,7 @@ import { length } from "flo-bezier3";
 import { getShapeArea } from "flo-boolean";
 import { getFatBranch } from "./get-fat-branch.js";
 import { getFatBranchesFrom } from "./get-fat-branches-from.js";
-import { getChainPss } from "./get-round-salience.js";
+import { getChainPss } from "./get-fat-salience.js";
 
 
 /**

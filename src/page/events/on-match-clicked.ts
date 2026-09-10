@@ -1,8 +1,8 @@
 import type { PageData } from '../page-data.js';
-import type { FatBranch } from '../../morph/fat-branch.js';
+import type { FatBranch } from '../../morph/fat-branch/fat-branch.js';
 import { matchTrees } from '../../morph/match-trees/match-trees.js';
 import { matchColors } from './match-colors.js';
-import { getFatBranchTree, getSkeletonBeziers } from '../../morph/get-fat-branch-tree.js';
+import { getFatBranchTree, getSkeletonBeziers } from '../../morph/fat-branch/get-fat-branch-tree.js';
 import { drawBeziersAsSinglePath } from '../../draw/draw-beziers-as-single-path.js';
 
 

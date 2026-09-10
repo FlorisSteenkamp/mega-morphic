@@ -1,10 +1,10 @@
 import { drawFs } from 'flo-draw';
 import { Mat } from 'flo-mat';
 import { getNearestCpNode } from '../get-nearest/get-nearest-cp-node.js';
-import { getFatBranch } from '../../morph/get-fat-branch.js';
-import { getChainMatCurves } from '../../morph/get-chain-mat-curves.js';
-import { getFatBranchesFrom } from '../../morph/get-fat-branches-from.js';
-import { getFatBranchTree } from '../../morph/get-fat-branch-tree.js';
+import { getFatBranch } from '../../morph/fat-branch/get-fat-branch.js';
+import { getChainMatCurves } from '../../morph/fat-branch/get-chain-mat-curves.js';
+import { getFatBranchesFrom } from '../../morph/fat-branch/get-fat-branches-from.js';
+import { getFatBranchTree } from '../../morph/fat-branch/get-fat-branch-tree.js';
 import { drawFatBranch } from './draw-fat-branch.js';
 
 

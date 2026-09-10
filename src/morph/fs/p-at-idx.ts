@@ -1,4 +1,5 @@
 import { evalDeCasteljau } from "flo-bezier3";
+import { clamp } from "../../utils/clamp";
 
 const { min, max, floor } = Math;
 
@@ -10,9 +11,9 @@ function pAtIndex(
         bz: number[][][],
         kf: number): number[] {
 
-    const j = max(0, min(bz.length - 1, floor(kf)));
+    const j = clamp(floor(kf), 0, bz.length - 1);
 
-    return evalDeCasteljau(bz[j], max(0, min(1, kf - j)));
+    return evalDeCasteljau(bz[j], clamp(kf - j, 0, 1));
 }
 
 

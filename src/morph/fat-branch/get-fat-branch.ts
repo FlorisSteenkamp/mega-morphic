@@ -2,7 +2,7 @@ import type { CpNode } from "flo-mat";
 import { FatBranch } from './fat-branch.js';
 import { getAllOnCircle, getRealProngCount } from "flo-mat";
 import { getShapeArea } from "flo-boolean";
-import { getRoundSaliencePss } from "./get-round-salience.js";
+import { getFatSaliencePss } from "./get-fat-salience.js";
 
 
 function getFatBranch(
@@ -29,7 +29,7 @@ function getFatBranch(
     for (const chainOut of chainsOut) {
         for (const chainBack of chainsBack) {
             const cpChain = [...chainOut, ...chainBack.slice(1)];
-            const pss = getRoundSaliencePss(cpChain);
+            const pss = getFatSaliencePss(cpChain);
             const salience = Math.abs(getShapeArea(pss));
 
             if (salience > bestSalience) {

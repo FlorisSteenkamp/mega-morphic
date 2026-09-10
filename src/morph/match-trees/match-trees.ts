@@ -1,4 +1,4 @@
-import type { FatBranch, FatBranchEdge } from '../fat-branch.js';
+import type { FatBranch, FatBranchEdge } from '../fat-branch/fat-branch.js';
 
 
 /** A single fat branch of `tree1` matched to a single fat branch of `tree2`. */

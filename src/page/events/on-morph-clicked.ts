@@ -1,7 +1,7 @@
 import type { PageData } from '../page-data.js';
 import { buildMorphEntries } from '../../morph/build-morph-entries.js';
 import { drawMorph } from '../draw-morph.js';
-import { getFatBranchTree } from '../../morph/get-fat-branch-tree.js';
+import { getFatBranchTree } from '../../morph/fat-branch/get-fat-branch-tree.js';
 
 
 function onMorphClicked(

@@ -1,7 +1,7 @@
 import type { PageData } from '../page-data.js';
 import { drawFs } from 'flo-draw';
-import { getFattestBranch } from '../../morph/get-fattest-branch.js';
-import { getChainMatCurves } from '../../morph/get-chain-mat-curves.js';
+import { getFattestBranch } from '../../morph/fat-branch/get-fattest-branch.js';
+import { getChainMatCurves } from '../../morph/fat-branch/get-chain-mat-curves.js';
 
 
 function onFattestClicked(

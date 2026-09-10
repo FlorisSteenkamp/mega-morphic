@@ -1,12 +1,9 @@
 import type { MorphEntry } from './morph-entry.js';
 import { getShapeArea } from 'flo-boolean';
 import { getDiskChainEnvelope } from './get-disk-chain-envelope.js';
-import { getLastP } from './get-last-p.js';
+import { getLastP } from './fs/get-last-p.js';
 import { reverseShapeOrientation } from 'flo-boolean';
-import { pAtIndex } from './shape/p-at-idx.js';
-import { reconstructOutline } from './reconstruct-outline.js';
-
-const { atan2, min, max, cos, sin, abs, ceil, PI: π } = Math;
+import { pAtIndex } from './fs/p-at-idx.js';
 
 
 interface ResolvedMorph {
@@ -45,16 +42,16 @@ function resolveMorphAt(
         const rs = ra.map((r, k) => r*(1 - t) + rb[k]*t);
         radii.push(rs);
 
-        // Residual-corrected outline; bare disk envelope as fallback.
-        const loop =
-            // reconstructOutline(entries[i], getDrawn_(i), rs, t)
-            // ??
-            getDiskChainEnvelope(getDrawn_(i), rs);
+        // bare disk envelope
+        const loop = getDiskChainEnvelope(getDrawn_(i), rs);
 
         if (loop === undefined) { continue; }
 
         // The union is winding-number based - orient all loops alike.
-        outlines.push(getShapeArea(loop) < 0 ? reverseShapeOrientation(loop) : loop);
+        outlines.push(getShapeArea(loop) < 0
+            ? reverseShapeOrientation(loop)
+            : loop
+        );
     }
 
     return {
