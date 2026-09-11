@@ -6,6 +6,7 @@ import { getLastP } from './fs/get-last-p.js';
 import { reverseShapeOrientation } from 'flo-boolean';
 import { pAtIndex } from './fs/p-at-idx.js';
 import { boundaryTangents, boundaryPoint } from './anchored-sleeves.js';
+import { intrinsicSkeletonLerp } from './intrinsic-skeleton.js';
 
 const { atan2, max, cos, sin, abs, ceil, hypot, PI: π } = Math;
 
@@ -297,9 +298,8 @@ function getDrawn(
 
         const { a, b, glue } = entries[i];
 
-        let bz = a.map((ps, k) =>
-            ps.map((p, j) => p.map((c, d) =>
-                c * (1 - t) + b[k][j][d] * t)));
+        // Length + knot-angle interpolation (not a control-point lerp).
+        let bz = intrinsicSkeletonLerp(a, b, t);
 
         if (glue !== undefined) {
             let target: number[];

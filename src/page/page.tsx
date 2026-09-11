@@ -19,6 +19,7 @@ import { toDrawKeyToText } from './fs-consts-types/to-draw-key-to-text.js';
 import { mouseMove } from './mouse/mouse-move.js';
 import { mouseDown } from './mouse/mouse-down.js';
 import { mouseUp } from './mouse/mouse-up.js';
+import { panMouseDown } from './mouse/pan.js';
 import { drawElements } from './fs-consts-types/draw-elems.js';
 import { getGlyphNames, loadPath } from './fs-consts-types/load-path.js';
 import { onMatchClicked } from './events/on-match-clicked.js';
@@ -391,7 +392,10 @@ function Page(props: Props) {
                 xmlns="http://www.w3.org/2000/svg" version="1.1" x="0px"  y="0px"
                 viewBox={toViewBoxStr(viewbox3)}
                 style={{ width: '100%', height: '100%', minWidth: 0, border: '1px solid #ccc', display: pageState.showSvgs[2] ? undefined : 'none' }}
-                onMouseDown={mouseDown(stateControl, svgRef3, viewbox3)}
+                onMouseDown={e => {
+                    panMouseDown(stateControl, svgRef3)(e);
+                    mouseDown(stateControl, svgRef3, viewbox3)(e);
+                }}
                 onMouseUp={mouseUp(stateControl, svgRef3, viewbox3, 3)}
                 onMouseMove={mouseMove(stateControl, svgRef3, refX, refY, 3)}
                 onClick={onClick(stateControl, svgRef3, 3)}
