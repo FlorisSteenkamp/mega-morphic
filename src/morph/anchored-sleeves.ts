@@ -1,0 +1,364 @@
+import { getBoundaryBeziersToNext } from 'flo-mat';
+import { fromTo, getTAtLength, length, toCubic, evalDeCasteljau } from 'flo-bezier3';
+import type { FatBranch } from './fat-branch/fat-branch.js';
+import { getSkeletonEdgeCpPairs } from './fat-branch/get-fat-branch-tree.js';
+import { distributeBezierListsEvenly } from './distribute-beziers-evenly.js';
+import { clamp } from '../utils/clamp.js';
+
+const { atan2, cos, sin, hypot, PI: π } = Math;
+
+const EPS_LEN = 1e-9;
+
+
+/**
+ * One side of a morph entry's boundary, anchored to the maximal disks.
+ *
+ * Per resampled skeleton segment (in the side's outline travel direction:
+ * `out` runs boundary k → k+1, `back` runs k+1 → k):
+ * - `anchorsA`/`anchorsB`: `[fromθ, fromρ, toθ, toρ]` - the segment's two
+ *   boundary anchors in the local disk frame of their skeleton boundary
+ *   (θ = angle in the (T, N) basis, ρ = distance / disk radius, so the
+ *   anchor rides the interpolated maximal disk).
+ * - `piecesA`/`piecesB`: the boundary pieces between the two anchors,
+ *   normalized into the anchors' chord frame, control-point corresponding.
+ */
+interface SleeveSide {
+    readonly anchorsA: number[][];
+    readonly anchorsB: number[][];
+    readonly piecesA: number[][][][];
+    readonly piecesB: number[][][][];
+}
+
+
+/** Everything of one frame needed to anchor its boundary. */
+interface SleeveFrame {
+    /** per original skeleton edge: boundary pieces per side (outline direction) */
+    readonly edges: { out: number[][][]; back: number[][][] }[];
+    /** normalized arc-length knots of the original skeleton edges */
+    readonly knots: number[];
+    /** the resampled skeleton (shared `us` breakpoints) */
+    readonly bz: number[][][];
+    /** maximal-disk radius per resampled segment boundary */
+    readonly radii: number[];
+}
+
+
+/**
+ * The boundary pieces alongside each original skeleton edge of the fat
+ * branch (tip → other end), per side, each in outline direction (`out`
+ * pieces run with the skeleton, `back` pieces against it).
+ */
+function getEdgeSleeves(
+        fb: FatBranch): { out: number[][][]; back: number[][][] }[] {
+
+    return getSkeletonEdgeCpPairs(fb).map(pair => ({
+        out: getBoundaryBeziersToNext(pair.out),
+        back: getBoundaryBeziersToNext(pair.back)
+    }));
+}
+
+
+/** Normalized cumulative arc-length knots of a skeleton bezier list. */
+function skeletonKnots(bz: number[][][]): number[] {
+    const lens = bz.map(ps => length([0, 1], ps));
+    const total = lens.reduce((s, l) => s + l, 0);
+
+    const knots = [0];
+    let cum = 0;
+    for (const l of lens) { cum += l; knots.push(total > 0 ? cum/total : 0); }
+    knots[knots.length - 1] = 1;
+
+    return knots;
+}
+
+
+/**
+ * Builds both anchored boundary sides of a matched pair: each frame's
+ * boundary is cut at the shared skeleton breakpoints `us` (by boundary arc
+ * fraction within each original edge), anchors are encoded in their disk's
+ * local frame, and the in-between pieces are resampled to correspond and
+ * normalized into their chord frames.
+ */
+function buildSleeveSides(
+        A: SleeveFrame,
+        B: SleeveFrame,
+        us: number[]): { out: SleeveSide; back: SleeveSide } {
+
+    return {
+        out: buildSide(A, B, us, 'out'),
+        back: buildSide(A, B, us, 'back')
+    };
+}
+
+
+function buildSide(
+        A: SleeveFrame,
+        B: SleeveFrame,
+        us: number[],
+        side: 'out' | 'back'): SleeveSide {
+
+    const segsA = cutSide(A.edges, A.knots, us, side);
+    const segsB = cutSide(B.edges, B.knots, us, side);
+    const TsA = boundaryTangents(A.bz);
+    const TsB = boundaryTangents(B.bz);
+
+    const anchorsA: number[][] = [];
+    const anchorsB: number[][] = [];
+    const piecesA: number[][][][] = [];
+    const piecesB: number[][][][] = [];
+
+    const isOut = side === 'out';
+    for (let k = 0; k < segsA.length; k++) {
+        const sA = segsA[k];
+        const sB = segsB[k];
+
+        // Degenerate on either side: represent both as their plain chord.
+        let pA = sA.pieces;
+        let pB = sB.pieces;
+        if (totalLen(pA) < EPS_LEN || totalLen(pB) < EPS_LEN) {
+            pA = [[sA.from, sA.to]];
+            pB = [[sB.from, sB.to]];
+        } else {
+            [pA, pB] = distributeBezierListsEvenly(pA, pB);
+        }
+
+        const bidxFrom = isOut ? k : k + 1;
+        const bidxTo = isOut ? k + 1 : k;
+
+        anchorsA.push([
+            ...polarAnchor(sA.from, bidxFrom, A, TsA),
+            ...polarAnchor(sA.to, bidxTo, A, TsA)
+        ]);
+        anchorsB.push([
+            ...polarAnchor(sB.from, bidxFrom, B, TsB),
+            ...polarAnchor(sB.to, bidxTo, B, TsB)
+        ]);
+
+        piecesA.push(normalizeSeg(pA, sA.from, sA.to));
+        piecesB.push(normalizeSeg(pB, sB.from, sB.to));
+    }
+
+    fillDegenerateThetas(anchorsA, isOut);
+    fillDegenerateThetas(anchorsB, isOut);
+
+    return { anchorsA, anchorsB, piecesA, piecesB };
+}
+
+
+/**
+ * Cuts one side's boundary at the shared skeleton breakpoints: each `us`
+ * interval lies within a single original edge; its boundary sub-piece is the
+ * corresponding arc-fraction range of that edge's side pieces (skeleton
+ * fraction f maps to boundary arc fraction f on the out side, 1−f on the
+ * back side since back pieces run against the skeleton).
+ */
+function cutSide(
+        edges: { out: number[][][]; back: number[][][] }[],
+        knots: number[],
+        us: number[],
+        side: 'out' | 'back'
+        ): { pieces: number[][][]; from: number[]; to: number[] }[] {
+
+    const segs: { pieces: number[][][]; from: number[]; to: number[] }[] = [];
+
+    for (let k = 0; k < us.length - 1; k++) {
+        const uA = us[k];
+        const uB = us[k + 1];
+
+        // The midpoint uniquely identifies the original edge containing [uA,uB].
+        const mid = (uA + uB) / 2;
+        let j = 0;
+        while (j < knots.length - 2 && knots[j + 1] <= mid) { j++; }
+
+        const span = knots[j + 1] - knots[j];
+        const fA = span <= 0 ? 0 : clamp((uA - knots[j]) / span, 0, 1);
+        const fB = span <= 0 ? 1 : clamp((uB - knots[j]) / span, 0, 1);
+
+        const pieces = side === 'out'
+            ? cutByArcFraction(edges[j].out, fA, fB)
+            : cutByArcFraction(edges[j].back, 1 - fB, 1 - fA);
+
+        const from = pieces[0][0];
+        const last = pieces[pieces.length - 1];
+        segs.push({ pieces, from, to: last[last.length - 1] });
+    }
+
+    return segs;
+}
+
+
+/** The sub-list of `pieces` between arc fractions `f0` ≤ `f1` (as cubics). */
+function cutByArcFraction(
+        pieces: number[][][],
+        f0: number,
+        f1: number): number[][][] {
+
+    const lens = pieces.map(ps => length([0, 1], ps));
+    const total = lens.reduce((s, l) => s + l, 0);
+
+    if (total < EPS_LEN) {
+        const p = pieces[0]?.[0] ?? [0, 0];
+        return [[p, p]];
+    }
+
+    const s0 = f0 * total;
+    const s1 = f1 * total;
+
+    const out: number[][][] = [];
+    let c = 0;
+    for (let i = 0; i < pieces.length; i++) {
+        const a = Math.max(s0, c);
+        const b = Math.min(s1, c + lens[i]);
+        if (b - a > EPS_LEN) {
+            const t0 = clamp(getTAtLength(pieces[i], a - c), 0, 1);
+            const t1 = clamp(getTAtLength(pieces[i], b - c), 0, 1);
+            out.push(toCubic(fromTo(pieces[i], t0, t1)));
+        }
+        c += lens[i];
+    }
+
+    if (out.length === 0) {
+        // Zero-length range: a single point.
+        let cc = 0;
+        for (let i = 0; i < pieces.length; i++) {
+            if (s0 <= cc + lens[i] || i === pieces.length - 1) {
+                const t0 = clamp(getTAtLength(pieces[i], s0 - cc), 0, 1);
+                const p = evalDeCasteljau(pieces[i], t0);
+                return [[p, p]];
+            }
+            cc += lens[i];
+        }
+    }
+
+    return out;
+}
+
+
+function totalLen(pieces: number[][][]): number {
+    return pieces.reduce((s, ps) => s + length([0, 1], ps), 0);
+}
+
+
+/**
+ * The anchor `c` in the local disk frame of skeleton boundary `bidx`:
+ * `[θ, ρ]` with `c = p + ρ·r·(cos θ·T + sin θ·N)`. θ is NaN when the anchor
+ * coincides with the center (filled in later from a neighbor).
+ */
+function polarAnchor(
+        c: number[],
+        bidx: number,
+        F: SleeveFrame,
+        Ts: number[][]): number[] {
+
+    const p = boundaryPoint(F.bz, bidx);
+    const r = F.radii[bidx];
+    const ux = c[0] - p[0];
+    const uy = c[1] - p[1];
+    const d = hypot(ux, uy);
+
+    if (d < EPS_LEN) { return [NaN, 1]; }
+
+    const T = Ts[bidx];
+    const N = [-T[1], T[0]];
+    const theta = atan2(ux*N[0] + uy*N[1], ux*T[0] + uy*T[1]);
+    const rho = r > EPS_LEN ? clamp(d / r, 0, 2) : 1;
+
+    return [theta, rho];
+}
+
+
+/** Fills NaN anchor angles from the nearest defined one on the same side. */
+function fillDegenerateThetas(anchors: number[][], isOut: boolean): void {
+    // Flatten in travel order: [seg0 from, seg0 to, seg1 from, ...].
+    const idx: [number, number][] = [];
+    for (let k = 0; k < anchors.length; k++) { idx.push([k, 0], [k, 2]); }
+
+    const theta = (i: number) => anchors[idx[i][0]][idx[i][1]];
+
+    for (let i = 0; i < idx.length; i++) {
+        if (!Number.isNaN(theta(i))) { continue; }
+
+        let filled = NaN;
+        for (let o = 1; o < idx.length && Number.isNaN(filled); o++) {
+            if (i - o >= 0 && !Number.isNaN(theta(i - o))) { filled = theta(i - o); }
+            else if (i + o < idx.length && !Number.isNaN(theta(i + o))) { filled = theta(i + o); }
+        }
+        if (Number.isNaN(filled)) { filled = isOut ? π/2 : -π/2; }
+
+        anchors[idx[i][0]][idx[i][1]] = filled;
+    }
+}
+
+
+/** Pieces expressed in the chord frame of `e0` → `e1` (chord maps to (0,0)→(1,0)). */
+function normalizeSeg(
+        pieces: number[][][],
+        e0: number[],
+        e1: number[]): number[][][] {
+
+    const dx = e1[0] - e0[0];
+    const dy = e1[1] - e0[1];
+    let den = dx*dx + dy*dy;
+    // Degenerate chord: translation only (mirrored at reconstruction).
+    let bx = dx; let by = dy;
+    if (den < EPS_LEN*EPS_LEN) { bx = 1; by = 0; den = 1; }
+
+    return pieces.map(ps => ps.map(p => {
+        const ux = p[0] - e0[0];
+        const uy = p[1] - e0[1];
+        return [(bx*ux + by*uy) / den, (-by*ux + bx*uy) / den];
+    }));
+}
+
+
+/**
+ * Unit tangent of the skeleton at each segment boundary (same rule at build
+ * and reconstruction time so t=0/1 are exact).
+ */
+function boundaryTangents(bz: number[][][]): number[][] {
+    const Ts: number[][] = [];
+    for (let k = 0; k < bz.length; k++) { Ts.push(unit(dirAtStart(bz[k]))); }
+    Ts.push(unit(dirAtEnd(bz[bz.length - 1])));
+
+    return Ts;
+}
+
+
+function boundaryPoint(bz: number[][][], k: number): number[] {
+    if (k < bz.length) { return bz[k][0]; }
+    const last = bz[bz.length - 1];
+    return last[last.length - 1];
+}
+
+
+function unit(v: number[]): number[] {
+    const h = hypot(v[0], v[1]);
+    return h > 0 ? [v[0]/h, v[1]/h] : [1, 0];
+}
+
+
+function dirAtStart(ps: number[][]): number[] {
+    const p0 = ps[0];
+    for (let i = 1; i < ps.length; i++) {
+        const [x, y] = [ps[i][0] - p0[0], ps[i][1] - p0[1]];
+        if (x !== 0 || y !== 0) { return [x, y]; }
+    }
+    return [1, 0];
+}
+
+
+function dirAtEnd(ps: number[][]): number[] {
+    const pE = ps[ps.length - 1];
+    for (let i = ps.length - 2; i >= 0; i--) {
+        const [x, y] = [pE[0] - ps[i][0], pE[1] - ps[i][1]];
+        if (x !== 0 || y !== 0) { return [x, y]; }
+    }
+    return [1, 0];
+}
+
+
+export {
+    buildSleeveSides, getEdgeSleeves, skeletonKnots, boundaryTangents,
+    boundaryPoint
+}
+export type { SleeveSide, SleeveFrame }

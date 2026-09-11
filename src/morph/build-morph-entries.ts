@@ -3,8 +3,10 @@ import type { MorphEntry, MutableMorphEntry } from './morph-entry.js';
 import { matchTrees } from './match-trees/match-trees.js';
 import { distributeBezierListsWithRadii } from './distribute-beziers-evenly.js';
 import { getSkeletonBeziers, getSkeletonRadii } from './fat-branch/get-fat-branch-tree.js';
+import { buildSleeveSides, getEdgeSleeves, skeletonKnots } from './anchored-sleeves.js';
 import { getLastP } from './fs/get-last-p.js';
 import { getParentMap } from './get-parent-map.js';
+import { getShapeArea } from 'flo-boolean';
 import { matchColors } from '../page/events/match-colors.js';
 import { nearestIdx } from './nearest-idx.js';
 
@@ -24,6 +26,12 @@ function buildMorphEntries(
 
     const matchedTrees = matchTrees(tree1, tree2);
 
+    // The sleeves walk the outline in its global direction - the trunk's
+    // (mostly boundary) loop gives a reliable winding for the cap arcs.
+    // Small child branches cannot: their closing sector arc is reversed and
+    // can dominate, flipping their pss winding.
+    const capSign = getShapeArea(tree1.pss) < 0 ? -1 : 1;
+
     const entries: MutableMorphEntry[] = [];
     /** entry location of every fat branch */
     const entryLoc = new Map<FatBranch, EntryLoc>();
@@ -33,11 +41,34 @@ function buildMorphEntries(
     // Matched pairs: resample for correspondence, morph shape1 → shape2.
     matchedTrees.pairs.forEach(([fbA, fbB], i) => {
         const bzA = getSkeletonBeziers(fbA);
-        const bzB = getSkeletonBeziers(fbB);
+        let bzB = getSkeletonBeziers(fbB);
         const rdA = getSkeletonRadii(fbA);
-        const rdB = getSkeletonRadii(fbB);
+        let rdB = getSkeletonRadii(fbB);
+
+        // Boundary pieces per original skeleton edge, per side.
+        const edgesA = getEdgeSleeves(fbA);
+        let edgesB = getEdgeSleeves(fbB);
+
+        // Flipped trunk: traverse tree2's trunk from its other tip - reverse
+        // its skeleton; its edge sleeves reverse order and swap sides (the
+        // boundary geometry itself keeps its outline direction).
+        if (i === 0 && matchedTrees.flipped) {
+            bzB = bzB.map(ps => [...ps].reverse()).reverse();
+            rdB = [...rdB].reverse();
+            edgesB = [...edgesB].reverse()
+                .map(e => ({ out: e.back, back: e.out }));
+        }
 
         const [m1, m2] = distributeBezierListsWithRadii(bzA, rdA, bzB, rdB);
+
+        // Boundary anchored to the maximal disks, shape lerped on top.
+        const sides = buildSleeveSides(
+            { edges: edgesA, knots: skeletonKnots(bzA),
+              bz: m1.beziers, radii: m1.radii },
+            { edges: edgesB, knots: skeletonKnots(bzB),
+              bz: m2.beziers, radii: m2.radii },
+            m1.us
+        );
 
         entryLoc.set(fbA, { idx: entries.length, side: 'a' });
         entryLoc.set(fbB, { idx: entries.length, side: 'b' });
@@ -53,6 +84,9 @@ function buildMorphEntries(
             ra: m1.radii,
             rb: m2.radii,
             us: m1.us,
+            sleeveOut: sides.out,
+            sleeveBack: sides.back,
+            capSign,
             classes: `${matchColors[i % matchColors.length]} thin35 nofill`,
         });
     });

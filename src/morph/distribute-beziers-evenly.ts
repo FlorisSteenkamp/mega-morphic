@@ -161,4 +161,4 @@ function distributeBezierListsEvenly(
 
 
 export type { MorphBranch }
-export { distributeBezierListsWithRadii }
+export { distributeBezierListsWithRadii, distributeBezierListsEvenly }

@@ -12,12 +12,12 @@ function drawFatBranch(
         color: string,
         showDelay?: number) {
 
-    const [$path] = drawBeziersAsSinglePath(g, branch.pss, `thin20 ${color} fill25`);
+    // const [$path] = drawBeziersAsSinglePath(g, branch.pss, `thin20 ${color} fill25`);
     const [$medial] = drawBeziersAsSinglePath(
         g, getSkeletonBeziers(branch), `thin10 ${color} nofill`
     );
-    const $svgs = [$path, $medial];
-    // const $svgs = [$medial];
+    // const $svgs = [$path, $medial];
+    const $svgs = [$medial];
     if (showDelay) {
         for (const $p of $svgs) {
             if ($p !== undefined) { setTimeout(() => $p.remove(), showDelay); }

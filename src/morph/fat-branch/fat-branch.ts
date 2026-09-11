@@ -26,6 +26,12 @@ interface FatBranchEdge {
      * opposite signs for clockwise vs anti-clockwise
      */
     readonly angle: number;
+    /**
+     * which side of the parent's MAT the child emanates from: +1 if its fork
+     * sector is skipped on the parent's outbound boundary sleeve (tip → end),
+     * -1 if on the return sleeve
+     */
+    readonly side: 1 | -1;
 }
 
 

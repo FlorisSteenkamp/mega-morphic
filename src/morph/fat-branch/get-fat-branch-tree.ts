@@ -83,11 +83,34 @@ function addChildren(parent: FatBranch): void {
         );
 
         parent.children.push({
-            branch, distanceFromLeaf, roundSalienceFromLeaf, angle
+            branch, distanceFromLeaf, roundSalienceFromLeaf, angle,
+            side: childSide(rotated, kF, s)
         });
 
         addChildren(branch);
     }
+}
+
+
+/**
+ * The side of the parent's MAT a child emanates from: +1 if its sector is
+ * skipped (jumped over) within the parent chain's FIRST run over the fork
+ * circle (the outbound sleeve), -1 if within the return run.
+ */
+function childSide(rotated: CpNode[], kF: number, s: CpNode): 1 | -1 {
+    for (let q = kF;
+            q < rotated.length - 1 && isOnSameCircle(rotated[q], s);
+            q++) {
+        const next = rotated[q + 1];
+        if (next === rotated[q].next || !isOnSameCircle(rotated[q], next)) {
+            continue;  // boundary step or pass-through, not a jump
+        }
+        for (let c = rotated[q]; c !== next; c = c.nextOnCircle) {
+            if (c === s) { return 1; }
+        }
+    }
+
+    return -1;
 }
 
 

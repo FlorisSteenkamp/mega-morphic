@@ -1,4 +1,4 @@
-import { getDiskChainEnvelope } from '../../src/morph/disk-chain-envelope.js';
+import { getDiskChainEnvelope } from '../../src/morph/get-disk-chain-envelope.js';
 import { getShapeArea, boolean } from 'flo-boolean';
 
 

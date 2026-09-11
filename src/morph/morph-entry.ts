@@ -1,5 +1,6 @@
 import type { Mutable } from '../utils/mutable.js';
 import type { Glue } from './glue.js';
+import type { SleeveSide } from './anchored-sleeves.js';
 
 
 /**
@@ -17,6 +18,12 @@ interface MorphEntry {
     readonly rb?: number[];
     /** normalized skeleton position per segment boundary */
     readonly us?: number[];
+    /** disk-anchored boundary, out side (tip → end) */
+    readonly sleeveOut?: SleeveSide;
+    /** disk-anchored boundary, back side (end → tip) */
+    readonly sleeveBack?: SleeveSide;
+    /** winding sign of the outline (±1) - the tip cap arcs sweep this way */
+    readonly capSign?: number;
 }
 
 

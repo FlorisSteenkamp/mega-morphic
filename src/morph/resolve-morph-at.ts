@@ -1,9 +1,15 @@
 import type { MorphEntry } from './morph-entry.js';
+import type { SleeveSide } from './anchored-sleeves.js';
 import { getShapeArea } from 'flo-boolean';
 import { getDiskChainEnvelope } from './get-disk-chain-envelope.js';
 import { getLastP } from './fs/get-last-p.js';
 import { reverseShapeOrientation } from 'flo-boolean';
 import { pAtIndex } from './fs/p-at-idx.js';
+import { boundaryTangents, boundaryPoint } from './anchored-sleeves.js';
+
+const { atan2, max, cos, sin, abs, ceil, hypot, PI: π } = Math;
+
+const MIN_LEN = 1e-6;
 
 
 interface ResolvedMorph {
@@ -18,7 +24,8 @@ interface ResolvedMorph {
 /**
  * Resolves every morph entry at `t` ∈ [0,1]: control points lerped, glue
  * applied (junctions riding their parents' drawn skeletons), radii lerped,
- * and the coarse boundary computed as the union of all disk envelopes.
+ * and the outline built by lerping the entry's original boundary sleeves
+ * (disk envelope as fallback), all as loops ready for a winding-number union.
  */
 function resolveMorphAt(
         entries: MorphEntry[],
@@ -42,16 +49,22 @@ function resolveMorphAt(
         const rs = ra.map((r, k) => r*(1 - t) + rb[k]*t);
         radii.push(rs);
 
-        // bare disk envelope
-        const loop = getDiskChainEnvelope(getDrawn_(i), rs);
+        // Boundary anchored to the drawn maximal disks, shape lerped on top;
+        // bare disk envelope as fallback.
+        const loops = [
+            sleeveOutline(entries[i], getDrawn_(i), rs, t),
+            // getDiskChainEnvelope(getDrawn_(i), rs)
+        ];
 
-        if (loop === undefined) { continue; }
+        for (const loop of loops) {
+            if (loop === undefined) { continue; }
 
-        // The union is winding-number based - orient all loops alike.
-        outlines.push(getShapeArea(loop) < 0
-            ? reverseShapeOrientation(loop)
-            : loop
-        );
+            // The union is winding-number based - orient all loops alike.
+            outlines.push(getShapeArea(loop) < 0
+                ? reverseShapeOrientation(loop)
+                : loop
+            );
+        }
     }
 
     return {
@@ -63,10 +76,213 @@ function resolveMorphAt(
 
 
 /**
+ * The morphed outline of one entry: per skeleton segment, both frames'
+ * boundary anchors rebuilt in the DRAWN disks' local frames (so they ride
+ * the interpolated maximal disks) and interpolated; the boundary pieces
+ * between them lerped in their chord frames and mapped through the
+ * interpolated chords; the two sides closed with disk cap arcs at the tips
+ * (fork/tip gaps bridged with line segments - the loop union covers those).
+ */
+function sleeveOutline(
+        entry: MorphEntry,
+        bz: number[][][],
+        rs: number[],
+        t: number): number[][][] | undefined {
+
+    const { sleeveOut, sleeveBack, capSign = 1 } = entry;
+    if (sleeveOut === undefined || sleeveBack === undefined) {
+        return undefined;
+    }
+    if (sleeveOut.piecesA.length === 0) { return undefined; }
+
+    const Ts = boundaryTangents(bz);
+
+    const out = reconstructSide(sleeveOut, true, bz, rs, Ts, t);
+    const back = reconstructSide(sleeveBack, false, bz, rs, Ts, t);
+
+    const pStart = bz[0][0];
+    const pEnd = getLastP(bz);
+
+    // out runs tip → end, back runs end → tip (outline direction).
+    const endCap = capArcPts(
+        pEnd, rs[rs.length - 1], out.last, back.first, capSign);
+    const startCap = capArcPts(
+        pStart, rs[0], back.last, out.first, capSign);
+
+    return assembleLoop([
+        ...out.pieces,
+        ...endCap.map(p => [p]),
+        ...back.pieces,
+        ...startCap.map(p => [p]),
+    ]);
+}
+
+
+/**
+ * One side's boundary pieces at time `t`, in outline order: anchors
+ * interpolated in the drawn disks' local frames, chord-normalized pieces
+ * lerped and mapped through the interpolated anchor chords.
+ */
+function reconstructSide(
+        side: SleeveSide,
+        isOut: boolean,
+        bz: number[][][],
+        rs: number[],
+        Ts: number[][],
+        t: number): { pieces: number[][][]; first: number[]; last: number[] } {
+
+    const n = side.piecesA.length;
+    const pieces: number[][][] = [];
+    let first: number[] = [0, 0];
+    let last: number[] = [0, 0];
+
+    for (let m = 0; m < n; m++) {
+        const k = isOut ? m : n - 1 - m;  // outline order
+        const aA = side.anchorsA[k];
+        const aB = side.anchorsB[k];
+        const bidxFrom = isOut ? k : k + 1;
+        const bidxTo = isOut ? k + 1 : k;
+
+        const e0 = anchorPoint(
+            aA[0], aA[1], aB[0], aB[1], bidxFrom, bz, rs, Ts, t);
+        const e1 = anchorPoint(
+            aA[2], aA[3], aB[2], aB[3], bidxTo, bz, rs, Ts, t);
+
+        if (m === 0) { first = e0; }
+        last = e1;
+
+        // Chord frame of the interpolated anchors (same degenerate rule as
+        // normalization so t=0/1 reproduce the originals exactly).
+        let bx = e1[0] - e0[0];
+        let by = e1[1] - e0[1];
+        if (bx*bx + by*by < MIN_LEN*MIN_LEN*1e-6) { bx = 1; by = 0; }
+
+        const qsA = side.piecesA[k];
+        const qsB = side.piecesB[k];
+        for (let i = 0; i < qsA.length; i++) {
+            pieces.push(qsA[i].map((q, j) => {
+                const qx = q[0]*(1 - t) + qsB[i][j][0]*t;
+                const qy = q[1]*(1 - t) + qsB[i][j][1]*t;
+                return [
+                    e0[0] + bx*qx - by*qy,
+                    e0[1] + by*qx + bx*qy
+                ];
+            }));
+        }
+    }
+
+    return { pieces, first, last };
+}
+
+
+/** The interpolated anchor: polar coords lerped (θ the short way) and applied
+ *  to the DRAWN disk's local frame at skeleton boundary `bidx`. */
+function anchorPoint(
+        thA: number, rhA: number,
+        thB: number, rhB: number,
+        bidx: number,
+        bz: number[][][],
+        rs: number[],
+        Ts: number[][],
+        t: number): number[] {
+
+    const dθ = ((thB - thA + π) % (2*π) + 2*π) % (2*π) - π;
+    const θ = thA + t*dθ;
+    const ρ = rhA*(1 - t) + rhB*t;
+
+    const p = boundaryPoint(bz, bidx);
+    const r = rs[bidx];
+    const T = Ts[bidx];
+    const N = [-T[1], T[0]];
+    const ux = cos(θ)*T[0] + sin(θ)*N[0];
+    const uy = cos(θ)*T[1] + sin(θ)*N[1];
+
+    return [p[0] + ρ*r*ux, p[1] + ρ*r*uy];
+}
+
+
+/**
+ * Chains ordered open pieces into one closed loop: consecutive pieces are
+ * snapped together when their endpoints (nearly) coincide, else bridged with
+ * a line segment; single-point pieces act as polyline waypoints.
+ */
+function assembleLoop(pieces: number[][][]): number[][][] | undefined {
+    const loop: number[][][] = [];
+
+    for (let ps of pieces) {
+        const prev = loop[loop.length - 1];
+        if (prev === undefined) {
+            if (ps.length >= 2) { loop.push(ps); }
+            continue;
+        }
+
+        const q = prev[prev.length - 1];
+        const gap = hypot(ps[0][0] - q[0], ps[0][1] - q[1]);
+
+        if (ps.length === 1) {  // waypoint
+            if (gap > MIN_LEN) { loop.push([q, ps[0]]); }
+            continue;
+        }
+
+        if (gap > MIN_LEN) {
+            loop.push([q, ps[0]]);  // bridge
+        } else {
+            ps = [q, ...ps.slice(1)];  // snap for exact continuity
+        }
+        loop.push(ps);
+    }
+
+    if (loop.length < 2) { return undefined; }
+
+    // Close the loop exactly.
+    const first = loop[0][0];
+    const last = getLastP(loop);
+    const gap = hypot(first[0] - last[0], first[1] - last[1]);
+    if (gap > MIN_LEN) {
+        loop.push([last, first]);
+    } else {
+        const lastPs = loop[loop.length - 1];
+        loop[loop.length - 1] = [...lastPs.slice(0, -1), first];
+    }
+
+    return loop;
+}
+
+
+/** Interior points of the arc of the disk at `p` from `from` to `to`,
+ *  sweeping in the direction given by the outline winding `sign`. */
+function capArcPts(
+        p: number[],
+        r: number,
+        from: number[],
+        to: number[],
+        sign: number,
+        capSteps = 16): number[][] {
+
+    if (r < MIN_LEN) { return []; }
+
+    const a0 = atan2(from[1] - p[1], from[0] - p[0]);
+    const a1 = atan2(to[1] - p[1], to[0] - p[0]);
+
+    const ccw = ((a1 - a0) % (2*π) + 2*π) % (2*π);
+    const sweep = sign > 0 ? ccw : ccw - 2*π;
+
+    const steps = max(2, ceil(capSteps * abs(sweep) / (2*π)));
+    const out: number[][] = [];
+    for (let k = 1; k < steps; k++) {
+        const th = a0 + sweep * (k / steps);
+        out.push([p[0] + r*cos(th), p[1] + r*sin(th)]);
+    }
+    return out;
+}
+
+
+/**
  * Returns a memoized resolver that computes an entry's drawn beziers at `t`:
  * control points lerped between frames `a` and `b`, then, if the entry is
  * glued, translated so its endpoint rides its parent's drawn skeleton
- * (parents are resolved recursively on demand). Results are cached in `drawn`.
+ * (parents are resolved recursively on demand). Results are cached in
+ * `drawn`.
  */
 function getDrawn(
         t: number,

@@ -1,4 +1,5 @@
 import type { FatBranch, FatBranchEdge } from '../fat-branch/fat-branch.js';
+import { getSkeletonLength } from '../fat-branch/get-fat-branch-tree.js';
 
 
 /** A single fat branch of `tree1` matched to a single fat branch of `tree2`. */
@@ -17,6 +18,8 @@ interface MatchResult {
     readonly inserted: FatBranch[];
     /** the total edit cost of the matching */
     readonly cost: number;
+    /** true if `tree2`'s trunk orientation was flipped for the best match */
+    readonly flipped: boolean;
 }
 
 
@@ -90,7 +93,13 @@ function matchTrees(
     const children1 = tree1.children ?? [];
     const children2 = tree2.children ?? [];
 
-    const edit = editForest(children1, children2, new Map(), cost);
+    // The trunk tip choice is arbitrary - try tree2's trunk both ways.
+    const normal = editForestSided(children1, children2, new Map(), cost);
+    const flippedEdit = editForestSided(
+        children1, flipTrunkEdges(tree2), new Map(), cost);
+
+    const flipped = flippedEdit.cost < normal.cost;
+    const edit = flipped ? flippedEdit : normal;
 
     const pairs: MatchedPair[] = [[tree1, tree2]];
     const deleted: FatBranch[] = [];
@@ -101,7 +110,7 @@ function matchTrees(
         else { inserted.push(op.b.branch); }
     }
 
-    return { pairs, deleted, inserted, cost: edit.cost };
+    return { pairs, deleted, inserted, cost: edit.cost, flipped };
 }
 
 
@@ -146,6 +155,32 @@ function angleDist(x: number, y: number): number {
 }
 
 
+/**
+ * Returns the trunk's child edges as seen from its other leaf tip: distances
+ * and partial saliences measured from the opposite end, angles relative to
+ * the reversed travel direction, and the (ordered) children reversed. Deeper
+ * levels are unaffected - a child branch's own tip is intrinsic to it.
+ */
+function flipTrunkEdges(trunk: FatBranch): FatBranchEdge[] {
+    const skeletonLength = getSkeletonLength(trunk.cpChain);
+
+    return (trunk.children ?? [])
+        .map((edge): FatBranchEdge => ({
+            branch: edge.branch,
+            distanceFromLeaf: skeletonLength - edge.distanceFromLeaf,
+            roundSalienceFromLeaf:
+                trunk.roundSalience - edge.roundSalienceFromLeaf,
+            // Reversing the travel direction maps θ to θ − sign(θ)·π.
+            angle: edge.angle > 0
+                ? edge.angle - Math.PI
+                : edge.angle + Math.PI,
+            // The outbound sleeve becomes the return sleeve.
+            side: edge.side === 1 ? -1 : 1
+        }))
+        .reverse();
+}
+
+
 // ---- Ordered forest edit distance ------------------------------------------
 
 function childrenOf(edge: FatBranchEdge): FatBranchEdge[] {
@@ -172,6 +207,28 @@ function forestKey(forest: FatBranchEdge[]): string {
 
 function minEdit(edits: Edit[]): Edit {
     return edits.reduce((best, e) => (e.cost < best.cost ? e : best));
+}
+
+
+/**
+ * Ordered edit distance of two child forests, matched PER SIDE of the parent
+ * MAT: a branch on the outbound sleeve can never match one on the return
+ * sleeve, and order is preserved within each side (but not across sides).
+ */
+function editForestSided(
+        F: FatBranchEdge[],
+        G: FatBranchEdge[],
+        memo: Map<string, Edit>,
+        cost: Cost): Edit {
+
+    const eOut = editForest(
+        F.filter(e => e.side === 1), G.filter(e => e.side === 1),
+        memo, cost);
+    const eBack = editForest(
+        F.filter(e => e.side === -1), G.filter(e => e.side === -1),
+        memo, cost);
+
+    return { cost: eOut.cost + eBack.cost, ops: eOut.ops.concat(eBack.ops) };
 }
 
 
@@ -230,7 +287,8 @@ function editForest(
         };
 
         // Match i with j: align their children and the remaining forests.
-        const children = editForest(childrenOf(i), childrenOf(j), memo, cost);
+        const children = editForestSided(
+            childrenOf(i), childrenOf(j), memo, cost);
         const rest = editForest(Frest, Grest, memo, cost);
         const matchEdit: Edit = {
             cost: cost.relabel(i, j) + children.cost + rest.cost,
