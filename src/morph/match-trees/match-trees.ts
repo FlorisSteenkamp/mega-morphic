@@ -326,5 +326,5 @@ function editForest(
 }
 
 
-export { matchTrees }
+export { matchTrees, flipTrunkEdges, trunkTurning, angleDist }
 export type { MatchResult, MatchedPair, MatchOptions, CostWeights }

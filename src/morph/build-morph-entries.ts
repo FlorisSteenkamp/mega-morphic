@@ -1,21 +1,25 @@
 import type { FatBranch } from './fat-branch/fat-branch.js';
 import type { MorphEntry, MutableMorphEntry } from './morph-entry.js';
 import type { AnchorPair } from './align-branches.js';
-import { matchTrees } from './match-trees/match-trees.js';
+import type { MatchedPath, PathNode } from './match-paths/match-paths.js';
+import type { EntryLoc, Trim } from './place-topology.js';
+import { matchPaths } from './match-paths/match-paths.js';
 import { alignBranches, resampleAt } from './align-branches.js';
-import { buildSleeveSides, skeletonKnots } from './anchored-sleeves.js';
+import {
+    buildSleeveSides, skeletonKnots, getEdgeSleeves
+} from './anchored-sleeves.js';
+import {
+    getSkeletonBeziers, getSkeletonRadii
+} from './fat-branch/get-fat-branch-tree.js';
+import { edgeIndexAt } from './edge-index-at.js';
 import { getLastP } from './fs/get-last-p.js';
-import { getParentMap } from './get-parent-map.js';
 import { getShapeArea } from 'flo-boolean';
 import { length } from 'flo-bezier3';
 import { clamp } from '../utils/clamp.js';
 import { matchColors } from '../page/events/match-colors.js';
 import { nearestIdx } from './nearest-idx.js';
 import { placeTopology } from './place-topology.js';
-import { composeThroughSkipped } from './compose-through-skipped.js';
 
-
-type EntryLoc = { idx: number; side: 'a' | 'b' };
 
 /** A matched feature (fork) position in both frames, for visualization. */
 interface FeatureMark {
@@ -24,145 +28,110 @@ interface FeatureMark {
     readonly classes: string;
 }
 
+
 /**
- * Matches the two fat branch trees and builds the full set of morph entries:
- * resampled matched pairs plus collapsing deleted/inserted branches, all
- * glued so junctions stay attached throughout the morph.
- *
- * @param matchColorsList colors cycled through for the matched pairs
+ * Matches the two fat branch trees PATH-wise (junction-to-leaf chains, DTW
+ * alignability as the matching metric) and builds the full set of morph
+ * entries: each matched path pair becomes one feature-aligned entry (a
+ * chain's composite geometry is native - no post-hoc compositing), matched
+ * child forks along the whole path are alignment anchors and glue points,
+ * and everything unmatched (whole subtrees, off-path leaf-side stubs)
+ * collapses via topology entries glued to the entry owning its fork.
  */
 function buildMorphEntries(
         tree1: FatBranch,
         tree2: FatBranch,
         marks?: FeatureMark[]): MorphEntry[] {
 
-    const matchedTrees = matchTrees(tree1, tree2);
+    const pm = matchPaths(tree1, tree2);
 
     // The sleeves walk the outline in its global direction - the trunk's
     // (mostly boundary) loop gives a reliable winding for the cap arcs.
-    // Small child branches cannot: their closing sector arc is reversed and
-    // can dominate, flipping their pss winding.
     const capSign = getShapeArea(tree1.pss) < 0 ? -1 : 1;
 
-    const parent1 = getParentMap(tree1);
-    const parent2 = getParentMap(tree2);
-    const pairOf = new Map<FatBranch, FatBranch>(
-        matchedTrees.pairs.map(p => [p[0], p[1]] as const));
-    const pairIdxOf = new Map<FatBranch, number>(
-        matchedTrees.pairs.map((p, i) => [p[0], i] as const));
     const unit1 = Math.sqrt(tree1.roundSalience);
     const unit2 = Math.sqrt(tree2.roundSalience);
-
-    const deletedSet = new Set(matchedTrees.deleted);
-    const insertedSet = new Set(matchedTrees.inserted);
 
     const entries: MutableMorphEntry[] = [];
     /** entry location of every fat branch */
     const entryLoc = new Map<FatBranch, EntryLoc>();
     /** per entry: its resampled segment boundary points, per side */
     const bnds: { a?: number[][]; b?: number[][] }[] = [];
-    /** glue attachment per matched child, from the alignment's fork anchors */
-    const anchorGlue = new Map<FatBranch, { e: number; k: number }>();
-    /** matched ancestor of each composited (through-deleted) branch, per side */
-    const mountsA = new Map<FatBranch, FatBranch>();
-    const mountsB = new Map<FatBranch, FatBranch>();
-    /** skipped branches partially absorbed by composites (min fork wins) */
-    const trims = new Map<FatBranch, { fromEdge: number; absorber: FatBranch }>();
+    /** branches fully covered by a matched path (per tree) */
+    const onPath1 = new Set<FatBranch>();
+    const onPath2 = new Set<FatBranch>();
+    /** stub hosts: their leaf-side remainder retracts (per tree) */
+    const trims1 = new Map<FatBranch, Trim>();
+    const trims2 = new Map<FatBranch, Trim>();
 
-    // Matched pairs: feature-align for correspondence, morph shape1 → shape2.
-    matchedTrees.pairs.forEach(([fbA, fbB], i) => {
-        // A branch whose parent chain was deleted/inserted extends through
-        // those ancestors to the nearest matched one - the partner's
-        // trunk-adjacent material then has a real counterpart.
-        const gA = composeThroughSkipped(fbA, parent1, deletedSet);
-        const gB = composeThroughSkipped(fbB, parent2, insertedSet);
-        if (gA.mount !== undefined) { mountsA.set(fbA, gA.mount); }
-        if (gB.mount !== undefined) { mountsB.set(fbB, gB.mount); }
-        for (const [g, fb] of [[gA, fbA], [gB, fbB]] as const) {
-            for (const abs of g.absorbed) {
-                const prev = trims.get(abs.branch);
-                if (prev === undefined || abs.fromEdge < prev.fromEdge) {
-                    trims.set(abs.branch,
-                        { fromEdge: abs.fromEdge, absorber: fb });
-                }
-            }
-        }
+    let pairIdx = 0;
 
-        const bzA = gA.bz;
+    buildPair(pm.trunk, true);
+
+    // Whatever no matched path covers collapses: whole unmatched subtrees
+    // in full, stub hosts trimmed to their leaf-side remainders.
+    placeTopology(tree1, topoSetOf(tree1, onPath1, trims1), 'a',
+        'red thin35 nofill', capSign, trims1, entryLoc, bnds, entries);
+    placeTopology(tree2, topoSetOf(tree2, onPath2, trims2), 'b',
+        'green thin35 nofill', capSign, trims2, entryLoc, bnds, entries);
+
+    return entries as MorphEntry[];
+
+
+    /** Builds the entry for one matched path pair, then recursively its
+     *  matched children's entries (glued onto this one). Returns the index. */
+    function buildPair(mp: MatchedPath, isTrunk: boolean): number {
+        const i = pairIdx++;
+        const idx = entries.length;
+
+        const gA = composeChain(mp.a);
+        const gB = composeChain(mp.b);
         let bzB = gB.bz;
-        const rdA = gA.rd;
         let rdB = gB.rd;
-
-        // Boundary pieces per original skeleton edge, per side.
-        const edgesA = gA.edges;
         let edgesB = gB.edges;
 
         // Flipped trunk: traverse tree2's trunk from its other tip - reverse
         // its skeleton; its edge sleeves reverse order and swap sides (the
-        // boundary geometry itself keeps its outline direction).
-        const flipped = i === 0 && matchedTrees.flipped;
-        if (flipped) {
+        // boundary geometry itself keeps its outline direction). The
+        // matcher's pooled distances already use the flipped convention.
+        if (isTrunk && pm.flipped) {
             bzB = bzB.map(ps => [...ps].reverse()).reverse();
             rdB = [...rdB].reverse();
             edgesB = [...edgesB].reverse()
                 .map(e => ({ out: e.back, back: e.out }));
         }
 
-        // Feature anchors: forks of this pair's MATCHED children.
-        const LA = totalLen(bzA);
-        const LB = totalLen(bzB);
-        const anchors: AnchorPair[] = [];
-        const anchorChildren: FatBranch[] = [];
-        for (const edgeA of fbA.children ?? []) {
-            const cA = edgeA.branch;
-            const cB = pairOf.get(cA);
-            if (cB === undefined || parent2.get(cB) !== fbB) { continue; }
-            const edgeB = (fbB.children ?? []).find(e => e.branch === cB);
-            if (edgeB === undefined) { continue; }
+        registerChain(mp.a, 'a', idx, onPath1, trims1);
+        registerChain(mp.b, 'b', idx, onPath2, trims2);
 
-            const dB = edgeB.distanceFromLeaf;
-            anchors.push({
-                uA: clamp(edgeA.distanceFromLeaf / LA, 0, 1),
-                uB: clamp((flipped ? LB - dB : dB) / LB, 0, 1)
-            });
-            anchorChildren.push(cA);
-        }
+        // Feature anchors: ALL matched child forks along the paths (incl.
+        // absorbed stretches - the matcher pooled them).
+        const LA = totalLen(gA.bz);
+        const LB = totalLen(bzB);
+        const matchOps = mp.children.filter(
+            op => op.type === 'match');
+        const anchors: AnchorPair[] = matchOps.map(op => ({
+            uA: clamp(op.a.dist / LA, 0, 1),
+            uB: clamp(op.b.dist / LB, 0, 1)
+        }));
 
         // Non-linear (feature-warped) correspondence along the skeleton.
-        const al = alignBranches(bzA, rdA, bzB, rdB, anchors, unit1, unit2);
-        const mA = resampleAt(bzA, rdA, al.usA);
+        const al = alignBranches(gA.bz, gA.rd, bzB, rdB, anchors,
+            unit1, unit2);
+        const mA = resampleAt(gA.bz, gA.rd, al.usA);
         const mB = resampleAt(bzB, rdB, al.usB);
 
         // Boundary anchored to the maximal disks, shape lerped on top.
         const sides = buildSleeveSides(
-            { edges: edgesA, knots: skeletonKnots(bzA),
+            { edges: gA.edges, knots: skeletonKnots(gA.bz),
               us: al.usA, bz: mA.beziers, radii: mA.radii },
             { edges: edgesB, knots: skeletonKnots(bzB),
               us: al.usB, bz: mB.beziers, radii: mB.radii }
         );
 
-        entryLoc.set(fbA, { idx: entries.length, side: 'a' });
-        entryLoc.set(fbB, { idx: entries.length, side: 'b' });
-
         const bndA = boundaries(mA.beziers);
         const bndB = boundaries(mB.beziers);
         bnds.push({ a: bndA, b: bndB });
-
-        // Matched forks attach at the SAME breakpoint index in both frames.
-        anchors.forEach((_, n) => {
-            const k = al.anchorIdx[n];
-            if (k < 0) { return; }
-            anchorGlue.set(anchorChildren[n], { e: entries.length, k });
-            if (marks !== undefined) {
-                const ci = pairIdxOf.get(anchorChildren[n]) ?? 0;
-                marks.push({
-                    pA: bndA[k],
-                    pB: bndB[k],
-                    classes:
-                        `${matchColors[ci % matchColors.length]} thin20 nofill`
-                });
-            }
-        });
 
         entries.push({
             a: mA.beziers,
@@ -175,97 +144,116 @@ function buildMorphEntries(
             capSign,
             classes: `${matchColors[i % matchColors.length]} thin35 nofill`,
         });
-    });
 
-    // Deleted branches (shape 1 only): retract into their attachment as t→1.
-    placeTopology(tree1, deletedSet, 'a', 'red thin35 nofill', capSign,
-        trims, entryLoc, bnds, entries);
+        // Children: build each matched sub-pair and glue it to this entry -
+        // at the aligned fork anchor when kept, else at the per-frame
+        // nearest boundary.
+        matchOps.forEach((op, n) => {
+            const childIdx = buildPair(op.sub, false);
 
-    // Inserted branches (shape 2 only): grow out of their attachment as t→0.
-    placeTopology(tree2, insertedSet, 'b', 'green thin35 nofill', capSign,
-        trims, entryLoc, bnds, entries);
+            const k = al.anchorIdx[n];
+            entries[childIdx].glue = k >= 0
+                ? { e1: idx, k1: k, e2: idx, k2: k }
+                : {
+                    e1: idx,
+                    k1: nearestIdx(bndA, getLastP(entries[childIdx].a)),
+                    e2: idx,
+                    k2: nearestIdx(bndB, getLastP(entries[childIdx].b))
+                };
 
-    // Glue each matched non-trunk pair to its parents (per frame) so its
-    // junction rides the parents' drawn skeletons throughout the morph.
-    matchedTrees.pairs.forEach(([fbA, fbB], i) => {
-        if (i === 0) { return; }  // the trunk pair is the root — nothing to glue to
+            if (marks !== undefined && k >= 0) {
+                marks.push({
+                    pA: bndA[k],
+                    pB: bndB[k],
+                    classes: `${matchColors[
+                        (childIdx) % matchColors.length]} thin20 nofill`
+                });
+            }
+        });
 
-        const idx = entryLoc.get(fbA)!.idx;
+        return idx;
+    }
 
-        // Aligned fork anchor: same breakpoint index in both frames.
-        const ag = anchorGlue.get(fbA);
-        if (ag !== undefined) {
-            entries[idx].glue = { e1: ag.e, k1: ag.k, e2: ag.e, k2: ag.k };
-            return;
+    /** Registers a chain's branches: entry location for all, fully-covered
+     *  ones as on-path, stub hosts with their trim. */
+    function registerChain(
+            nodes: PathNode[],
+            side: 'a' | 'b',
+            idx: number,
+            onPath: Set<FatBranch>,
+            trims: Map<FatBranch, Trim>): void {
+
+        const leaf = nodes[nodes.length - 1].branch;
+        for (const node of nodes) {
+            entryLoc.set(node.branch, { idx, side });
+            if (node.exit === undefined) {
+                onPath.add(node.branch);
+                continue;
+            }
+            const j = edgeIndexAt(
+                getSkeletonBeziers(node.branch),
+                node.exit.distanceFromLeaf);
+            if (j >= 1) {
+                trims.set(node.branch, { fromEdge: j, absorber: leaf });
+            } else {
+                onPath.add(node.branch);  // empty stub - fully absorbed
+            }
         }
+    }
+}
 
-        // Composited entries mount on their nearest matched ancestor.
-        const mA = mountsA.get(fbA);
-        const mB = mountsB.get(fbB);
-        const at1 = mA !== undefined
-            ? mountAttachment(mA, entryLoc, bnds, getLastP(entries[idx].a))
-            : getAttachment(fbA, parent1, entryLoc, bnds, getLastP(entries[idx].a));
-        const at2 = mB !== undefined
-            ? mountAttachment(mB, entryLoc, bnds, getLastP(entries[idx].b))
-            : getAttachment(fbB, parent2, entryLoc, bnds, getLastP(entries[idx].b));
-        if (at1 === undefined || at2 === undefined) { return; }
 
-        entries[idx].glue = {
-            e1: at1.e, k1: at1.k,
-            e2: at2.e, k2: at2.k
-        };
-    });
+/** A chain's composite geometry: skeleton, radii and per-edge sleeves,
+ *  leaf → junction (each branch traversed in its own direction). */
+function composeChain(nodes: PathNode[]): {
+        bz: number[][][];
+        rd: number[];
+        edges: { out: number[][][]; back: number[][][] }[] } {
 
-    return entries as MorphEntry[];
+    const leaf = nodes[nodes.length - 1].branch;
+    let bz = getSkeletonBeziers(leaf);
+    let rd = getSkeletonRadii(leaf);
+    let edges = getEdgeSleeves(leaf);
+
+    for (let k = nodes.length - 2; k >= 0; k--) {
+        const { branch, exit } = nodes[k];
+        const pBz = getSkeletonBeziers(branch);
+        const j = edgeIndexAt(pBz, exit!.distanceFromLeaf);
+
+        bz = [...bz, ...pBz.slice(j)];
+        rd = [...rd, ...getSkeletonRadii(branch).slice(j + 1)];
+        edges = [...edges, ...getEdgeSleeves(branch).slice(j)];
+    }
+
+    return { bz, rd, edges };
+}
+
+
+/** All branches of the tree not fully covered by a matched path (stub hosts
+ *  keep their trim: only the leaf-side remainder collapses). */
+function topoSetOf(
+        root: FatBranch,
+        onPath: Set<FatBranch>,
+        trims: Map<FatBranch, Trim>): Set<FatBranch> {
+
+    const out = new Set<FatBranch>();
+    const walk = (br: FatBranch): void => {
+        if (!onPath.has(br)) { out.add(br); }
+        for (const e of br.children ?? []) { walk(e.branch); }
+    };
+    walk(root);
+
+    // A trim without a topo placement would be ignored; a topo stub host
+    // without its trim would collapse in full - keep them consistent.
+    for (const host of trims.keys()) { out.add(host); }
+    out.delete(root);
+
+    return out;
 }
 
 
 function totalLen(bz: number[][][]): number {
     return bz.reduce((s, ps) => s + length([0, 1], ps), 0);
-}
-
-
-/**
- * The entry index and boundary index a branch's junction attaches to: the
- * nearest boundary of its tree parent's entry (in the branch's own frame).
- */
-function getAttachment(
-        fb: FatBranch,
-        parentMap: Map<FatBranch, FatBranch>,
-        entryLoc: Map<FatBranch, EntryLoc>,
-        bnds: { a?: number[][]; b?: number[][] }[],
-        junction: number[]): { e: number; k: number } | undefined {
-
-    const parent = parentMap.get(fb);
-    if (parent === undefined) { return undefined; }
-
-    const loc = entryLoc.get(parent);
-    if (loc === undefined) { return undefined; }
-
-    const bn = bnds[loc.idx][loc.side];
-    if (bn === undefined) { return undefined; }
-
-    return {
-        e: loc.idx,
-        k: nearestIdx(bn, junction)
-    };
-}
-
-
-/** Attachment on a composited branch's matched ancestor (its own frame). */
-function mountAttachment(
-        ancestor: FatBranch,
-        entryLoc: Map<FatBranch, EntryLoc>,
-        bnds: { a?: number[][]; b?: number[][] }[],
-        junction: number[]): { e: number; k: number } | undefined {
-
-    const loc = entryLoc.get(ancestor);
-    if (loc === undefined) { return undefined; }
-
-    const bn = bnds[loc.idx][loc.side];
-    if (bn === undefined) { return undefined; }
-
-    return { e: loc.idx, k: nearestIdx(bn, junction) };
 }
 
 
