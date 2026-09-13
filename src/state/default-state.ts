@@ -53,6 +53,7 @@ const defaultPageState: PageState = {
     viewMat: true,
     simplify: false,
     showSvgs: [true, true, true],
+    morphFillOnly: false,
 }
 
 

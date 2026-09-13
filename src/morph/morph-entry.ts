@@ -24,6 +24,9 @@ interface MorphEntry {
     readonly sleeveBack?: SleeveSide;
     /** winding sign of the outline (±1) - the tip cap arcs sweep this way */
     readonly capSign?: number;
+    /** which frame is a collapsed point (topology entries) - its chord
+     *  angles are meaningless fill */
+    readonly collapsed?: 'a' | 'b';
 }
 
 

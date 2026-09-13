@@ -6,7 +6,9 @@ import { getLastP } from './fs/get-last-p.js';
 import { reverseShapeOrientation } from 'flo-boolean';
 import { pAtIndex } from './fs/p-at-idx.js';
 import { boundaryTangents, boundaryPoint } from './anchored-sleeves.js';
-import { intrinsicSkeletonLerp } from './intrinsic-skeleton.js';
+import {
+    intrinsicSkeletonLerp, wrapAngle, unwrappedChordAngles
+} from './intrinsic-skeleton.js';
 
 const { atan2, max, cos, sin, abs, ceil, hypot, PI: π } = Math;
 
@@ -34,8 +36,10 @@ function resolveMorphAt(
 
     // Drawn (post-glue) beziers per entry; parents resolved on demand.
     const drawn: (number[][][] | undefined)[] = entries.map(() => undefined);
+    // Continuous first-segment anchor angle per entry (no atan2 re-wrapping).
+    const alphas: number[] = entries.map(() => 0);
 
-    const getDrawn_ = getDrawn(t, entries, drawn);
+    const getDrawn_ = getDrawn(t, entries, drawn, alphas);
 
     const radii: (number[] | undefined)[] = [];
     const outlines: number[][][][] = [];
@@ -98,15 +102,20 @@ function sleeveOutline(
 
     const Ts = boundaryTangents(bz);
 
-    const out = reconstructSide(sleeveOut, true, bz, rs, Ts, t);
-    const back = reconstructSide(sleeveBack, false, bz, rs, Ts, t);
+    const out = reconstructSide(sleeveOut, true, bz, rs, Ts, capSign, t);
+    const back = reconstructSide(sleeveBack, false, bz, rs, Ts, capSign, t);
 
     const pStart = bz[0][0];
     const pEnd = getLastP(bz);
 
     // out runs tip → end, back runs end → tip (outline direction).
-    const endCap = capArcPts(
-        pEnd, rs[rs.length - 1], out.last, back.first, capSign);
+    // A glued entry closes through its JUNCTION (= pEnd, glued onto the
+    // parent's skeleton, strictly interior to the parent's region) - the
+    // wedge guarantees overlap with the parent at every t, and at t=0/1 its
+    // extra sliver is covered by the parent's fork-gap arc.
+    const endCap = entry.glue !== undefined
+        ? [pEnd]
+        : capArcPts(pEnd, rs[rs.length - 1], out.last, back.first, capSign);
     const startCap = capArcPts(
         pStart, rs[0], back.last, out.first, capSign);
 
@@ -122,7 +131,9 @@ function sleeveOutline(
 /**
  * One side's boundary pieces at time `t`, in outline order: anchors
  * interpolated in the drawn disks' local frames, chord-normalized pieces
- * lerped and mapped through the interpolated anchor chords.
+ * lerped and mapped through the interpolated anchor chords. Fork gaps
+ * (skipped child sectors) are bridged with the fork disk's arc, swept with
+ * the winding - the parent's true region boundary there.
  */
 function reconstructSide(
         side: SleeveSide,
@@ -130,6 +141,7 @@ function reconstructSide(
         bz: number[][][],
         rs: number[],
         Ts: number[][],
+        capSign: number,
         t: number): { pieces: number[][][]; first: number[]; last: number[] } {
 
     const n = side.piecesA.length;
@@ -149,7 +161,17 @@ function reconstructSide(
         const e1 = anchorPoint(
             aA[2], aA[3], aB[2], aB[3], bidxTo, bz, rs, Ts, t);
 
-        if (m === 0) { first = e0; }
+        if (m === 0) {
+            first = e0;
+        } else {
+            // Fork gap: bridge along the boundary disk at this knot.
+            const gap = hypot(e0[0] - last[0], e0[1] - last[1]);
+            if (gap > 1e-3) {
+                const p = boundaryPoint(bz, bidxFrom);
+                pieces.push(...capArcPts(p, rs[bidxFrom], last, e0, capSign)
+                    .map(q => [q]));
+            }
+        }
         last = e1;
 
         // Chord frame of the interpolated anchors (same degenerate rule as
@@ -280,17 +302,42 @@ function capArcPts(
 
 /**
  * Returns a memoized resolver that computes an entry's drawn beziers at `t`:
- * control points lerped between frames `a` and `b`, then, if the entry is
- * glued, translated so its endpoint rides its parent's drawn skeleton
- * (parents are resolved recursively on demand). Results are cached in
- * `drawn`.
+ * skeleton interpolated intrinsically between frames `a` and `b`, then, if
+ * the entry is glued, translated so its endpoint rides its parent's drawn
+ * skeleton AND rotated about that junction by the parent's local frame
+ * rotation there (beyond the naive angle lerp) - so the child's angle
+ * RELATIVE to its parent interpolates linearly. All angles are tracked
+ * UNWRAPPED and continuously in t (`alphas` carries each entry's continuous
+ * anchor angle), so the rotation never jumps by 2π mid-morph. Parents are
+ * resolved recursively on demand; results are cached in `drawn`.
  */
 function getDrawn(
         t: number,
         entries: MorphEntry[],
-        drawn: (number[][][] | undefined)[]) {
+        drawn: (number[][][] | undefined)[],
+        alphas: number[]) {
 
     return getDrawn_;
+
+    /** ψ at attachment `k` on the DRAWN parent `e`, continuous in t. */
+    function parentPsi(e: number, k: number): number {
+        const ψs = unwrappedChordAngles(getDrawn_(e));
+        return alphas[e] + (profileAngleAt(ψs, k) - ψs[0]);
+    }
+
+    /** ψ at `k` on parent `e`'s static frame-a skeleton. */
+    function staticPsiA(e: number, k: number): number {
+        return profileAngleAt(unwrappedChordAngles(entries[e].a), k);
+    }
+
+    /** ψ at `k` on parent `e`'s static frame-b skeleton, re-anchored to the
+     *  drawn parent's continuous anchor at t=1 (same value mod 2π). */
+    function staticPsiB(e: number, k: number): number {
+        const ψsA = unwrappedChordAngles(entries[e].a);
+        const ψsB = unwrappedChordAngles(entries[e].b);
+        const adj = ψsA[0] + wrapAngle(ψsB[0] - ψsA[0]) - ψsB[0];
+        return profileAngleAt(ψsB, k) + adj;
+    }
 
     function getDrawn_(i: number): number[][][] {
         const cached = drawn[i];
@@ -301,13 +348,23 @@ function getDrawn(
         // Length + knot-angle interpolation (not a control-point lerp).
         let bz = intrinsicSkeletonLerp(a, b, t);
 
+        // Continuous anchor angle (matches intrinsicSkeletonLerp's φ0(t)).
+        const φ0A = unwrappedChordAngles(a)[0];
+        const φ0B = unwrappedChordAngles(b)[0];
+        let α = φ0A + t*wrapAngle(φ0B - φ0A);
+
         if (glue !== undefined) {
             let target: number[];
+            let dψ: number;  // parent frame rotation beyond its naive lerp
+
             if (glue.e1 === glue.e2) {
                 // Junction slides along the one parent from k1 to k2.
-                target = pAtIndex(
-                    getDrawn_(glue.e1), (1 - t)*glue.k1 + t*glue.k2
-                );
+                const kf = (1 - t)*glue.k1 + t*glue.k2;
+                target = pAtIndex(getDrawn_(glue.e1), kf);
+
+                const ψ = parentPsi(glue.e1, kf);
+                dψ = (1 - t)*(ψ - staticPsiA(glue.e1, glue.k1))
+                    + t*(ψ - staticPsiB(glue.e1, glue.k2));
             } else {
                 // Attached to different branches per frame: blend between
                 // the two attachment points' drawn positions.
@@ -317,17 +374,69 @@ function getDrawn(
                     (1 - t)*p1[0] + t*p2[0],
                     (1 - t)*p1[1] + t*p2[1]
                 ];
+
+                dψ = (1 - t)*(parentPsi(glue.e1, glue.k1)
+                        - staticPsiA(glue.e1, glue.k1))
+                    + t*(parentPsi(glue.e2, glue.k2)
+                        - staticPsiB(glue.e2, glue.k2));
             }
 
+            // Take the shortest rotation RELATIVE to the parent, not in
+            // absolute terms - so children follow their parent's rotation
+            // instead of swinging the other way around (2π-multiple
+            // correction, scaled by t: t=0/1 geometry unaffected). A
+            // collapsed frame has NO orientation (fill angles) - hold the
+            // parent-relative angle constant at the REAL frame's value
+            // instead (cancelling relΔ rotates only the collapsed point).
+            const relΔ = wrapAngle(φ0B - φ0A)
+                - (staticPsiB(glue.e2, glue.k2)
+                    - staticPsiA(glue.e1, glue.k1));
+            const collapsed = entries[i].collapsed;
+            dψ += collapsed === 'b' ? -t*relΔ
+                : collapsed === 'a' ? (1 - t)*relΔ
+                : t*(wrapAngle(relΔ) - relΔ);
+
+            α += dψ;
+
+            // Rotate about the junction by dψ, then move it onto the parent
+            // (both vanish at t=0 and t=1).
             const base = getLastP(bz);
             const dx = target[0] - base[0];
             const dy = target[1] - base[1];
-            bz = bz.map(ps => ps.map(p => [p[0] + dx, p[1] + dy]));
+            const c = cos(dψ);
+            const s = sin(dψ);
+            bz = bz.map(ps => ps.map(p => {
+                const ux = p[0] - base[0];
+                const uy = p[1] - base[1];
+                return [
+                    base[0] + dx + c*ux - s*uy,
+                    base[1] + dy + s*ux + c*uy
+                ];
+            }));
         }
 
+        alphas[i] = α;
         drawn[i] = bz;
         return bz;
     }
+}
+
+
+/**
+ * The angle profile's value at (fractional) boundary index `kf`, CONTINUOUS
+ * in `kf`: unwrapped per-segment chord angles interpolated between segment
+ * midpoints - so a sliding attachment never jumps across a sharp bend.
+ */
+function profileAngleAt(ψs: number[], kf: number): number {
+    const n = ψs.length;
+    if (n === 1) { return ψs[0]; }
+
+    // Segment k's angle sits at index k + 0.5.
+    const x = Math.min(Math.max(kf - 0.5, 0), n - 1);
+    const k = Math.min(Math.floor(x), n - 2);
+    const f = x - k;
+
+    return ψs[k]*(1 - f) + ψs[k + 1]*f;
 }
 
 

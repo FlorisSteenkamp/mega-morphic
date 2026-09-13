@@ -36,6 +36,8 @@ interface PageState {
     readonly simplify: boolean;
     /** Which of the three SVGs are shown (shape 1, shape 2, morph). */
     readonly showSvgs: readonly [boolean, boolean, boolean];
+    /** Draw the morph as filled area only (no MAT skeletons, no outline stroke). */
+    readonly morphFillOnly: boolean;
 }
 
 

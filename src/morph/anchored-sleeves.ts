@@ -36,7 +36,9 @@ interface SleeveFrame {
     readonly edges: { out: number[][][]; back: number[][][] }[];
     /** normalized arc-length knots of the original skeleton edges */
     readonly knots: number[];
-    /** the resampled skeleton (shared `us` breakpoints) */
+    /** this frame's breakpoints (monotone, may repeat for collapsed sections) */
+    readonly us: number[];
+    /** the resampled skeleton (cut at `us`) */
     readonly bz: number[][][];
     /** maximal-disk radius per resampled segment boundary */
     readonly radii: number[];
@@ -74,19 +76,18 @@ function skeletonKnots(bz: number[][][]): number[] {
 
 /**
  * Builds both anchored boundary sides of a matched pair: each frame's
- * boundary is cut at the shared skeleton breakpoints `us` (by boundary arc
- * fraction within each original edge), anchors are encoded in their disk's
- * local frame, and the in-between pieces are resampled to correspond and
- * normalized into their chord frames.
+ * boundary is cut at its own breakpoints (paired index-for-index between the
+ * frames; by boundary arc fraction within each original edge), anchors are
+ * encoded in their disk's local frame, and the in-between pieces are
+ * resampled to correspond and normalized into their chord frames.
  */
 function buildSleeveSides(
         A: SleeveFrame,
-        B: SleeveFrame,
-        us: number[]): { out: SleeveSide; back: SleeveSide } {
+        B: SleeveFrame): { out: SleeveSide; back: SleeveSide } {
 
     return {
-        out: buildSide(A, B, us, 'out'),
-        back: buildSide(A, B, us, 'back')
+        out: buildSide(A, B, 'out'),
+        back: buildSide(A, B, 'back')
     };
 }
 
@@ -94,11 +95,10 @@ function buildSleeveSides(
 function buildSide(
         A: SleeveFrame,
         B: SleeveFrame,
-        us: number[],
         side: 'out' | 'back'): SleeveSide {
 
-    const segsA = cutSide(A.edges, A.knots, us, side);
-    const segsB = cutSide(B.edges, B.knots, us, side);
+    const segsA = cutSide(A.edges, A.knots, A.us, side);
+    const segsB = cutSide(B.edges, B.knots, B.us, side);
     const TsA = boundaryTangents(A.bz);
     const TsB = boundaryTangents(B.bz);
 
@@ -112,12 +112,20 @@ function buildSide(
         const sA = segsA[k];
         const sB = segsB[k];
 
-        // Degenerate on either side: represent both as their plain chord.
+        // Degenerate sides: a fully degenerate pair becomes its chords; a
+        // one-sided degenerate (e.g. a collapsed topology frame) mirrors the
+        // real side's structure so control points still correspond.
         let pA = sA.pieces;
         let pB = sB.pieces;
-        if (totalLen(pA) < EPS_LEN || totalLen(pB) < EPS_LEN) {
+        const degA = totalLen(pA) < EPS_LEN;
+        const degB = totalLen(pB) < EPS_LEN;
+        if (degA && degB) {
             pA = [[sA.from, sA.to]];
             pB = [[sB.from, sB.to]];
+        } else if (degB) {
+            pB = pA.map(ps => ps.map(() => [sB.from[0], sB.from[1]]));
+        } else if (degA) {
+            pA = pB.map(ps => ps.map(() => [sA.from[0], sA.from[1]]));
         } else {
             [pA, pB] = distributeBezierListsEvenly(pA, pB);
         }
@@ -313,14 +321,25 @@ function normalizeSeg(
 
 /**
  * Unit tangent of the skeleton at each segment boundary (same rule at build
- * and reconstruction time so t=0/1 are exact).
+ * and reconstruction time so t=0/1 are exact). Degenerate (zero-length)
+ * segments inherit the nearest real neighbor's tangent - an arbitrary
+ * fallback would encode anchor angles in a bogus frame that the drawn
+ * (interpolated) frame doesn't match mid-morph.
  */
 function boundaryTangents(bz: number[][][]): number[][] {
-    const Ts: number[][] = [];
-    for (let k = 0; k < bz.length; k++) { Ts.push(unit(dirAtStart(bz[k]))); }
-    Ts.push(unit(dirAtEnd(bz[bz.length - 1])));
+    const dirs: number[][] = [];
+    for (let k = 0; k < bz.length; k++) { dirs.push(dirAtStart(bz[k])); }
+    dirs.push(dirAtEnd(bz[bz.length - 1]));
 
-    return Ts;
+    const isZero = (v: number[]) => v[0] === 0 && v[1] === 0;
+    for (let k = 1; k < dirs.length; k++) {
+        if (isZero(dirs[k])) { dirs[k] = dirs[k - 1]; }
+    }
+    for (let k = dirs.length - 2; k >= 0; k--) {
+        if (isZero(dirs[k])) { dirs[k] = dirs[k + 1]; }
+    }
+
+    return dirs.map(unit);
 }
 
 
@@ -343,7 +362,7 @@ function dirAtStart(ps: number[][]): number[] {
         const [x, y] = [ps[i][0] - p0[0], ps[i][1] - p0[1]];
         if (x !== 0 || y !== 0) { return [x, y]; }
     }
-    return [1, 0];
+    return [0, 0];  // degenerate - filled from a neighbor by boundaryTangents
 }
 
 
@@ -353,7 +372,7 @@ function dirAtEnd(ps: number[][]): number[] {
         const [x, y] = [pE[0] - ps[i][0], pE[1] - ps[i][1]];
         if (x !== 0 || y !== 0) { return [x, y]; }
     }
-    return [1, 0];
+    return [0, 0];  // degenerate - filled from a neighbor by boundaryTangents
 }
 
 

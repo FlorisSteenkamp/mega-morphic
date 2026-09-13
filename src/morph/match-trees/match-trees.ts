@@ -1,5 +1,6 @@
 import type { FatBranch, FatBranchEdge } from '../fat-branch/fat-branch.js';
-import { getSkeletonLength } from '../fat-branch/get-fat-branch-tree.js';
+import { getSkeletonLength, getSkeletonBeziers } from '../fat-branch/get-fat-branch-tree.js';
+import { unwrappedChordAngles } from '../intrinsic-skeleton.js';
 
 
 /** A single fat branch of `tree1` matched to a single fat branch of `tree2`. */
@@ -42,12 +43,15 @@ interface CostWeights {
     readonly salience: number;
     /** emanating angle relative to the parent */
     readonly angle: number;
+    /** trunk total-turning mismatch (orientation decision only) */
+    readonly turn: number;
 }
 
 const defaultWeights: CostWeights = {
     distance: 1,
     salience: 1,
-    angle: 0.5
+    angle: 0.5,
+    turn: 1
 };
 
 
@@ -98,7 +102,16 @@ function matchTrees(
     const flippedEdit = editForestSided(
         children1, flipTrunkEdges(tree2), new Map(), cost);
 
-    const flipped = flippedEdit.cost < normal.cost;
+    // Trunk total-turning compatibility: reversing a trunk negates its
+    // turning, and intrinsic interpolation between OPPOSITE turnings unwinds
+    // the skeleton mid-morph (e.g. a closed O-ring opening up) - so the
+    // orientation decision must include the trunks, not just the children.
+    const turn1 = trunkTurning(tree1);
+    const turn2 = trunkTurning(tree2);
+    const turnN = weights.turn * Math.abs(turn1 - turn2) / Math.PI;
+    const turnF = weights.turn * Math.abs(turn1 + turn2) / Math.PI;
+
+    const flipped = flippedEdit.cost + turnF < normal.cost + turnN;
     const edit = flipped ? flippedEdit : normal;
 
     const pairs: MatchedPair[] = [[tree1, tree2]];
@@ -155,11 +168,22 @@ function angleDist(x: number, y: number): number {
 }
 
 
+/** Total turning angle of a fat branch's skeleton path (tip → end). */
+function trunkTurning(fb: FatBranch): number {
+    const ψs = unwrappedChordAngles(getSkeletonBeziers(fb));
+    return ψs.length === 0 ? 0 : ψs[ψs.length - 1] - ψs[0];
+}
+
+
 /**
  * Returns the trunk's child edges as seen from its other leaf tip: distances
  * and partial saliences measured from the opposite end, angles relative to
- * the reversed travel direction, and the (ordered) children reversed. Deeper
- * levels are unaffected - a child branch's own tip is intrinsic to it.
+ * the reversed travel direction, and sides swapped. Deeper levels are
+ * unaffected - a child branch's own tip is intrinsic to it.
+ *
+ * NOTE no list reversal: matching is per side, and mirroring d already flips
+ * each side group's internal order into the correct convention (out-side
+ * ascending, back-side descending); reversing would break it.
  */
 function flipTrunkEdges(trunk: FatBranch): FatBranchEdge[] {
     const skeletonLength = getSkeletonLength(trunk.cpChain);
@@ -176,8 +200,7 @@ function flipTrunkEdges(trunk: FatBranch): FatBranchEdge[] {
                 : edge.angle + Math.PI,
             // The outbound sleeve becomes the return sleeve.
             side: edge.side === 1 ? -1 : 1
-        }))
-        .reverse();
+        }));
 }
 
 

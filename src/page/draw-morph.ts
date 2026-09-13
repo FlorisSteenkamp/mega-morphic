@@ -62,7 +62,9 @@ function drawMorph(
         refPageData: React.RefObject<PageData | null>,
         t: number) {
 
-    const { morphRef, svgRef3 } = refPageData.current!;
+    const { morphRef, svgRef3, props } = refPageData.current!;
+    const fillOnly =
+        props.stateControl.state.appState.pageState.morphFillOnly;
 
     const entries = morphRef.current;
     if (!entries) { return; }
@@ -73,7 +75,10 @@ function drawMorph(
     g3.replaceChildren();
 
     // The morphed boundary, drawn first so skeletons render on top.
-    drawLoopsAsPath(g3, outlines, 'gray thin10 fill25');
+    drawLoopsAsPath(g3, outlines,
+        fillOnly ? 'black nostroke' : 'gray thin10 fill25');
+
+    if (fillOnly) { return; }
 
     for (let i = 0; i < entries.length; i++) {
         const bz = drawn[i];

@@ -112,4 +112,21 @@ function wrapAngle(x: number): number {
 }
 
 
-export { intrinsicSkeletonLerp }
+/**
+ * Per-segment chord angles, UNWRAPPED cumulatively (adjacent segments differ
+ * by their true turning angle, never a ±2π jump) - a continuous angle
+ * profile along the skeleton.
+ */
+function unwrappedChordAngles(bz: number[][][]): number[] {
+    const { phi } = chords(bz);
+
+    const out = [phi[0]];
+    for (let k = 1; k < phi.length; k++) {
+        out.push(out[k - 1] + wrapAngle(phi[k] - phi[k - 1]));
+    }
+
+    return out;
+}
+
+
+export { intrinsicSkeletonLerp, wrapAngle, unwrappedChordAngles }

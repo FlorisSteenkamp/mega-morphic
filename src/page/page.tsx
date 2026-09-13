@@ -192,6 +192,11 @@ function Page(props: Props) {
         drawMorph(refPageData, t / 100);
     }
 
+    function onMorphFillOnlyChanged(morphFillOnly: boolean) {
+        upd(pageState, { morphFillOnly });
+        drawMorph(refPageData, morphT / 100);
+    }
+
     return <>
         <div style={{ height: '100vh', boxSizing: 'border-box', padding: '10px', display: 'flex', flexDirection: 'column' }}>
             <div>
@@ -248,6 +253,7 @@ function Page(props: Props) {
                 </div>
                 <Checkbox checked={pageState.simplify} styles={showThreeProngChangedStyles} text="simplify" onChanged={onSimplifyChanged} />
                 <Checkbox checked={pageState.viewMat} styles={showThreeProngChangedStyles} text="mat/sat" onChanged={onViewMatChanged} />
+                <Checkbox checked={pageState.morphFillOnly} styles={showThreeProngChangedStyles} text="fill only" onChanged={onMorphFillOnlyChanged} />
             </div>
             <div style={{ display: 'flex', gap: '16px', alignItems: 'flex-end', paddingBottom: '8px' }}>
                 <div style={{ minWidth: '225px'}}>
@@ -307,7 +313,7 @@ function Page(props: Props) {
                             cursor: 'pointer',
                         }}
                     >
-                        residual
+                        [placeholder]
                     </button>
                 </div>
                 <div style={{ display: 'flex' }}>
