@@ -6,12 +6,22 @@ import { getLastP } from './fs/get-last-p.js';
 import { nearestIdx } from './nearest-idx.js';
 
 
-/** Which entry a fat branch lives in, and on which side ('a' = shape 1). */
-type EntryLoc = { idx: number; side: 'a' | 'b' };
+/**
+ * Which entry a fat branch lives in, and on which side ('a' = shape 1).
+ */
+type EntryLoc = {
+    idx: number;
+    side: 'a' | 'b'
+}
 
-/** A skipped branch's absorbed stretch: edges from `fromEdge` on now live
- *  in the matched `absorber`'s composite entry. */
-type Trim = { fromEdge: number; absorber: FatBranch };
+
+/**
+ * A skipped branch's absorbed stretch: edges from `fromEdge` on now live
+ * in the matched `absorber`'s composite entry.
+ */
+type Trim = {
+    fromEdge: number; absorber: FatBranch
+}
 
 
 /**
@@ -35,7 +45,13 @@ function placeTopology(
         trims: Map<FatBranch, Trim>,
         entryLoc: Map<FatBranch, EntryLoc>,
         bnds: { a?: number[][]; b?: number[][] }[],
-        entries: MutableMorphEntry[]): void {
+        entries: MutableMorphEntry[],
+        /** bypassed trunk-stub entries: glue candidates for root children */
+        rootStubEntries: number[] = [],
+        /** attachment-point dot marks (own frame) */
+        marks?: { pA?: number[]; pB?: number[]; classes: string;
+            dot?: boolean;
+            at?: { e: number; k1: number; k2: number } }[]): void {
 
     walk(root);
 
@@ -71,24 +87,29 @@ function placeTopology(
         // A chained child's fork may lie on its parent's ABSORBED stretch -
         // then the absorber's composite owns that boundary, not the trimmed
         // remainder. Pick whichever candidate's boundary the junction is
-        // actually on (the true one matches exactly).
-        const candidates: FatBranch[] = [glueTo];
+        // actually on (the true one matches exactly). Children of the ROOT
+        // may also sit on a bypassed trunk stub.
+        const candidateEs: number[] = [];
+        const candBranches: FatBranch[] = [glueTo];
         const pTrim = trims.get(parent);
         if (glueTo === parent && pTrim !== undefined) {
-            candidates.push(pTrim.absorber);
+            candBranches.push(pTrim.absorber);
         }
+        for (const cand of candBranches) {
+            const loc = entryLoc.get(cand);
+            if (loc !== undefined) { candidateEs.push(loc.idx); }
+        }
+        if (parent === root) { candidateEs.push(...rootStubEntries); }
 
         let bestAt: { e: number; k: number } | undefined;
         let bestD = Infinity;
-        for (const cand of candidates) {
-            const loc = entryLoc.get(cand);
-            if (loc === undefined) { continue; }
-            const bn = bnds[loc.idx][loc.side];
+        for (const e of candidateEs) {
+            const bn = bnds[e][side];
             if (bn === undefined) { continue; }
             const k = nearestIdx(bn, junction);
             const d = Math.hypot(
                 bn[k][0] - junction[0], bn[k][1] - junction[1]);
-            if (d < bestD) { bestD = d; bestAt = { e: loc.idx, k }; }
+            if (d < bestD) { bestD = d; bestAt = { e, k }; }
         }
         if (bestAt === undefined) { return; }
 
@@ -97,44 +118,81 @@ function placeTopology(
             e2: bestAt.e, k2: bestAt.k
         };
 
-        const collapsed = collapseTo(bz, junction);
-        // Radii → 0 so the branch's disks vanish into the fork disk
-        // (pinning them to the fork radius made tip disks GROW).
-        const rZero = radii.map(() => 0);
+        const bnAt = bnds[bestAt.e][side]![bestAt.k];
+        marks?.push({
+            [side === 'a' ? 'pA' : 'pB']: bnAt,
+            classes: `${side === 'a' ? 'red' : 'green'} nostroke`,
+            dot: true,
+            at: { e: bestAt.e, k1: bestAt.k, k2: bestAt.k }
+        });
 
-        // No resampling needed: the collapsed frame mirrors the real frame
-        // segment for segment, so both use the real frame's knots.
-        const us = skeletonKnots(bz);
-        const pointEdges = edges.map(() => ({
-            out: [[junction, junction]],
-            back: [[junction, junction]]
-        }));
-
-        const real = { edges, knots: us, us, bz, radii };
-        const gone = {
-            edges: pointEdges, knots: us, us, bz: collapsed, radii: rZero
-        };
-
-        const sides = side === 'a'
-            ? buildSleeveSides(real, gone)
-            : buildSleeveSides(gone, real);
-
-        entryLoc.set(child, { idx: entries.length, side });
-        bnds.push(side === 'a' ? { a: boundaries(bz) } : { b: boundaries(bz) });
-        entries.push({
-            a: side === 'a' ? bz : collapsed,
-            b: side === 'a' ? collapsed : bz,
-            ra: side === 'a' ? radii : rZero,
-            rb: side === 'a' ? rZero : radii,
-            us,
-            sleeveOut: sides.out,
-            sleeveBack: sides.back,
-            capSign,
-            classes,
-            glue,
-            collapsed: side === 'a' ? 'b' : 'a'
+        entryLoc.set(child, {
+            idx: pushCollapsedEntry(
+                bz, radii, edges, side, classes, capSign, glue,
+                bnds, entries),
+            side
         });
     }
+}
+
+
+/**
+ * Pushes a topology entry: the real geometry in its own frame, collapsed
+ * onto its junction (last point) with zero radii and point sleeves in the
+ * other frame. Returns the entry index.
+ */
+function pushCollapsedEntry(
+        bz: number[][][],
+        radii: number[],
+        edges: { out: number[][][]; back: number[][][] }[],
+        side: 'a' | 'b',
+        classes: string,
+        capSign: number,
+        glue: Glue,
+        bnds: { a?: number[][]; b?: number[][] }[],
+        entries: MutableMorphEntry[]): number {
+
+    const junction = getLastP(bz);
+
+    const collapsed = collapseTo(bz, junction);
+    // Radii → 0 so the branch's disks vanish into the fork disk
+    // (pinning them to the fork radius made tip disks GROW).
+    const rZero = radii.map(() => 0);
+
+    // No resampling needed: the collapsed frame mirrors the real frame
+    // segment for segment, so both use the real frame's knots.
+    const us = skeletonKnots(bz);
+    const pointEdges = edges.map(() => ({
+        out: [[junction, junction]],
+        back: [[junction, junction]]
+    }));
+
+    const real = { edges, knots: us, us, bz, radii };
+    const gone = {
+        edges: pointEdges, knots: us, us, bz: collapsed, radii: rZero
+    };
+
+    const sides = side === 'a'
+        ? buildSleeveSides(real, gone)
+        : buildSleeveSides(gone, real);
+
+    const idx = entries.length;
+    bnds.push(side === 'a' ? { a: boundaries(bz) } : { b: boundaries(bz) });
+    entries.push({
+        a: side === 'a' ? bz : collapsed,
+        b: side === 'a' ? collapsed : bz,
+        ra: side === 'a' ? radii : rZero,
+        rb: side === 'a' ? rZero : radii,
+        us,
+        sleeveOut: sides.out,
+        sleeveBack: sides.back,
+        capSign,
+        classes,
+        glue,
+        collapsed: side === 'a' ? 'b' : 'a'
+    });
+
+    return idx;
 }
 
 
@@ -150,4 +208,4 @@ function collapseTo(beziers: number[][][], pt: number[]): number[][][] {
 
 
 export type { EntryLoc, Trim }
-export { placeTopology }
+export { placeTopology, pushCollapsedEntry }

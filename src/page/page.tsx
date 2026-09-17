@@ -6,11 +6,14 @@ import type { ClickFor } from '../state/page-state.js';
 import type { Props } from './props.js';
 import type { PageData } from './page-data.js';
 import type { MorphEntry } from './draw-morph.js';
+import type { FeatureMark } from '../morph/build-morph-entries/build-morph-entries.js';
+import type { PoseRamp } from '../morph/pose-ramp.js';
+import type { PathCostWeights } from '../morph/match-paths/path-cost-weights.js';
 import { useRef, useEffect } from 'react';
-import { Slider } from '../components/simple/simple-slider.js';
-import { SimpleSelect } from '../components/simple/simple-select.js';
-import { ButtonGroup } from '../components/simple/simple-button-group.js';
-import { Checkbox } from '../components/simple/simple-checkbox.js';
+import { Slider } from '../components/simple-slider.js';
+import { SimpleSelect } from '../components/simple-select.js';
+import { ButtonGroup } from '../components/simple-button-group.js';
+import { Checkbox } from '../components/simple-checkbox.js';
 import { loadDeducedProps } from './load-deduced-props.js';
 import { logSomeStuff } from './log/log-some-stuff.js';
 import { toViewBoxStr, unionViewbox } from './fs-consts-types/viewbox.js';
@@ -26,6 +29,7 @@ import { onMatchClicked } from './events/on-match-clicked.js';
 import { onMorphClicked } from './events/on-morph-clicked.js';
 import { onFattestClicked } from './events/on-fattest-clicked.js';
 import { drawMorph } from './draw-morph.js';
+import { beziersToSvgPathStr } from 'flo-boolean';
 
 
 const toDrawCheckboxStyles = { 
@@ -48,6 +52,23 @@ const showThreeProngChangedStyles = {
 
 
 const getGlyphNames_ = await getGlyphNames();
+
+
+/** slider range per path-matching weight */
+const weightRanges: Record<keyof PathCostWeights,
+        { max: number; step: number }> = {
+    shape: { max: 3, step: 0.05 },
+    position: { max: 2, step: 0.05 },
+    angle: { max: 2, step: 0.05 },
+    del: { max: 10, step: 0.1 },
+    delFloor: { max: 1, step: 0.01 },
+    stub: { max: 10, step: 0.1 },
+    tail: { max: 2, step: 0.05 },
+    turn: { max: 2, step: 0.05 },
+    sway: { max: 2, step: 0.05 },
+    gapOpen: { max: 1, step: 0.01 },
+    gapExtend: { max: 0.3, step: 0.005 }
+};
 // console.log(getGlyphNames_);
 
 
@@ -73,11 +94,14 @@ function Page(props: Props) {
     // of its attachment point (a is collapsed). Entries may be glued to a
     // parent entry so their junction stays attached throughout the morph.
     const morphRef = useRef<MorphEntry[] | null>(null);
+    const morphMarksRef = useRef<FeatureMark[] | null>(null);
+    const morphPoseRef = useRef<PoseRamp | null>(null);
     const [morphT, setMorphT] = React.useState(0);  // slider value 0..100
 
     const refPageData = useRef<PageData>(null);
     const pageData: PageData = {
-        props, svgRef1, svgRef2, svgRef3, morphRef, morphT
+        props, svgRef1, svgRef2, svgRef3, morphRef, morphMarksRef,
+        morphPoseRef, morphT
     };
     refPageData.current = pageData;
 
@@ -141,7 +165,12 @@ function Page(props: Props) {
             loadDeducedProps(stateControl, pathStr1, pathStr2);
 
         upd(stateControl.state.appState.pageState.deduced, {
-            bezierLoops1, pathStr1, mats1,
+            bezierLoops1,
+            // Regenerated from the (possibly rotated) loops so the drawn
+            // outline always matches what the MAT consumed.
+            pathStr1: bezierLoops1
+                .map(loop => beziersToSvgPathStr(loop)).join(' '),
+            mats1,
             bezierLoops2, pathStr2, mats2,
         });
 
@@ -162,7 +191,7 @@ function Page(props: Props) {
     }
 
 
-    function onClickForChanged(key: ClickFor | 'spacer'): void {
+    function onClickForChanged(key: ClickFor | 'spacer' | undefined): void {
         if (key === 'spacer') { return; }
         upd(pageState, { clickFor: key });
     }
@@ -195,6 +224,51 @@ function Page(props: Props) {
     function onMorphFillOnlyChanged(morphFillOnly: boolean) {
         upd(pageState, { morphFillOnly });
         drawMorph(refPageData, morphT / 100);
+    }
+
+    function onProcrustesChanged(procrustes: boolean) {
+        upd(pageState, { procrustes });
+    }
+
+    function onShowPoseChanged(showPose: boolean) {
+        upd(pageState, { showPose });
+        drawMorph(refPageData, morphT / 100);
+    }
+
+    function pathWeightChanged(key: keyof PathCostWeights) {
+        return (event: Event, value: number | number[]) => {
+            upd(pageState, {
+                pathWeights: {
+                    ...pageState.pathWeights,
+                    [key]: value as number
+                }
+            });
+        };
+    }
+
+    /** Zoom the morph svg out 2x around its current center. */
+    function onZoomOutClicked() {
+        const [[minX, minY], [maxX, maxY]] = pageState.viewbox3;
+        const cx = (minX + maxX) / 2;
+        const cy = (minY + maxY) / 2;
+        const hw = maxX - cx;
+        const hh = maxY - cy;
+        transientState.viewboxStack3.push(pageState.viewbox3);
+        upd(pageState, {
+            viewbox3: [[cx - 2*hw, cy - 2*hh], [cx + 2*hw, cy + 2*hh]]
+        });
+    }
+
+    /** Rotate shape 1 a further 10° and rebuild everything (testing). */
+    function onRotate10Clicked() {
+        upd(pageState, { rot1: (pageState.rot1 + 10) % 360 });
+        lazyLoadDeduced(false);
+    }
+
+    /** Toggle shape 1's horizontal mirror and rebuild everything (testing). */
+    function onFlipHClicked() {
+        upd(pageState, { flip1: !pageState.flip1 });
+        lazyLoadDeduced(false);
     }
 
     return <>
@@ -254,6 +328,8 @@ function Page(props: Props) {
                 <Checkbox checked={pageState.simplify} styles={showThreeProngChangedStyles} text="simplify" onChanged={onSimplifyChanged} />
                 <Checkbox checked={pageState.viewMat} styles={showThreeProngChangedStyles} text="mat/sat" onChanged={onViewMatChanged} />
                 <Checkbox checked={pageState.morphFillOnly} styles={showThreeProngChangedStyles} text="fill only" onChanged={onMorphFillOnlyChanged} />
+                <Checkbox checked={pageState.procrustes} styles={showThreeProngChangedStyles} text="procrustes" onChanged={onProcrustesChanged} />
+                <Checkbox checked={pageState.showPose} styles={showThreeProngChangedStyles} text="pose" onChanged={onShowPoseChanged} />
             </div>
             <div style={{ display: 'flex', gap: '16px', alignItems: 'flex-end', paddingBottom: '8px' }}>
                 <div style={{ minWidth: '225px'}}>
@@ -300,7 +376,7 @@ function Page(props: Props) {
                 </div>
                 <div style={{ display: 'flex' }}>
                     <button
-                        // onClick={() => onResidualClicked(refPageData)}
+                        onClick={onZoomOutClicked}
                         style={{
                             padding: '9px 20px',
                             fontSize: '14px',
@@ -313,7 +389,43 @@ function Page(props: Props) {
                             cursor: 'pointer',
                         }}
                     >
-                        [placeholder]
+                        zoom out
+                    </button>
+                </div>
+                <div style={{ display: 'flex' }}>
+                    <button
+                        onClick={onRotate10Clicked}
+                        style={{
+                            padding: '9px 20px',
+                            fontSize: '14px',
+                            fontWeight: 500,
+                            lineHeight: '1',
+                            color: '#fff',
+                            backgroundColor: '#1976d2',
+                            border: 'none',
+                            borderRadius: '4px',
+                            cursor: 'pointer',
+                        }}
+                    >
+                        rotate 10
+                    </button>
+                </div>
+                <div style={{ display: 'flex' }}>
+                    <button
+                        onClick={onFlipHClicked}
+                        style={{
+                            padding: '9px 20px',
+                            fontSize: '14px',
+                            fontWeight: 500,
+                            lineHeight: '1',
+                            color: pageState.flip1 ? '#1976d2' : '#fff',
+                            backgroundColor: pageState.flip1 ? '#fff' : '#1976d2',
+                            border: '1px solid #1976d2',
+                            borderRadius: '4px',
+                            cursor: 'pointer',
+                        }}
+                    >
+                        flip h
                     </button>
                 </div>
                 <div style={{ display: 'flex' }}>
@@ -388,6 +500,23 @@ function Page(props: Props) {
                         );
                     })}
                 </div>
+            </div>
+            <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap', alignItems: 'flex-end', paddingBottom: '6px' }}>
+                {(Object.keys(weightRanges) as (keyof PathCostWeights)[])
+                    .map(key => (
+                        <div key={key} style={{ minWidth: '110px' }}>
+                            <p style={{ marginTop: 0, marginBottom: '0.1em', fontSize: '12px' }}>
+                                {key}: {pageState.pathWeights[key]}
+                            </p>
+                            <Slider
+                                value={pageState.pathWeights[key]}
+                                min={0}
+                                max={weightRanges[key].max}
+                                step={weightRanges[key].step}
+                                onChange={pathWeightChanged(key)}
+                            />
+                        </div>
+                    ))}
             </div>
             <span ref={refX} style={{ userSelect: 'none', position: 'fixed', bottom: '13px', left: '10px' }} />
             <span ref={refY} style={{ userSelect: 'none', position: 'fixed', bottom: '13px', left: '120px' }} />

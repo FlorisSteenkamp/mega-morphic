@@ -1,5 +1,8 @@
 import type { PageData } from "./page-data";
 import type { MorphEntry, Glue } from "../morph/morph-entry.js";
+import type { FeatureMark } from "../morph/build-morph-entries/build-morph-entries.js";
+import { poseCorrectionAt } from "../morph/pose-ramp.js";
+import { procrustes } from "../morph/procrustes/procrustes-analysis.js";
 import { evalDeCasteljau } from "flo-bezier3";
 import { resolveMorphAt } from "../morph/resolve-morph-at.js";
 import { drawBeziersAsSinglePath } from "../draw/draw-beziers-as-single-path";
@@ -57,19 +60,61 @@ function pointAtIndex(bz: number[][][], kf: number): number[] {
 }
 
 
+/**
+ * Pose gizmo MEASURED from the drawn outlines: a ring at the area centroid
+ * with radius ∝ √area (the scale indicator) and a thin line along the
+ * principal axis (the rotation indicator) - lets the pose be tracked
+ * through the morph.
+ */
+function drawPoseGizmo(g: SVGGElement, outlines: number[][][][]) {
+    if (outlines.length === 0) { return; }
+
+    const { centroid, scale, angle } = procrustes(outlines.flat());
+    const [cx, cy] = centroid;
+
+    const $ring = document.createElementNS(XMLNS, 'circle');
+    $ring.setAttributeNS(null, 'cx', `${cx}`);
+    $ring.setAttributeNS(null, 'cy', `${cy}`);
+    $ring.setAttributeNS(null, 'r', `${0.2 * scale}`);
+    $ring.setAttributeNS(null, 'class', 'blue thin10 nofill');
+    g.appendChild($ring);
+
+    const dx = Math.cos(angle) * 0.6 * scale;
+    const dy = Math.sin(angle) * 0.6 * scale;
+    const $axis = document.createElementNS(XMLNS, 'path');
+    $axis.setAttributeNS(null, 'd',
+        `M${cx - dx} ${cy - dy} L${cx + dx} ${cy + dy}`);
+    $axis.setAttributeNS(null, 'class', 'blue thin2 nofill');
+    g.appendChild($axis);
+}
+
+
 /** Interpolate every morph drawable at `t` ∈ [0,1] and draw. */
 function drawMorph(
         refPageData: React.RefObject<PageData | null>,
         t: number) {
 
-    const { morphRef, svgRef3, props } = refPageData.current!;
-    const fillOnly =
-        props.stateControl.state.appState.pageState.morphFillOnly;
+    const { morphRef, morphMarksRef, morphPoseRef, svgRef3, props } =
+        refPageData.current!;
+    const { morphFillOnly: fillOnly, showPose } =
+        props.stateControl.state.appState.pageState;
 
     const entries = morphRef.current;
     if (!entries) { return; }
 
-    const { drawn, radii, outlines } = resolveMorphAt(entries, t);
+    let { drawn, radii, outlines } = resolveMorphAt(entries, t);
+
+    // Pin the drawn shape's MEASURED pose onto the interpolated pose path
+    // (procrustes): straight centroid line, constant angular rate,
+    // geometric scale - the shape blend alone wanders off the path.
+    const ramp = morphPoseRef.current;
+    if (ramp !== null && outlines.length > 0) {
+        const measured = procrustes(outlines.flat());
+        const { tf, scale } = poseCorrectionAt(ramp, t, measured);
+        drawn = drawn.map(bz => bz.map(ps => ps.map(tf)));
+        outlines = outlines.map(loop => loop.map(ps => ps.map(tf)));
+        radii = radii.map(rs => rs?.map(r => r * scale));
+    }
 
     const g3 = svgRef3.current!.getElementsByTagName('g')[0];
     g3.replaceChildren();
@@ -77,6 +122,8 @@ function drawMorph(
     // The morphed boundary, drawn first so skeletons render on top.
     drawLoopsAsPath(g3, outlines,
         fillOnly ? 'black nostroke' : 'gray thin10 fill25');
+
+    if (showPose) { drawPoseGizmo(g3, outlines); }
 
     if (fillOnly) { return; }
 
@@ -95,6 +142,43 @@ function drawMorph(
         //         drawCircle(g3, pointAtIndex(bz, k), rs[k], diskClasses);
         //     }
         // }
+    }
+
+    // Feature marks riding the drawn skeletons (glue points slide k1 → k2).
+    drawMovingMarks(g3, morphMarksRef.current, drawn, t);
+}
+
+
+/** Draws the feature marks at their positions on the DRAWN entries at `t`
+ *  (crosses = anchors, dots = plain attachments). */
+function drawMovingMarks(
+        g: SVGGElement,
+        marks: FeatureMark[] | null,
+        drawn: number[][][][],
+        t: number) {
+
+    if (marks === null) { return; }
+
+    const size = 12;
+    for (const { at, classes, dot } of marks) {
+        if (at === undefined || drawn[at.e] === undefined) { continue; }
+        const p = pointAtIndex(drawn[at.e], (1 - t)*at.k1 + t*at.k2);
+
+        if (dot) {
+            const $c = document.createElementNS(XMLNS, 'circle');
+            $c.setAttributeNS(null, 'cx', `${p[0]}`);
+            $c.setAttributeNS(null, 'cy', `${p[1]}`);
+            $c.setAttributeNS(null, 'r', '3');
+            $c.setAttributeNS(null, 'class', classes);
+            g.appendChild($c);
+            continue;
+        }
+        const $path = document.createElementNS(XMLNS, 'path');
+        $path.setAttributeNS(null, 'd',
+            `M${p[0] - size} ${p[1]} L${p[0] + size} ${p[1]} ` +
+            `M${p[0]} ${p[1] - size} L${p[0]} ${p[1] + size}`);
+        $path.setAttributeNS(null, 'class', classes);
+        g.appendChild($path);
     }
 }
 

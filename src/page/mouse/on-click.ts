@@ -45,8 +45,6 @@ function onClick(
         if (!svg$) { return; }
         const g = svg$.getElementsByTagName('g')[0];
 
-        // getRoundSalience, getCpChain
-
         const fs: { [key: string]: (g: SVGGElement, p: number[], delay: number) => void } = {
             twoProng          : logTwoProng(mats),
             threeProng        : logThreeProng(mats),
@@ -62,6 +60,7 @@ function onClick(
         }
         
         const { clickFor, showDelay } = pageState;
+        if (clickFor === undefined) { return; }
         fs[clickFor](g, [viewboxX,viewboxY], showDelay);
     }
 }

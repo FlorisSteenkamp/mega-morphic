@@ -5,6 +5,7 @@ import { createEmptyGeneratedSvgs, emptyDebugElems } from '../page/fs-consts-typ
 import { DeducedState } from './deduced-state.js';
 import { ToDraw } from './to-draw.js';
 import { mapObj } from '../utils/map-obj.js';
+import { defaultPathWeights } from '../morph/match-paths/match-paths.js';
 
 
 const defaultTransientState: TransientState = {
@@ -54,6 +55,11 @@ const defaultPageState: PageState = {
     simplify: false,
     showSvgs: [true, true, true],
     morphFillOnly: false,
+    procrustes: false,
+    showPose: false,
+    rot1: 0,
+    flip1: false,
+    pathWeights: defaultPathWeights,
 }
 
 

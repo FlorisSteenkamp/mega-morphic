@@ -1,3 +1,5 @@
+import { wrapAngle } from './wrap-angle.js';
+
 const { atan2, cos, sin, hypot, PI: π } = Math;
 
 const EPS = 1e-9;
@@ -107,17 +109,14 @@ function chordNormalize(ps: number[][]): number[][] {
 }
 
 
-function wrapAngle(x: number): number {
-    return ((x + π) % (2*π) + 2*π) % (2*π) - π;
-}
-
-
 /**
  * Per-segment chord angles, UNWRAPPED cumulatively (adjacent segments differ
  * by their true turning angle, never a ±2π jump) - a continuous angle
  * profile along the skeleton.
  */
-function unwrappedChordAngles(bz: number[][][]): number[] {
+function unwrappedChordAngles(
+        bz: number[][][]): number[] {
+
     const { phi } = chords(bz);
 
     const out = [phi[0]];
@@ -129,4 +128,4 @@ function unwrappedChordAngles(bz: number[][][]): number[] {
 }
 
 
-export { intrinsicSkeletonLerp, wrapAngle, unwrappedChordAngles }
+export { intrinsicSkeletonLerp, unwrappedChordAngles }

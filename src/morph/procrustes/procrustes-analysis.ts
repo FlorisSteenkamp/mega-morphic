@@ -1,4 +1,7 @@
-import { getShapeArea, getShapeCentroid, getPrincipalAxes } from 'flo-boolean';
+import {
+    getShapeArea, getShapeCentroid,
+    get2ndMomentOfInertia, getProdMomentOfInertia
+} from 'flo-boolean';
 
 
 /** A coarse similarity-transform pose of a single Jordan-loop shape. */
@@ -9,6 +12,9 @@ interface Pose {
     readonly scale: number;
     /** principal-axis angle in radians; only defined mod π */
     readonly angle: number;
+    /** |c₂₀|/(Ixx+Iyy) ∈ [0,1]: how measurable the axis is (0 = isotropic,
+     *  angle is pure noise) */
+    readonly anisotropy: number;
 }
 
 
@@ -16,8 +22,10 @@ interface Pose {
  * Coarse, moment-based pose of a single Jordan-loop shape, used to normalize
  * two shapes to a common frame before morphing.
  *
- * Rotation is the shape's principal axis and is only defined mod π; the 180°
- * / reflection ambiguity is left for the finer, correspondence-based step.
+ * The axis angle is arg(c₂₀)/2 with c₂₀ = (Iyy−Ixx) + 2i·Ixy — the same
+ * principal axis as the eigen decomposition, but CONTINUOUS through
+ * isotropy (no discrete major/minor label swap; the phase just moves fast
+ * near c₂₀ = 0). Still only defined mod π.
  */
 function procrustes(
         bezierLoop: (number[][])[]): Pose {
@@ -26,15 +34,17 @@ function procrustes(
     // getShapeArea is signed (negative for clockwise loops); use magnitude.
     const scale = Math.sqrt(Math.abs(getShapeArea(bezierLoop)));
 
-    // Principal axes are only meaningful about the centroid.
+    // Moments are only meaningful about the centroid.
     const centered = bezierLoop.map(
         ps => ps.map(p => [p[0] - centroid[0], p[1] - centroid[1]])
     );
-    const { eigenVectors } = getPrincipalAxes(centered);
-    const [vx, vy] = eigenVectors[0];
-    const angle = Math.atan2(vy, vx);
+    const [ixx, iyy] = get2ndMomentOfInertia(centered);
+    const ixy = getProdMomentOfInertia(centered);
+    const angle = Math.atan2(2*ixy, iyy - ixx) / 2;
+    const anisotropy =
+        Math.hypot(iyy - ixx, 2*ixy) / Math.abs(ixx + iyy);
 
-    return { centroid, scale, angle };
+    return { centroid, scale, angle, anisotropy };
 }
 
 

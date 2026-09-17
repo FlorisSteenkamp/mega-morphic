@@ -1,5 +1,5 @@
 import type { CpNode } from "flo-mat";
-import type { FatBranch, FatBranchEdge } from "./fat-branch.js";
+import type { FatBranch } from "./fat-branch.js";
 import {
     getAllOnCircle, getMatCurveToNext, getRealProngCount, isOnSameCircle
 } from "flo-mat";
@@ -8,6 +8,30 @@ import { getShapeArea } from "flo-boolean";
 import { getFatBranch } from "./get-fat-branch.js";
 import { getFatBranchesFrom } from "./get-fat-branches-from.js";
 import { getChainPss } from "./get-fat-salience.js";
+
+
+/**
+ * The 2-prong CpNode on the MAT's largest maximal disk - a canonical,
+ * rotation-invariant rooting for `getFatBranchTree`: the largest disk is the
+ * shape's most interior point (its radius is its boundary distance), so the
+ * trunk passes through the core rather than whatever peripheral branch the
+ * MAT traversal happened to start on.
+ */
+function getFattestCpNode(start: CpNode): CpNode {
+    let best: CpNode | undefined;
+    let cp = start;
+    do {
+        if (getRealProngCount(cp) === 2 &&
+            (best === undefined ||
+                cp.pointOnShape.circle.radius >
+                best.pointOnShape.circle.radius)) {
+            best = cp;
+        }
+        cp = cp.next;
+    } while (cp !== start);
+
+    return best ?? start;
+}
 
 
 /**
@@ -35,7 +59,9 @@ function getFatBranchTree(
 }
 
 
-function addChildren(parent: FatBranch): void {
+function addChildren(
+        parent: FatBranch): void {
+
     const branches = getFatBranchesFrom(parent);
     parent.children = [];
     if (branches.length === 0) { return; }
@@ -114,24 +140,41 @@ function childSide(rotated: CpNode[], kF: number, s: CpNode): 1 | -1 {
 }
 
 
-/** Closes an open (child) chain via its fork-circle seam jump. */
-function closeChain(cpChain: CpNode[]): CpNode[] {
+/**
+ * Closes an open (child) chain via its fork-circle seam jump.
+ */
+function closeChain(
+        cpChain: CpNode[]): CpNode[] {
+
     return cpChain[0] === cpChain[cpChain.length - 1]
         ? cpChain
         : [...cpChain, cpChain[0]];
 }
 
 
-function rotateAtTip(closedChain: CpNode[]): CpNode[] {
+/**
+ * Rotates a closed chain so it starts (and ends) at the branch's leaf tip:
+ * the node farthest from the chain start by skeleton arc - a leaf tip, since
+ * depth peaks where the boundary walk turns around. Skeleton depths measured
+ * on the result are then distances from that tip.
+ */
+function rotateAtTip(
+        closedChain: CpNode[]): CpNode[] {
+
     const depths = getSkeletonDepths(closedChain);
 
     let t = 0;
     for (let i = 1; i < depths.length; i++) {
-        if (depths[i] > depths[t]) { t = i; }
+        if (depths[i] > depths[t]) {
+            t = i;
+        }
     }
     if (t === 0) { return closedChain; }
 
-    return [...closedChain.slice(t), ...closedChain.slice(1, t + 1)];
+    return [
+        ...closedChain.slice(t),
+        ...closedChain.slice(1, t + 1)
+    ];
 }
 
 
@@ -145,7 +188,7 @@ function getSkeletonDepths(cpChain: CpNode[]): number[] {
     const seen = new Set<string>();
     let d = 0;
 
-    for (let i = 0; i < cpChain.length - 1; i++) {
+    for (let i=0; i<cpChain.length - 1; i++) {
         const cp = cpChain[i];
 
         if (cpChain[i+1] === cp.next) {
@@ -258,8 +301,13 @@ function getSkeletonLength(cpChain: CpNode[]): number {
 }
 
 
-/** Direction-independent key of the skeleton edge between adjacent disks. */
-function getEdgeKey(cp1: CpNode, cp2: CpNode): string {
+/**
+ * Direction-independent key of the skeleton edge between adjacent disks.
+ */
+function getEdgeKey(
+        cp1: CpNode,
+        cp2: CpNode): string {
+
     const id1 = getCircleId(cp1);
     const id2 = getCircleId(cp2);
 
@@ -272,7 +320,9 @@ function getCircleId(cp: CpNode): number {
 }
 
 
-function dirAtStart(ps: number[][]): number[] {
+function dirAtStart(
+        ps: number[][]): number[] {
+
     const p0 = ps[0];
     for (let i = 1; i < ps.length; i++) {
         const [x, y] = [ps[i][0] - p0[0], ps[i][1] - p0[1]];
@@ -293,6 +343,10 @@ function dirAtEnd(ps: number[][]): number[] {
 
 
 export {
-    getFatBranchTree, getSkeletonLength, getSkeletonBeziers, getSkeletonRadii,
+    getFatBranchTree,
+    getFattestCpNode,
+    getSkeletonLength,
+    getSkeletonBeziers,
+    getSkeletonRadii,
     getSkeletonEdgeCpPairs
 }

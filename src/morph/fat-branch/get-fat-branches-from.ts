@@ -2,9 +2,9 @@ import type { CpNode } from "flo-mat";
 import type { FatBranch } from "./fat-branch.js";
 import { isOnSameCircle } from "flo-mat";
 import { getShapeArea } from "flo-boolean";
-import { getChainsBetween } from "./get-fat-branch.js";
 import { getChainPss } from "./get-fat-salience.js";
 import { getArcBeziersBetween } from "../fs/get-arc-beziers-between.js";
+import { getChainsBetween } from "./get-chains-between.js";
 
 
 /**
@@ -54,15 +54,15 @@ function getFatBranchOfSector(
     // The child region is capped across the fork disk by the sector arc
     // traversed in reverse.
     const capPss = getArcBeziersBetween(s, sN)
-        .slice()
-        .reverse()
+        .toReversed()
         .map(ps => ps.slice().reverse());
 
     let bestChain: CpNode[] | undefined;
     let bestPss: number[][][] | undefined;
     let bestSalience = -Infinity;
 
-    for (const chain of getChainsBetween(s, sN)) {
+    const chains = getChainsBetween(s, sN);
+    for (const chain of chains) {
         const pss = [...getChainPss(chain), ...capPss];
         const salience = Math.abs(getShapeArea(pss));
 
@@ -77,7 +77,11 @@ function getFatBranchOfSector(
         return undefined;
     }
 
-    return { cpChain: bestChain, pss: bestPss!, roundSalience: bestSalience };
+    return {
+        cpChain: bestChain,
+        pss: bestPss!,
+        roundSalience: bestSalience
+    };
 }
 
 

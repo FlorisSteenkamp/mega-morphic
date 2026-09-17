@@ -8,9 +8,12 @@ import type { SleeveSide } from './anchored-sleeves.js';
  * for control point, optionally glued to a parent entry.
  */
 interface MorphEntry {
+    /** cubic Bézier control polygons at the start frame (t=0) */
     readonly a: number[][][];
+    /** cubic Bézier control polygons at the end frame (t=1), aligned with `a` */
     readonly b: number[][][];
     readonly classes: string;
+    /** optional attachment of this entry's junction end to parent entry boundaries */
     readonly glue?: Glue;
     /** maximal-disk radius per segment boundary of `a` (t=0) */
     readonly ra?: number[];

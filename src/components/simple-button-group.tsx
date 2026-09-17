@@ -3,8 +3,9 @@ import * as React from 'react';
 
 interface Props<T extends string> {
     readonly options: { [K in T]?: { text: string } };
-    readonly value: T;
-    readonly onChanged?: (key: T) => void;
+    /** undefined = nothing selected */
+    readonly value: T | undefined;
+    readonly onChanged?: (key: T | undefined) => void;
 }
 
 
@@ -14,8 +15,9 @@ function ButtonGroup<T extends string>(props: Props<T>) {
 
     function onClick(key: T) {
         return (event: React.MouseEvent<HTMLButtonElement, MouseEvent>) => {
-            if (!onChanged) { return; } 
-            onChanged(key);
+            if (!onChanged) { return; }
+            // Clicking the selection again deselects.
+            onChanged(key === selectedValue ? undefined : key);
         }
     }
 

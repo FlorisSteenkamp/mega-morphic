@@ -4,6 +4,7 @@ import type { FatBranch } from './fat-branch/fat-branch.js';
 import { getSkeletonEdgeCpPairs } from './fat-branch/get-fat-branch-tree.js';
 import { distributeBezierListsEvenly } from './distribute-beziers-evenly.js';
 import { clamp } from '../utils/clamp.js';
+import { getPolyBezierLength } from './fs/get-poly-bezier-length.js';
 
 const { atan2, cos, sin, hypot, PI: π } = Math;
 
@@ -117,8 +118,8 @@ function buildSide(
         // real side's structure so control points still correspond.
         let pA = sA.pieces;
         let pB = sB.pieces;
-        const degA = totalLen(pA) < EPS_LEN;
-        const degB = totalLen(pB) < EPS_LEN;
+        const degA = getPolyBezierLength(pA) < EPS_LEN;
+        const degB = getPolyBezierLength(pB) < EPS_LEN;
         if (degA && degB) {
             pA = [[sA.from, sA.to]];
             pB = [[sB.from, sB.to]];
@@ -239,11 +240,6 @@ function cutByArcFraction(
     }
 
     return out;
-}
-
-
-function totalLen(pieces: number[][][]): number {
-    return pieces.reduce((s, ps) => s + length([0, 1], ps), 0);
 }
 
 

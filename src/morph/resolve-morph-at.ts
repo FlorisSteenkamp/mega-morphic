@@ -7,8 +7,9 @@ import { reverseShapeOrientation } from 'flo-boolean';
 import { pAtIndex } from './fs/p-at-idx.js';
 import { boundaryTangents, boundaryPoint } from './anchored-sleeves.js';
 import {
-    intrinsicSkeletonLerp, wrapAngle, unwrappedChordAngles
-} from './intrinsic-skeleton.js';
+    intrinsicSkeletonLerp, unwrappedChordAngles
+} from './intrinsic-skeleton/intrinsic-skeleton.js';
+import { wrapAngle } from './intrinsic-skeleton/wrap-angle.js';
 
 const { atan2, max, cos, sin, abs, ceil, hypot, PI: π } = Math;
 
