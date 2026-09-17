@@ -1,21 +1,28 @@
 import type { Samples } from './samples.js';
 import { length } from 'flo-bezier3';
-import { unwrappedChordAngles } from '../intrinsic-skeleton/intrinsic-skeleton.js';
+import { unwrappedChordAngles } from '../intrinsic-skeleton/unwrapped-chord-angles.js';
 import { clamp } from '../../utils/clamp.js';
 
 const { max, min } = Math;
 
 
-/** Radius + turning-rate profile, start (u=0) → end (u=1). */
+/**
+ * Radius + turning-rate profile, start (u=0) → end (u=1).
+ * 
+ * @param pss
+ * @param rd
+ * @param unit
+ * @param maxN
+ */
 function sampleFeatures(
-        bz: number[][][],
+        pss: number[][][],
         rd: number[],
         unit: number,
-        maxN = 160): Samples {
+        maxN: number): Samples {
 
-    const n = clamp(2 * bz.length, min(24, maxN), maxN);
+    const n = clamp(2 * pss.length, min(24, maxN), maxN);
 
-    const lens = bz.map(ps => length([0, 1], ps));
+    const lens = pss.map(ps => length([0, 1], ps));
     const total = lens.reduce((s, l) => s + l, 0);
     const knots = [0];
     let cum = 0;
@@ -25,7 +32,7 @@ function sampleFeatures(
     }
     knots[knots.length - 1] = 1;
 
-    const φs = padProfile(unwrappedChordAngles(bz), rd.length);
+    const φs = padProfile(unwrappedChordAngles(pss), rd.length);
 
     const u: number[] = [];
     const r: number[] = [];

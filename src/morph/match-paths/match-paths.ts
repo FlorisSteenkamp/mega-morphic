@@ -8,7 +8,7 @@ import { makeContext } from './make-context.js';
 import { matchPathPair } from './match-path-pair.js';
 import { swayTerm } from './sway-term.js';
 import { trunkCandidates, reversedOf } from './trunk-candidates.js';
-import { unwrappedChordAngles } from '../intrinsic-skeleton/intrinsic-skeleton.js';
+import { getPolyBezierTurningAngle } from './get-poly-bezier-turning-angle.js';
 
 const { abs, PI: π } = Math;
 
@@ -64,6 +64,8 @@ function matchPaths(
         ...opts.weights
     };
 
+    const turnTerm_ = turnTerm(weights.turn);
+
     // const ctx = makeContext(tree1, tree2, weights);
     const ctx = makeContext(tree1, tree2);
 
@@ -80,9 +82,6 @@ function matchPaths(
         }
     }
 
-    const turnTerm = (pA: PathGeom, pB: PathGeom): number =>
-        weights.turn * abs(pathTurning(pA.bz) - pathTurning(pB.bz)) / π;
-
     // Beam: rank with a coarse-resolution alignment (same cost structure),
     // keep the best for full-resolution evaluation. The plain trunk pair
     // always stays in (both orientations).
@@ -91,7 +90,7 @@ function matchPaths(
         const ranked = cands.map(c => ({
             c,
             cost: matchPathPair(ctx, weights, c.pA, c.pB, true, true).cost +
-                turnTerm(c.pA, c.pB) + swayTerm(c.pA, c.pB, weights.sway)
+                turnTerm_(c.pA, c.pB) + swayTerm(c.pA, c.pB, weights.sway)
         }));
         ranked.sort((x, y) => x.cost - y.cost);
         cands = [...plain, ...ranked.slice(0, TRUNK_BEAM).map(r => r.c)];
@@ -103,7 +102,7 @@ function matchPaths(
 
     for (const { pA, pB, rev } of cands) {
         const m = matchPathPair(ctx, weights, pA, pB, true, false);
-        const cost = m.cost + turnTerm(pA, pB) + swayTerm(pA, pB, weights.sway);
+        const cost = m.cost + turnTerm_(pA, pB) + swayTerm(pA, pB, weights.sway);
         if (cost < bestCost) {
             bestCost = cost;
             best = m;
@@ -115,12 +114,28 @@ function matchPaths(
 }
 
 
-// ---- Trunk orientation helpers -------------------------------------------------
+/**
+ * Returns `turnWeight` * (the absolute difference in turning angle between the
+ * two given `PathGeom`s) / `π`
+ * 
+ * * i.e., a 180 degree turn imposes a penalty of `1` times `turnWeight`
+ * 
+ * @param turnWeight
+ */
+function turnTerm(
+        turnWeight: number) {
 
-/** Total turning angle of a composed skeleton path. */
-function pathTurning(bz: number[][][]): number {
-    const ψs = unwrappedChordAngles(bz);
-    return ψs.length === 0 ? 0 : ψs[ψs.length - 1] - ψs[0];
+    return function(
+        pA: PathGeom,
+        pB: PathGeom): number {
+
+        return turnWeight * abs(
+            getPolyBezierTurningAngle(pA.bz) - 
+            getPolyBezierTurningAngle(pB.bz)
+        ) / π;
+    }
 }
+
+
 
 export { matchPaths, defaultPathWeights }

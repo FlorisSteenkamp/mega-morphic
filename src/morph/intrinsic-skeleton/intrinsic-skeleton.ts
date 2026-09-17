@@ -1,6 +1,7 @@
 import { wrapAngle } from './wrap-angle.js';
+import { chords } from './chords.js';
 
-const { atan2, cos, sin, hypot, PI: π } = Math;
+const { cos, sin } = Math;
 
 const EPS = 1e-9;
 
@@ -60,37 +61,6 @@ function intrinsicSkeletonLerp(
 }
 
 
-/** Per-segment chord length and angle; degenerate chord angles are filled
- *  from the nearest non-degenerate segment. */
-function chords(bz: number[][][]): { L: number[]; phi: number[] } {
-    const L: number[] = [];
-    const phi: number[] = [];
-
-    for (const ps of bz) {
-        const p0 = ps[0];
-        const p1 = ps[ps.length - 1];
-        const dx = p1[0] - p0[0];
-        const dy = p1[1] - p0[1];
-        const l = hypot(dx, dy);
-        L.push(l);
-        phi.push(l < EPS ? NaN : atan2(dy, dx));
-    }
-
-    // Forward fill, then backward fill, then fallback.
-    for (let k = 1; k < phi.length; k++) {
-        if (Number.isNaN(phi[k])) { phi[k] = phi[k - 1]; }
-    }
-    for (let k = phi.length - 2; k >= 0; k--) {
-        if (Number.isNaN(phi[k])) { phi[k] = phi[k + 1]; }
-    }
-    for (let k = 0; k < phi.length; k++) {
-        if (Number.isNaN(phi[k])) { phi[k] = 0; }
-    }
-
-    return { L, phi };
-}
-
-
 /** Control points in the segment's own chord frame (chord ↦ (0,0)→(1,0)). */
 function chordNormalize(ps: number[][]): number[][] {
     const e0 = ps[0];
@@ -109,23 +79,4 @@ function chordNormalize(ps: number[][]): number[][] {
 }
 
 
-/**
- * Per-segment chord angles, UNWRAPPED cumulatively (adjacent segments differ
- * by their true turning angle, never a ±2π jump) - a continuous angle
- * profile along the skeleton.
- */
-function unwrappedChordAngles(
-        bz: number[][][]): number[] {
-
-    const { phi } = chords(bz);
-
-    const out = [phi[0]];
-    for (let k = 1; k < phi.length; k++) {
-        out.push(out[k - 1] + wrapAngle(phi[k] - phi[k - 1]));
-    }
-
-    return out;
-}
-
-
-export { intrinsicSkeletonLerp, unwrappedChordAngles }
+export { intrinsicSkeletonLerp }

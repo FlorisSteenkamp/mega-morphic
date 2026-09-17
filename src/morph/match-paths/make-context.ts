@@ -1,6 +1,7 @@
 import type { FatBranch } from '../fat-branch/fat-branch.js';
 import type { Context } from './context.js';
 import type { PathGeom } from './path-geom.js';
+import { memoize } from 'flo-memoize';
 import { length } from 'flo-bezier3';
 import { getSkeletonBeziers, getSkeletonRadii } from '../fat-branch/get-fat-branch-tree.js';
 import { edgeIndexAt } from '../edge-index-at.js';
@@ -11,14 +12,10 @@ function makeContext(
         tree2: FatBranch): Context {
 
     return {
-        // w,
-        unit1: Math.sqrt(tree1.roundSalience),
-        unit2: Math.sqrt(tree2.roundSalience),
         sal1: tree1.roundSalience,
         sal2: tree2.roundSalience,
         paths1: makePathCache(),
         paths2: makePathCache(),
-        memo: new Map()
     };
 }
 

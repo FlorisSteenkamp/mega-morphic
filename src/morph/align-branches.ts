@@ -1,5 +1,5 @@
 import { evalDeCasteljau, fromTo, getTAtLength, length, toCubic } from 'flo-bezier3';
-import { unwrappedChordAngles } from './intrinsic-skeleton/intrinsic-skeleton.js';
+import { unwrappedChordAngles } from './intrinsic-skeleton/unwrapped-chord-angles.js';
 import { clamp } from '../utils/clamp.js';
 
 const { abs, max, min, round } = Math;

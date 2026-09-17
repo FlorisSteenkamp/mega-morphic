@@ -1,6 +1,6 @@
 import type { PathGeom } from './path-geom.js';
 import { length } from 'flo-bezier3';
-import { unwrappedChordAngles } from '../intrinsic-skeleton/intrinsic-skeleton.js';
+import { unwrappedChordAngles } from '../intrinsic-skeleton/unwrapped-chord-angles.js';
 import { wrapAngle } from '../intrinsic-skeleton/wrap-angle.js';
 
 const { abs, PI: π } = Math;

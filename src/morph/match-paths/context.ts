@@ -1,18 +1,16 @@
 import type { FatBranch } from '../fat-branch/fat-branch.js';
-import type { MatchedPath } from './matched-path.js';
-import type { PathCostWeights } from './path-cost-weights.js';
 import type { PathGeom } from './path-geom.js';
 
 
 interface Context {
-    // readonly w: PathCostWeights;
-    readonly unit1: number;
-    readonly unit2: number;
+    /** tree 1 total round salience, used to normalize deletion costs */
     readonly sal1: number;
+    /** tree 2 total round salience, used to normalize insertion costs */
     readonly sal2: number;
+    /** memoized path enumeration for branches in tree 1 */
     readonly paths1: (br: FatBranch) => PathGeom[];
+    /** memoized path enumeration for branches in tree 2 */
     readonly paths2: (br: FatBranch) => PathGeom[];
-    readonly memo: Map<string, MatchedPath>;
 }
 
 

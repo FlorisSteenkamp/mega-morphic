@@ -16,7 +16,10 @@ interface PathCostWeights {
     readonly stub: number;
     /** unmatched leaf tail (per normalized length) */
     readonly tail: number;
-    /** trunk total-turning mismatch (orientation decision only) */
+    /**
+     * Trunk total-turning mismatch (orientation decision only).
+     * A 180 degree turn imposes a penalty of `1` times `turn`
+     */
     readonly turn: number;
     /** trunk absolute-orientation swing (mean chord-angle difference) -
      *  penalizes trunk pairings that make the whole morph rotate */

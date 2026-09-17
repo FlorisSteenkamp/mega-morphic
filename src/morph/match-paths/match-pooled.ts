@@ -5,7 +5,7 @@ import { alignSeq } from './align-seq.js';
 import { matchSubtrees } from './match-subtrees.js';
 import { PathCostWeights } from './path-cost-weights.js';
 
-const { abs, PI: π } = Math;
+const { sqrt, abs, PI: π } = Math;
 
 
 /** Per-side monotone alignment of two paths' pooled child forks. */
@@ -18,7 +18,7 @@ function matchPooled(
     // const { w } = ctx;
 
     const relabel = (a: PooledChild, b: PooledChild): number =>
-        w.position * abs(a.dist/ctx.unit1 - b.dist/ctx.unit2) +
+        w.position * abs(a.dist/sqrt(ctx.sal1) - b.dist/sqrt(ctx.sal2)) +
         w.angle * angleDist(a.angle, b.angle) / π +
         matchSubtrees(ctx, w, a.edge.branch, b.edge.branch).cost;
     const delCost = (a: PooledChild): number =>

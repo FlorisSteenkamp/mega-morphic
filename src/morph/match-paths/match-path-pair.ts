@@ -7,6 +7,9 @@ import { sampleFeatures } from './sample-features.js';
 import { PathCostWeights } from './path-cost-weights.js';
 
 
+const { sqrt } = Math;
+
+
 /**
  * Match one concrete path pair: profile DTW + tails + stubs + recursive
  * pooled-children alignment. `coarse` uses low-resolution profiles (beam
@@ -20,17 +23,16 @@ function matchPathPair(
         trunkLevel: boolean,
         coarse: boolean): MatchedPath {
 
-    // const { w } = ctx;
-
     const fA = coarse
-        ? pA.coarse ??= sampleFeatures(pA.bz, pA.rd, ctx.unit1, 48)
-        : pA.samples ??= sampleFeatures(pA.bz, pA.rd, ctx.unit1);
-    const fB = coarse
-        ? pB.coarse ??= sampleFeatures(pB.bz, pB.rd, ctx.unit2, 48)
-        : pB.samples ??= sampleFeatures(pB.bz, pB.rd, ctx.unit2);
+        ? pA.coarse ??= sampleFeatures(pA.bz, pA.rd, sqrt(ctx.sal1), 48)
+        : pA.samples ??= sampleFeatures(pA.bz, pA.rd, sqrt(ctx.sal1), 160);
 
-    const LnA = pA.L / ctx.unit1;
-    const LnB = pB.L / ctx.unit2;
+    const fB = coarse
+        ? pB.coarse ??= sampleFeatures(pB.bz, pB.rd, sqrt(ctx.sal2), 48)
+        : pB.samples ??= sampleFeatures(pB.bz, pB.rd, sqrt(ctx.sal2), 160);
+
+    const LnA = pA.L / sqrt(ctx.sal1);
+    const LnB = pB.L / sqrt(ctx.sal2);
 
     const al = alignProfiles(
         fA, fB,
@@ -41,8 +43,15 @@ function matchPathPair(
 
     const shapeCost = al.cost - al.tailPen;
     const tailCost = al.tailPen;
-    const stubCost = w.delFloor * (pA.stubN + pB.stubN) +
-        w.stub * (pA.stubSal / ctx.sal1 + pB.stubSal / ctx.sal2);
+
+    // Charge once per unmatched region, then in proportion to the material
+    // bypassed on each side. The floor prevents a reroute through a
+    // child-rich stretch from hiding several deletions inside one cheap
+    // stub; dividing salience by its tree total makes the material term
+    // dimensionless and comparable across differently scaled shapes.
+    const stubCost = 
+        w.delFloor*(pA.stubN + pB.stubN) +
+        w.stub*(pA.stubSal / ctx.sal1 + pB.stubSal / ctx.sal2);
 
     const { ops, cost: childCost } = matchPooled(
         ctx, w, pA.pooled, pB.pooled);

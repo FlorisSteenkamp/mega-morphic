@@ -6,9 +6,8 @@ import { getLastP } from './fs/get-last-p.js';
 import { reverseShapeOrientation } from 'flo-boolean';
 import { pAtIndex } from './fs/p-at-idx.js';
 import { boundaryTangents, boundaryPoint } from './anchored-sleeves.js';
-import {
-    intrinsicSkeletonLerp, unwrappedChordAngles
-} from './intrinsic-skeleton/intrinsic-skeleton.js';
+import { intrinsicSkeletonLerp } from './intrinsic-skeleton/intrinsic-skeleton.js';
+import { unwrappedChordAngles } from './intrinsic-skeleton/unwrapped-chord-angles.js';
 import { wrapAngle } from './intrinsic-skeleton/wrap-angle.js';
 
 const { atan2, max, cos, sin, abs, ceil, hypot, PI: π } = Math;
