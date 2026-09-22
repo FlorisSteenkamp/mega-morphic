@@ -3,6 +3,7 @@ import { unwrappedChordAngles } from '../intrinsic-skeleton/unwrapped-chord-angl
 import { clamp } from '../../utils/clamp.js';
 import { totalLength$ } from '../fs/total-length.js';
 import { sum } from '../../utils/sum.js';
+import { memoize } from 'flo-memoize';
 
 const { max, min } = Math;
 
@@ -30,45 +31,48 @@ const { max, min } = Math;
  * `[min(24, maxN), maxN]` - enough to resolve every segment, bounded for
  * cost (use a small `maxN` for coarse beam ranking)
  */
-function sampleFeatures(
-        pss: number[][][],
-        radii: number[],
-        unit: number,
-        maxN: number): Samples {
+const sampleFeatures$ = memoize(function(
+        maxN: number,
+        unit: number) {
 
-    const n = clamp(2 * pss.length, min(24, maxN), maxN);
+    return memoize(function(
+            pss: number[][][],
+            radii: number[]): Samples {
 
-    const lens = pss.map(totalLength$);
-    const totalLen = sum(lens);
-    const knots = [0];
-    let cum = 0;
-    for (const l of lens) {
-        cum += l;
-        knots.push(totalLen > 0 ? cum / totalLen : 0);
-    }
-    knots[knots.length - 1] = 1;
+        const n = clamp(2 * pss.length, min(24, maxN), maxN);
 
-    const φs = padProfile(unwrappedChordAngles(pss), radii.length);
+        const lens = pss.map(totalLength$);
+        const totalLen = sum(lens);
+        const knots = [0];
+        let cum = 0;
+        for (const l of lens) {
+            cum += l;
+            knots.push(totalLen > 0 ? cum / totalLen : 0);
+        }
+        knots[knots.length - 1] = 1;
 
-    const u: number[] = [];
-    const r: number[] = [];
-    const φ: number[] = [];
-    for (let i = 0; i < n; i++) {
-        const ui = i / (n - 1);
-        u.push(ui);
-        r.push(valueAt(radii, knots, ui) / unit);
-        φ.push(valueAt(φs, knots, ui));
-    }
+        const φs = padProfile(unwrappedChordAngles(pss), radii.length);
 
-    const turn: number[] = [];
-    for (let i = 0; i < n; i++) {
-        const i0 = max(0, i - 1);
-        const i1 = min(n - 1, i + 1);
-        turn.push((φ[i1] - φ[i0]) / (u[i1] - u[i0]));
-    }
+        const u: number[] = [];
+        const r: number[] = [];
+        const φ: number[] = [];
+        for (let i = 0; i < n; i++) {
+            const ui = i / (n - 1);
+            u.push(ui);
+            r.push(valueAt(radii, knots, ui) / unit);
+            φ.push(valueAt(φs, knots, ui));
+        }
 
-    return { u, r, turn };
-}
+        const turn: number[] = [];
+        for (let i = 0; i < n; i++) {
+            const i0 = max(0, i - 1);
+            const i1 = min(n - 1, i + 1);
+            turn.push((φ[i1] - φ[i0]) / (u[i1] - u[i0]));
+        }
+
+        return { u, r, turn };
+    });
+});
 
 
 /** Chord angles live per segment (rd is per boundary): pad to align. */
@@ -96,4 +100,4 @@ function valueAt(vals: number[], knots: number[], u: number): number {
 }
 
 
-export { sampleFeatures }
+export { sampleFeatures$ }

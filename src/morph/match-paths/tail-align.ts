@@ -17,11 +17,12 @@ interface TailAlign {
     /** unmatched u fractions at the leaf (start) ends */
     readonly tailStartA: number;
     readonly tailStartB: number;
-    /** unmatched u fractions at the junction (end) ends - trunk only */
-    readonly tailEndA: number;
-    readonly tailEndB: number;
     /** full traceback, start → end */
     readonly steps: AlignStep[];
+    /** [TRUNK ONLY (else === 0)] - unmatched u fractions at the junction (end) ends */
+    readonly tailEndA: number;
+    /** [TRUNK ONLY (else === 0)] - unmatched u fractions at the junction (end) ends */
+    readonly tailEndB: number;
 }
 
 

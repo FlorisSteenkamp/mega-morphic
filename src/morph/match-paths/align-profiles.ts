@@ -49,12 +49,12 @@ function alignProfiles(
     const M: number[][] = [];
     const Ix: number[][] = [];
     const Iy: number[][] = [];
-    const fromM: (0 | 1 | 2)[][] = [];
+    const fromM: (0|1|2)[][] = [];
     for (let i = 0; i < nA; i++) {
         M.push(new Array(nB).fill(INF));
         Ix.push(new Array(nB).fill(INF));
         Iy.push(new Array(nB).fill(INF));
-        fromM.push(new Array(nB).fill(0) as (0 | 1 | 2)[]);
+        fromM.push(new Array(nB).fill(0) as (0|1|2)[]);
     }
 
     // Fresh starts along the leaf edges (the only way M is set at i=0/j=0).
@@ -85,7 +85,7 @@ function alignProfiles(
     // Terminal: pinned at (nA-1, nB-1), or (trunk) priced end skips.
     let bi = nA - 1;
     let bj = nB - 1;
-    let bState: 0 | 1 | 2 = stateAt(bi, bj);
+    let bState: 0|1|2 = stateAt(bi, bj);
     let bCost = valAt(bi, bj, bState);
     let endTailA = 0;
     let endTailB = 0;
@@ -131,8 +131,11 @@ function alignProfiles(
     steps.push({ i, j, state: 0, cost: cost(i, j) });
     steps.reverse();
 
-    const tailPen = i*tailUnitA + j*tailUnitB
-        + endTailA*tailUnitA + endTailB*tailUnitB;
+    const tailPen = 
+        i*tailUnitA +
+        j*tailUnitB +
+        endTailA*tailUnitA +
+        endTailB*tailUnitB;
 
     return {
         cost: bCost,
@@ -144,12 +147,25 @@ function alignProfiles(
         steps
     };
 
-    function stateAt(x: number, y: number): 0 | 1 | 2 {
-        return M[x][y] <= Ix[x][y] && M[x][y] <= Iy[x][y] ? 0
-            : Ix[x][y] <= Iy[x][y] ? 1 : 2;
+
+    function stateAt(x: number, y: number): 0|1|2 {
+        return (
+              M[x][y] <= Ix[x][y] && M[x][y] <= Iy[x][y]
+            ? 0
+            : Ix[x][y] <= Iy[x][y]
+            ? 1
+            : 2
+        );
     }
-    function valAt(x: number, y: number, s: 0 | 1 | 2): number {
-        return s === 0 ? M[x][y] : s === 1 ? Ix[x][y] : Iy[x][y];
+
+    function valAt(x: number, y: number, s: 0|1|2): number {
+        return (
+              s === 0
+            ? M[x][y]
+            : s === 1
+            ? Ix[x][y]
+            : Iy[x][y]
+        );
     }
 }
 

@@ -55,16 +55,17 @@ module.exports = {
         colors: true,
         errors: true,
         // circular-dependency-plugin reports cycles as warnings
-        warnings: true,
+        // warnings: true,
+        warnings: false,
         builtAt: true
     },
     plugins: [
-        new CircularDependencyPlugin({
-            exclude: /node_modules/,
-            failOnError: false,
-            allowAsyncCycles: false,
-            cwd: process.cwd()
-        }),
+        // new CircularDependencyPlugin({
+        //     exclude: /node_modules/,
+        //     failOnError: false,
+        //     allowAsyncCycles: false,
+        //     cwd: process.cwd()
+        // }),
         // new BundleAnalyzerPlugin(
         //     exportsProofMode
         //         ? {

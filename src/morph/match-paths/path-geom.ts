@@ -1,6 +1,5 @@
 import type { PathPiece } from './path-piece.js';
 import type { PooledChild } from './pooled-child.js';
-import type { Samples } from './samples.js';
 
 
 /** A path's composed geometry and derived features. */
@@ -23,10 +22,6 @@ interface PathGeom {
     readonly stubN: number;
     /** on-path child forks (excluding exits) */
     readonly pooled: PooledChild[];
-    /** cached full-resolution radius and turning profile */
-    samples?: Samples;
-    /** cached 48-sample profile used only for trunk beam ranking */
-    coarse?: Samples;
 }
 
 
