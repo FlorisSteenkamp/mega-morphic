@@ -3,8 +3,11 @@ import type { FeatureMark } from '../../morph/build-morph-entries/build-morph-en
 import type { PoseRamp } from '../../morph/pose-ramp.js';
 import { buildMorphEntries } from '../../morph/build-morph-entries/build-morph-entries.js';
 import { drawMorph } from '../draw-morph.js';
-import { getFatBranchTree, getFattestCpNode } from '../../morph/fat-branch/get-fat-branch-tree.js';
+import { getFatBranchTree, getSkeletonBeziers } from '../../morph/fat-branch/get-fat-branch-tree.js';
 import { XMLNS } from '../../draw/xmlns.js';
+import { getFattestCpNode } from '../../morph/fat-branch/get-fattest-cp-node.js';
+import { showMatch } from './on-match-clicked.js';
+import { showBranchNums } from './show-branch-nums.js';
 
 
 function onMorphClicked(
@@ -44,7 +47,15 @@ function onMorphClicked(
         .filter(m => m.pB !== undefined)
         .map(m => ({ p: m.pB!, classes: m.classes, dot: m.dot })));
 
+    // × at each tree's trunk skeleton start (its own orientation).
+    drawTrunkStartCross(svgRef1.current, getSkeletonBeziers(tree1)[0][0]);
+    drawTrunkStartCross(svgRef2.current, getSkeletonBeziers(tree2)[0][0]);
+
     drawMorph(refPageData, morphT / 100);
+
+    // Refresh the overlay for the newly built match.
+    if (pageState.showMatch) { showMatch(refPageData, true); }
+    if (pageState.showBranchNums) { showBranchNums(refPageData, true); }
 }
 
 
@@ -77,6 +88,25 @@ function drawFeatureMarks(
         $path.setAttributeNS(null, 'class', `${classes} feature-mark`);
         g.appendChild($path);
     }
+}
+
+
+/** Thickish purple 45°-rotated cross (×) at the trunk's skeleton start.
+ *  Tagged `feature-mark` so the next morph replaces it. */
+function drawTrunkStartCross(
+        svg$: SVGSVGElement | null,
+        p: number[]) {
+
+    if (svg$ === null) { return; }
+    const g = svg$.getElementsByTagName('g')[0];
+
+    const s = 14;
+    const $path = document.createElementNS(XMLNS, 'path');
+    $path.setAttributeNS(null, 'd',
+        `M${p[0] - s} ${p[1] - s} L${p[0] + s} ${p[1] + s} ` +
+        `M${p[0] - s} ${p[1] + s} L${p[0] + s} ${p[1] - s}`);
+    $path.setAttributeNS(null, 'class', 'purple thin50 nofill feature-mark');
+    g.appendChild($path);
 }
 
 

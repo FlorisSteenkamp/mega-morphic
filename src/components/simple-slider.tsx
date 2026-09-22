@@ -8,6 +8,8 @@ interface Props {
     max?: number;
     step?: number;
     valueLabelDisplay?: 'auto' | 'on' | 'off';
+    /** track/thumb accent and value-label color */
+    color?: string;
     'aria-labelledby'?: string;
     onChange?: (
         event: Event, value: number | number[], activeThumb: number) => void;
@@ -17,7 +19,7 @@ interface Props {
 const Slider = memo(function SimpleSlider(props: Props) {
     const {
         value, min = 0, max = 100, step = 1,
-        valueLabelDisplay = 'off', onChange,
+        valueLabelDisplay = 'off', color = '#1976d2', onChange,
     } = props;
 
     const [active, setActive] = useState(false);
@@ -45,7 +47,7 @@ const Slider = memo(function SimpleSlider(props: Props) {
                         padding: '1px 5px',
                         borderRadius: '3px',
                         fontSize: '12px',
-                        background: '#1976d2',
+                        background: color,
                         color: '#fff',
                         pointerEvents: 'none',
                         whiteSpace: 'nowrap',
@@ -66,7 +68,7 @@ const Slider = memo(function SimpleSlider(props: Props) {
                 onMouseLeave={() => setActive(false)}
                 onFocus={() => setActive(true)}
                 onBlur={() => setActive(false)}
-                style={{ width: '100%' }}
+                style={{ width: '100%', accentColor: color }}
             />
         </div>
     );

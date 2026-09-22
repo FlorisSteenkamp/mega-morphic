@@ -1,37 +1,16 @@
 import type { CpNode } from "flo-mat";
 import type { FatBranch } from "./fat-branch.js";
-import {
-    getAllOnCircle, getMatCurveToNext, getRealProngCount, isOnSameCircle
-} from "flo-mat";
-import { length } from "flo-bezier3";
+import { getMatCurveToNext, getRealProngCount, isOnSameCircle } from "flo-mat";
 import { getShapeArea } from "flo-boolean";
 import { getFatBranch } from "./get-fat-branch.js";
 import { getFatBranchesFrom } from "./get-fat-branches-from.js";
-import { getChainPss } from "./get-fat-salience.js";
-
-
-/**
- * The 2-prong CpNode on the MAT's largest maximal disk - a canonical,
- * rotation-invariant rooting for `getFatBranchTree`: the largest disk is the
- * shape's most interior point (its radius is its boundary distance), so the
- * trunk passes through the core rather than whatever peripheral branch the
- * MAT traversal happened to start on.
- */
-function getFattestCpNode(start: CpNode): CpNode {
-    let best: CpNode | undefined;
-    let cp = start;
-    do {
-        if (getRealProngCount(cp) === 2 &&
-            (best === undefined ||
-                cp.pointOnShape.circle.radius >
-                best.pointOnShape.circle.radius)) {
-            best = cp;
-        }
-        cp = cp.next;
-    } while (cp !== start);
-
-    return best ?? start;
-}
+import { getChainPss } from "./get-chain-pss.js";
+import { totalLength$ } from "../fs/total-length.js";
+import { getEdgeKey } from './get-edge-key.js';
+import { rotateAtTip } from './rotate-at-tip.js';
+import { getSkeletonLengthDepths } from "./get-skeleton-length-depths.js";
+import { getSkeletonEdgeCps } from './get-skeleton-cps.js';
+import { closeChain } from './close-chain.js';
 
 
 /**
@@ -43,7 +22,7 @@ function getFattestCpNode(start: CpNode): CpNode {
 function getFatBranchTree(
         cpNode: CpNode): FatBranch | undefined {
 
-    // getFatBranch requires a plain 2-prong; walk to the nearest one.
+    // `getFatBranch` requires a plain 2-prong; walk to the nearest one.
     const cpStart = cpNode;
     while (getRealProngCount(cpNode) !== 2) {
         cpNode = cpNode.next;
@@ -59,17 +38,21 @@ function getFatBranchTree(
 }
 
 
+/**
+ * Adds child `FatBranch`es to the given parent `FatBranch`.
+ * 
+ * @param parent 
+ */
 function addChildren(
         parent: FatBranch): void {
 
     const branches = getFatBranchesFrom(parent);
-    parent.children = [];
     if (branches.length === 0) { return; }
 
     // Rotate the (closed) chain to start at the leaf tip so each node's
     // skeleton depth is its distance from the tip.
     const rotated = rotateAtTip(closeChain(parent.cpChain));
-    const depths = getSkeletonDepths(rotated);
+    const depths = getSkeletonLengthDepths(rotated);
 
     for (const branch of branches) {
         const s = branch.cpChain[0];  // contact on the fork circle
@@ -89,19 +72,26 @@ function addChildren(
 
         // Tip piece: both boundary sides from the fork around the tip
         // (the rotation seam at the tip is an original chain transition),
-        // closed by a chord across the fork disk.
-        const tipChain = [...rotated.slice(mF), ...rotated.slice(1, kF + 1)];
-        const chord = [
-            rotated[kF].pointOnShape.p,
-            rotated[mF].pointOnShape.p
+        // closed across the fork disk by the distal arc so the disk's area
+        // is counted exactly once (children cap at the circle, excluding it).
+        const forkTipForkChain = [
+            ...rotated.slice(mF),  // final `CpNode` of fork to tip
+            ...rotated.slice(1, kF + 1),  // tip to first `CpNode` on fork
+            rotated[mF]  // close the chain
         ];
         const roundSalienceFromLeaf = Math.abs(
-            getShapeArea([...getChainPss(tipChain), chord])
+            getShapeArea(getChainPss(forkTipForkChain, false))
         );
 
         // Parent travel direction (tip -> fork -> beyond) at the fork center
         // vs the child's emanating MAT direction from that same center.
-        const parentDir = dirAtEnd(getMatCurveToNext(rotated[kF - 1]));
+        // The parent direction is the MEAN of its incoming end tangent and
+        // its first outgoing start tangent around the fork circle - the
+        // incoming tangent alone can pick the wrong angular side when the
+        // parent bends sharply through the junction.
+        const inDir = dirAtEnd(getMatCurveToNext(rotated[kF - 1]));
+        const outDir = dirAtStart(getMatCurveToNext(rotated[kF]));
+        const parentDir = meanDir(inDir, outDir);
         const childDir = dirAtStart(getMatCurveToNext(s));
         const angle = Math.atan2(
             parentDir[0]*childDir[1] - parentDir[1]*childDir[0],
@@ -109,7 +99,10 @@ function addChildren(
         );
 
         parent.children.push({
-            branch, distanceFromLeaf, roundSalienceFromLeaf, angle,
+            branch,
+            distanceFromLeaf,
+            roundSalienceFromLeaf,
+            angle,
             side: childSide(rotated, kF, s)
         });
 
@@ -141,142 +134,11 @@ function childSide(rotated: CpNode[], kF: number, s: CpNode): 1 | -1 {
 
 
 /**
- * Closes an open (child) chain via its fork-circle seam jump.
- */
-function closeChain(
-        cpChain: CpNode[]): CpNode[] {
-
-    return cpChain[0] === cpChain[cpChain.length - 1]
-        ? cpChain
-        : [...cpChain, cpChain[0]];
-}
-
-
-/**
- * Rotates a closed chain so it starts (and ends) at the branch's leaf tip:
- * the node farthest from the chain start by skeleton arc - a leaf tip, since
- * depth peaks where the boundary walk turns around. Skeleton depths measured
- * on the result are then distances from that tip.
- */
-function rotateAtTip(
-        closedChain: CpNode[]): CpNode[] {
-
-    const depths = getSkeletonDepths(closedChain);
-
-    let t = 0;
-    for (let i = 1; i < depths.length; i++) {
-        if (depths[i] > depths[t]) {
-            t = i;
-        }
-    }
-    if (t === 0) { return closedChain; }
-
-    return [
-        ...closedChain.slice(t),
-        ...closedChain.slice(1, t + 1)
-    ];
-}
-
-
-/**
- * Returns per-node skeleton arc distances from the chain start. Every
- * skeleton edge occurs exactly twice (once per boundary side): the first
- * occurrence walks away from the start, the second walks back.
- */
-function getSkeletonDepths(cpChain: CpNode[]): number[] {
-    const depths: number[] = [0];
-    const seen = new Set<string>();
-    let d = 0;
-
-    for (let i=0; i<cpChain.length - 1; i++) {
-        const cp = cpChain[i];
-
-        if (cpChain[i+1] === cp.next) {
-            const key = getEdgeKey(cp, cp.next);
-            if (seen.has(key)) {
-                d -= length([0, 1], getMatCurveToNext(cp));
-            } else {
-                seen.add(key);
-                d += length([0, 1], getMatCurveToNext(cp));
-            }
-        }
-
-        depths.push(d);
-    }
-
-    return depths;
-}
-
-
-/**
- * The CpNodes whose mat curves form the fat branch's linear skeleton path,
- * ordered from its leaf tip to its other end (each skeleton edge exactly
- * once).
- */
-function getSkeletonEdgeCps(fatBranch: FatBranch): CpNode[] {
-    return getSkeletonEdgeCpPairs(fatBranch).map(pair => pair.out);
-}
-
-
-/**
- * Per skeleton edge of the fat branch's linear path (tip → other end): the
- * chain CpNode walking it on the outbound boundary side (`out`, in skeleton
- * direction) and the one walking it back on the other side (`back`, in
- * REVERSE skeleton direction).
- */
-function getSkeletonEdgeCpPairs(
-        fatBranch: FatBranch): { out: CpNode; back: CpNode }[] {
-
-    const cpChain = rotateAtTip(closeChain(fatBranch.cpChain));
-    const pairs: { out: CpNode; back: CpNode }[] = [];
-    const edgeIdx = new Map<string, number>();
-
-    for (let i = 0; i < cpChain.length - 1; i++) {
-        const cp = cpChain[i];
-
-        if (cpChain[i+1] === cp.next) {
-            // Skip self-edges: steps between two contacts on the SAME circle
-            // (leaf-tip caps) — boundary walks them once, and they are not
-            // skeleton edges (zero-length mat curves).
-            if (getCircleId(cp) === getCircleId(cp.next)) { continue; }
-
-            const key = getEdgeKey(cp, cp.next);
-            const idx = edgeIdx.get(key);
-            if (idx === undefined) {
-                edgeIdx.set(key, pairs.length);
-                pairs.push({ out: cp, back: undefined! });
-            } else {
-                pairs[idx].back = cp;
-            }
-        }
-    }
-
-    return pairs;
-}
-
-
-/**
  * The fat branch's linear skeleton path as mat-curve beziers, ordered from
  * its leaf tip to its other end (each skeleton edge exactly once).
  */
 function getSkeletonBeziers(fatBranch: FatBranch): number[][][] {
     return getSkeletonEdgeCps(fatBranch).map(cp => getMatCurveToNext(cp));
-}
-
-
-/**
- * The maximal-disk radius at each skeleton segment boundary of the fat
- * branch's linear skeleton path (`getSkeletonBeziers` order; length =
- * segment count + 1).
- */
-function getSkeletonRadii(fatBranch: FatBranch): number[] {
-    const cps = getSkeletonEdgeCps(fatBranch);
-    if (cps.length === 0) { return []; }
-
-    return [
-        cps[0].pointOnShape.circle.radius,
-        ...cps.map(cp => cp.next.pointOnShape.circle.radius)
-    ];
 }
 
 
@@ -292,31 +154,12 @@ function getSkeletonLength(cpChain: CpNode[]): number {
             const key = getEdgeKey(cp, cp.next);
             if (!seen.has(key)) {
                 seen.add(key);
-                total += length([0, 1], getMatCurveToNext(cp));
+                total += totalLength$(getMatCurveToNext(cp));
             }
         }
     }
 
     return total;
-}
-
-
-/**
- * Direction-independent key of the skeleton edge between adjacent disks.
- */
-function getEdgeKey(
-        cp1: CpNode,
-        cp2: CpNode): string {
-
-    const id1 = getCircleId(cp1);
-    const id2 = getCircleId(cp2);
-
-    return id1 < id2 ? `${id1}_${id2}` : `${id2}_${id1}`;
-}
-
-
-function getCircleId(cp: CpNode): number {
-    return Math.min(...getAllOnCircle(cp).map(c => c.id));
 }
 
 
@@ -342,11 +185,23 @@ function dirAtEnd(ps: number[][]): number[] {
 }
 
 
+/** Normalized mean of two directions; falls back to the non-degenerate
+ *  one, and to `d1` when they are (near) anti-parallel. */
+function meanDir(d1: number[], d2: number[]): number[] {
+    const l1 = Math.hypot(d1[0], d1[1]);
+    const l2 = Math.hypot(d2[0], d2[1]);
+    if (l1 === 0) { return d2; }
+    if (l2 === 0) { return d1; }
+
+    const mx = d1[0]/l1 + d2[0]/l2;
+    const my = d1[1]/l1 + d2[1]/l2;
+
+    return Math.hypot(mx, my) < 1e-9 ? d1 : [mx, my];
+}
+
+
 export {
     getFatBranchTree,
-    getFattestCpNode,
     getSkeletonLength,
-    getSkeletonBeziers,
-    getSkeletonRadii,
-    getSkeletonEdgeCpPairs
+    getSkeletonBeziers
 }

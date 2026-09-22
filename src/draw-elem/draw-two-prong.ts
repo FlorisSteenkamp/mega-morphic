@@ -26,7 +26,7 @@ function drawTwoProng(
                 color = 'cyan ';
                 thin = '10';
                 break;
-            }        
+            }
         }
 
         // const cp = twoProng.cp;
@@ -42,8 +42,8 @@ function drawTwoProng(
         
         const $center = dot   (g, circle.center, 0.02*scaleFactor, 'yellow', delay);
         const $circle = drawCircle(g, circle, color + 'thin' + thin + ' nofill', delay); 
-        const $cp1    = dot   (g, pS, 0.005*scaleFactor, color, delay);
-        const $cp2    = dot   (g, pA, 0.01*scaleFactor, color, delay);
+        const $cp1    = dot   (g, pS, 0.02*scaleFactor, color, delay);
+        const $cp2    = dot   (g, pA, 0.04*scaleFactor, color, delay);
 
         // const $l1 = drawSpokes ? line(g, [pS, c], 'thin5 red nofill', delay) : [];
         // const $l2 = drawSpokes ? line(g, [pA, c], 'thin5 red nofill', delay) : [];

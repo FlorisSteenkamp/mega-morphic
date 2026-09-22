@@ -1,5 +1,5 @@
 const path = require('path');
-// const CircularDependencyPlugin = require('circular-dependency-plugin');
+const CircularDependencyPlugin = require('circular-dependency-plugin');
 const { BundleAnalyzerPlugin } = require('webpack-bundle-analyzer');
 
 
@@ -54,9 +54,17 @@ module.exports = {
         all: false,
         colors: true,
         errors: true,
+        // circular-dependency-plugin reports cycles as warnings
+        warnings: true,
         builtAt: true
     },
     plugins: [
+        new CircularDependencyPlugin({
+            exclude: /node_modules/,
+            failOnError: false,
+            allowAsyncCycles: false,
+            cwd: process.cwd()
+        }),
         // new BundleAnalyzerPlugin(
         //     exportsProofMode
         //         ? {

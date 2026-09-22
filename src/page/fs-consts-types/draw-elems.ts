@@ -2,10 +2,11 @@ declare var _debug_: Debug;
 import type { Mat } from 'flo-mat';
 import {
     getBranches, getSatCulls, getHoleClosers,
-    traverseVertices, isOneProng, isSharp, getRealProngCount
+    traverseVertices, isOneProng, isSharp, getRealProngCount,
+    getProngCount
 } from 'flo-mat';
 import { getLeaves } from '../../../../mat/src/sat/get-leaves.js';
-import { Debug } from '../../debug.js';
+import { Debug } from '../../debug/debug.js';
 import { ToDraw } from "../../state/to-draw.js";
 import { deleteSvgs } from './delete-svgs.js';
 import { drawLeaves } from '../../draw-elem/draw-leaves.js';
@@ -107,7 +108,8 @@ async function drawElements(
 
             if (elemType === 'twoProng') {
                 traverseVertices(mat.cpNode, cpNode => {
-                    if (getRealProngCount(cpNode) === 2) {
+                    // if (getRealProngCount(cpNode) === 2) {
+                    if (getProngCount(cpNode) === 2) {
                         svgElems.push(drawTwoProng(g, cpNode, undefined, 0, vbWidth/10))
                         num2Prongs++;
                     }

@@ -349,8 +349,10 @@ function getDrawn(
         let bz = intrinsicSkeletonLerp(a, b, t);
 
         // Continuous anchor angle (matches intrinsicSkeletonLerp's φ0(t)).
-        const φ0A = unwrappedChordAngles(a)[0];
-        const φ0B = unwrappedChordAngles(b)[0];
+        const ψsAe = unwrappedChordAngles(a);
+        const ψsBe = unwrappedChordAngles(b);
+        const φ0A = ψsAe[0];
+        const φ0B = ψsBe[0];
         let α = φ0A + t*wrapAngle(φ0B - φ0A);
 
         if (glue !== undefined) {
@@ -388,7 +390,13 @@ function getDrawn(
             // collapsed frame has NO orientation (fill angles) - hold the
             // parent-relative angle constant at the REAL frame's value
             // instead (cancelling relΔ rotates only the collapsed point).
-            const relΔ = wrapAngle(φ0B - φ0A)
+            // Anchored at the JUNCTION end: the interior bend deltas of the
+            // intrinsic lerp can hide a ±2π turn there that the tip-side
+            // φ0 branch alone cannot see.
+            const junctionRot = wrapAngle(φ0B - φ0A)
+                + (ψsBe[ψsBe.length - 1] - φ0B)
+                - (ψsAe[ψsAe.length - 1] - φ0A);
+            const relΔ = junctionRot
                 - (staticPsiB(glue.e2, glue.k2)
                     - staticPsiA(glue.e1, glue.k1));
             const collapsed = entries[i].collapsed;

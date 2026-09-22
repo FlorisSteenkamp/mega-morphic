@@ -1,14 +1,15 @@
 declare var _debug_: Debug;
 import * as React from 'react';
-import type { Debug } from '../debug.js';
+import type { Debug } from '../debug/debug.js';
 import type { ToDraw } from '../state/to-draw.js';
-import type { ClickFor } from '../state/page-state.js';
+import type { ClickFor } from '../state/click-for.js';
 import type { Props } from './props.js';
 import type { PageData } from './page-data.js';
 import type { MorphEntry } from './draw-morph.js';
 import type { FeatureMark } from '../morph/build-morph-entries/build-morph-entries.js';
 import type { PoseRamp } from '../morph/pose-ramp.js';
 import type { PathCostWeights } from '../morph/match-paths/path-cost-weights.js';
+import { defaultPathWeights } from '../morph/match-paths/match-paths.js';
 import { useRef, useEffect } from 'react';
 import { Slider } from '../components/simple-slider.js';
 import { SimpleSelect } from '../components/simple-select.js';
@@ -25,7 +26,8 @@ import { mouseUp } from './mouse/mouse-up.js';
 import { panMouseDown } from './mouse/pan.js';
 import { drawElements } from './fs-consts-types/draw-elems.js';
 import { getGlyphNames, loadPath } from './fs-consts-types/load-path.js';
-import { onMatchClicked } from './events/on-match-clicked.js';
+import { showMatch } from './events/on-match-clicked.js';
+import { showBranchNums } from './events/show-branch-nums.js';
 import { onMorphClicked } from './events/on-morph-clicked.js';
 import { onFattestClicked } from './events/on-fattest-clicked.js';
 import { drawMorph } from './draw-morph.js';
@@ -37,7 +39,7 @@ const toDrawCheckboxStyles = {
         display: 'inline-block', 
         marginBottom: '5px', 
         fontWeight: 400,
-        width: '200px'
+        width: '120px'
     }
 }
 
@@ -54,20 +56,30 @@ const showThreeProngChangedStyles = {
 const getGlyphNames_ = await getGlyphNames();
 
 
-/** slider range per path-matching weight */
+/** cost-class color per weight group (mirrors PathCostWeights grouping) */
+const weightGroupColors = {
+    dtw: '#1976d2',       // profile alignment (shapeCost + tailCost)
+    stub: '#d32f2f',      // reroute stubs (stubCost)
+    children: '#388e3c',  // pooled children (childCost)
+    trunk: '#f57c00'      // trunk orientation (turn + sway)
+} as const;
+
+/** slider range + cost-class group per path-matching weight */
 const weightRanges: Record<keyof PathCostWeights,
-        { max: number; step: number }> = {
-    shape: { max: 3, step: 0.05 },
-    position: { max: 2, step: 0.05 },
-    angle: { max: 2, step: 0.05 },
-    del: { max: 10, step: 0.1 },
-    delFloor: { max: 1, step: 0.01 },
-    stub: { max: 10, step: 0.1 },
-    tail: { max: 2, step: 0.05 },
-    turn: { max: 2, step: 0.05 },
-    sway: { max: 2, step: 0.05 },
-    gapOpen: { max: 1, step: 0.01 },
-    gapExtend: { max: 0.3, step: 0.005 }
+        { max: number; step: number;
+          group: keyof typeof weightGroupColors }> = {
+    radius: { max: 3, step: 0.05, group: 'dtw' },
+    turning: { max: 1, step: 0.01, group: 'dtw' },
+    gapOpen: { max: 1, step: 0.01, group: 'dtw' },
+    gapExtend: { max: 0.3, step: 0.005, group: 'dtw' },
+    tail: { max: 2, step: 0.05, group: 'dtw' },
+    stub: { max: 10, step: 0.1, group: 'stub' },
+    del: { max: 10, step: 0.1, group: 'children' },
+    delFloor: { max: 1, step: 0.01, group: 'children' },
+    position: { max: 2, step: 0.05, group: 'children' },
+    angle: { max: 2, step: 0.05, group: 'children' },
+    turn: { max: 2, step: 0.05, group: 'trunk' },
+    sway: { max: 2, step: 0.05, group: 'trunk' }
 };
 // console.log(getGlyphNames_);
 
@@ -235,6 +247,16 @@ function Page(props: Props) {
         drawMorph(refPageData, morphT / 100);
     }
 
+    function onShowMatchChanged(show: boolean) {
+        upd(pageState, { showMatch: show });
+        showMatch(refPageData, show);
+    }
+
+    function onShowBranchNumsChanged(show: boolean) {
+        upd(pageState, { showBranchNums: show });
+        showBranchNums(refPageData, show);
+    }
+
     function pathWeightChanged(key: keyof PathCostWeights) {
         return (event: Event, value: number | number[]) => {
             upd(pageState, {
@@ -289,6 +311,18 @@ function Page(props: Props) {
                     />
                 );
             })}
+            <Checkbox
+                checked={pageState.showMatch}
+                styles={toDrawCheckboxStyles}
+                text="match"
+                onChanged={onShowMatchChanged}
+            />
+            <Checkbox
+                checked={pageState.showBranchNums}
+                styles={toDrawCheckboxStyles}
+                text="branch #s"
+                onChanged={onShowBranchNumsChanged}
+            />
             </div>
             <ButtonGroup<ClickFor>
                 options={{
@@ -299,11 +333,14 @@ function Page(props: Props) {
                     loopset: { text: 'loop set' },
                     cp: { text: 'cp' },
                     curvature: { text: 'k'},
-                    branch: { text: 'branch' },
                     curve: { text: 'curve' },
                     matCurve: { text: 'mat-curve'},
                     salience: { text: 'salience' },
-                    roundSalience: { text: 'round salience' }
+                    fatBranch: { text: 'fat branch' },
+                    fatTree: { text: 'fat tree' },
+                    pathMatchResult: { text: 'path match' },
+                    profileAlign: { text: 'align' },
+                    childDtw: { text: 'child dtw' }
                 }}
                 value={pageState.clickFor}
                 onChanged={onClickForChanged}
@@ -430,24 +467,6 @@ function Page(props: Props) {
                 </div>
                 <div style={{ display: 'flex' }}>
                     <button
-                        onClick={() => onMatchClicked(refPageData)}
-                        style={{
-                            padding: '9px 20px',
-                            fontSize: '14px',
-                            fontWeight: 500,
-                            lineHeight: '1',
-                            color: '#fff',
-                            backgroundColor: '#1976d2',
-                            border: 'none',
-                            borderRadius: '4px',
-                            cursor: 'pointer',
-                        }}
-                    >
-                        match
-                    </button>
-                </div>
-                <div style={{ display: 'flex' }}>
-                    <button
                         onClick={() => onMorphClicked(refPageData)}
                         style={{
                             padding: '9px 20px',
@@ -499,25 +518,63 @@ function Page(props: Props) {
                             </button>
                         );
                     })}
+                    <button
+                        onClick={() => upd(pageState, { showWeights: !pageState.showWeights })}
+                        style={{
+                            padding: '9px 14px',
+                            fontSize: '14px',
+                            fontWeight: 500,
+                            lineHeight: '1',
+                            color: pageState.showWeights ? '#fff' : '#1976d2',
+                            backgroundColor: pageState.showWeights ? '#1976d2' : '#fff',
+                            border: '1px solid #1976d2',
+                            borderRadius: '4px',
+                            cursor: 'pointer',
+                        }}
+                    >
+                        weights
+                    </button>
                 </div>
             </div>
+            {pageState.showWeights &&
             <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap', alignItems: 'flex-end', paddingBottom: '6px' }}>
                 {(Object.keys(weightRanges) as (keyof PathCostWeights)[])
-                    .map(key => (
-                        <div key={key} style={{ minWidth: '110px' }}>
-                            <p style={{ marginTop: 0, marginBottom: '0.1em', fontSize: '12px' }}>
-                                {key}: {pageState.pathWeights[key]}
-                            </p>
-                            <Slider
-                                value={pageState.pathWeights[key]}
-                                min={0}
-                                max={weightRanges[key].max}
-                                step={weightRanges[key].step}
-                                onChange={pathWeightChanged(key)}
-                            />
-                        </div>
-                    ))}
-            </div>
+                    .map(key => {
+                        const color = weightGroupColors[weightRanges[key].group];
+                        return (
+                            <div key={key} style={{ minWidth: '110px' }}>
+                                <p style={{ marginTop: 0, marginBottom: '0.1em', fontSize: '12px', color }}>
+                                    {key}: {pageState.pathWeights[key]}
+                                </p>
+                                <Slider
+                                    value={pageState.pathWeights[key]}
+                                    min={0}
+                                    max={weightRanges[key].max}
+                                    step={weightRanges[key].step}
+                                    color={color}
+                                    onChange={pathWeightChanged(key)}
+                                />
+                            </div>
+                        );
+                    })}
+                <button
+                    onClick={() => upd(pageState, { pathWeights: defaultPathWeights })}
+                    style={{
+                        padding: '6px 12px',
+                        fontSize: '13px',
+                        fontWeight: 500,
+                        lineHeight: '1',
+                        color: '#1976d2',
+                        backgroundColor: '#fff',
+                        border: '1px solid #1976d2',
+                        borderRadius: '4px',
+                        cursor: 'pointer',
+                        marginBottom: '8px',
+                    }}
+                >
+                    reset
+                </button>
+            </div>}
             <span ref={refX} style={{ userSelect: 'none', position: 'fixed', bottom: '13px', left: '10px' }} />
             <span ref={refY} style={{ userSelect: 'none', position: 'fixed', bottom: '13px', left: '120px' }} />
             <div style={{ display: 'flex', gap: '16px', flex: 1, minHeight: 0 }}>

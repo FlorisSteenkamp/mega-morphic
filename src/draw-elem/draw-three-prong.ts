@@ -30,7 +30,7 @@ function drawThreeProng(
     const $ls: SVGElement[] = [];
     for (let i=0; i<poss.length; i++) {
         const p = poss[i].p;
-        $cps.push(...dot(g, p, 0.01*(i+1)*scaleFactor, 'blue', delay));
+        $cps.push(...dot(g, p, 0.02*(i+1)*scaleFactor, 'blue', delay));
         $ls.push(...drawFs.line(g, [p, c], 'thin5 red', delay));
     }
     

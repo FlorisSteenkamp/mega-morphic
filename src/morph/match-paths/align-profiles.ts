@@ -1,13 +1,10 @@
+declare var _debug_: Debug; 
+import type { Debug } from '../../debug/debug.js';
 import type { PathCostWeights } from './path-cost-weights.js';
 import type { Samples } from './samples.js';
-import type { TailAlign } from './tail-align.js';
+import type { TailAlign, AlignStep } from './tail-align.js';
 
 const { abs, min, PI: π } = Math;
-
-/** radius-profile difference weight (same scale as align-branches) */
-const W_RADIUS = 1;
-/** turning-rate difference weight */
-const W_TURN = 0.15;
 
 
 /**
@@ -25,21 +22,28 @@ function alignProfiles(
         stepA: number,
         stepB: number,
         bothEnds: boolean,
-        w: PathCostWeights): TailAlign {
+        weights: PathCostWeights): TailAlign {
+
+    const { gapOpen, gapExtend, tail, radius, turning } = weights;
 
     const nA = fA.u.length;
     const nB = fB.u.length;
-    const OPEN = w.gapOpen;
-    const extA = w.gapExtend * stepA;
-    const extB = w.gapExtend * stepB;
-    const tailUnitA = w.tail * stepA;
-    const tailUnitB = w.tail * stepB;
-    const diagStep = w.shape * (stepA + stepB) / 2;
+    const extA = gapExtend * stepA;
+    const extB = gapExtend * stepB;
+    const tailUnitA = tail * stepA;
+    const tailUnitB = tail * stepB;
+    const diagStep = (stepA + stepB) / 2;
 
-    // Mirror-invariant turning (see align-branches).
-    const cost = (i: number, j: number): number =>
-        diagStep * (W_RADIUS*abs(fA.r[i] - fB.r[j])
-            + W_TURN*abs(abs(fA.turn[i]) - abs(fB.turn[j])) / (2*π));
+    // Mirror-invariant turning (see align-branches), weighted by the mean
+    // local radius so both terms price DISAGREEMENT AREA (salience
+    // fraction) - bends in fat regions matter more than in thin ones.
+    const cost = (i: number, j: number): number => {
+        const rA = fA.r[i];
+        const rB = fB.r[j];
+        return diagStep * (radius*abs(rA - rB)
+            + turning*((rA + rB)/2)
+                * abs(abs(fA.turn[i]) - abs(fB.turn[j])) / (2*π));
+    };
 
     const INF = Infinity;
     const M: number[][] = [];
@@ -57,11 +61,11 @@ function alignProfiles(
     M[0][0] = cost(0, 0);
     for (let i = 1; i < nA; i++) {
         M[i][0] = i*tailUnitA + cost(i, 0);
-        Ix[i][0] = min(M[i - 1][0] + OPEN, Ix[i - 1][0]) + extA;
+        Ix[i][0] = min(M[i - 1][0] + gapOpen, Ix[i - 1][0]) + extA;
     }
     for (let j = 1; j < nB; j++) {
         M[0][j] = j*tailUnitB + cost(0, j);
-        Iy[0][j] = min(M[0][j - 1] + OPEN, Iy[0][j - 1]) + extB;
+        Iy[0][j] = min(M[0][j - 1] + gapOpen, Iy[0][j - 1]) + extB;
     }
 
     for (let i = 1; i < nA; i++) {
@@ -73,8 +77,8 @@ function alignProfiles(
             M[i][j] = best + cost(i, j);
             fromM[i][j] = best === prevM ? 0 : best === prevIx ? 1 : 2;
 
-            Ix[i][j] = min(M[i - 1][j] + OPEN, Ix[i - 1][j]) + extA;
-            Iy[i][j] = min(M[i][j - 1] + OPEN, Iy[i][j - 1]) + extB;
+            Ix[i][j] = min(M[i - 1][j] + gapOpen, Ix[i - 1][j]) + extA;
+            Iy[i][j] = min(M[i][j - 1] + gapOpen, Iy[i][j - 1]) + extB;
         }
     }
 
@@ -105,23 +109,27 @@ function alignProfiles(
         }
     }
 
-    // Traceback for the start tails.
+    // Traceback for the start tails, recording the full alignment path.
+    const steps: AlignStep[] = [];
     let i = bi;
     let j = bj;
     let state = bState;
     while (!(state === 0 && (i === 0 || j === 0))) {
+        steps.push({ i, j, state, cost: state === 0 ? cost(i, j) : 0 });
         if (state === 0) {
             const s = fromM[i][j];
             i--; j--;
             state = s;
         } else if (state === 1) {
-            state = i > 1 && Ix[i - 1][j] <= M[i - 1][j] + OPEN ? 1 : 0;
+            state = i > 1 && Ix[i - 1][j] <= M[i - 1][j] + gapOpen ? 1 : 0;
             i--;
         } else {
-            state = j > 1 && Iy[i][j - 1] <= M[i][j - 1] + OPEN ? 2 : 0;
+            state = j > 1 && Iy[i][j - 1] <= M[i][j - 1] + gapOpen ? 2 : 0;
             j--;
         }
     }
+    steps.push({ i, j, state: 0, cost: cost(i, j) });
+    steps.reverse();
 
     const tailPen = i*tailUnitA + j*tailUnitB
         + endTailA*tailUnitA + endTailB*tailUnitB;
@@ -132,7 +140,8 @@ function alignProfiles(
         tailStartA: fA.u[i],
         tailStartB: fB.u[j],
         tailEndA: endTailA / (nA - 1),
-        tailEndB: endTailB / (nB - 1)
+        tailEndB: endTailB / (nB - 1),
+        steps
     };
 
     function stateAt(x: number, y: number): 0 | 1 | 2 {

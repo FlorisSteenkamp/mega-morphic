@@ -1,10 +1,11 @@
 declare var _debug_: Debug; 
 import type { Debug } from 'flo-mat';
+import type { StateControl } from '../../state-control/state-control';
 import { enableDebugDrawFs } from 'flo-draw';
 import { enableDebugForMat } from "flo-mat";
 import { enableDebugForBooleanOp } from 'flo-boolean';
-import { createMoreFunctions } from './create-more-functions';
-import { StateControl } from '../../state-control/state-control';
+import { createMoreFunctions } from './create-more-functions.js';
+import { enableDebugForMorph } from '../../debug/enable-debug-for-morph.js';
 
 
 /** 
@@ -17,6 +18,7 @@ function updDebugGlobal(
     (window as any)._debug_ = {};
     enableDebugDrawFs(debugOn);
     enableDebugForMat(debugOn);
+    enableDebugForMorph(debugOn);
     enableDebugForBooleanOp(debugOn);
 
     let d = (window as any).d = (window as any)._debug_ as Debug;

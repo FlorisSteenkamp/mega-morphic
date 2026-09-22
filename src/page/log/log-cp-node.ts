@@ -1,6 +1,4 @@
-declare var _debug_: Debug; 
-
-import { CpNodeFs, Debug, Mat } from 'flo-mat';
+import { Mat } from 'flo-mat';
 import { showAndLogCp } from './show-and-log-cp.js';
 import { StateControl } from '../../state-control/state-control.js';
 import { getNearestCpNode } from '../get-nearest/get-nearest-cp-node.js';

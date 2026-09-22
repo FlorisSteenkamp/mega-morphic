@@ -1,5 +1,5 @@
 declare var _debug_: Debug; 
-import type { Debug } from 'flo-mat';
+import type { Debug } from '../debug/debug.js';
 import { getPathsFromStr, findMats, Mat } from 'flo-mat';
 import { reverseShapeOrientation } from 'flo-boolean';
 import { StateControl } from '../state-control/state-control';

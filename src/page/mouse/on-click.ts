@@ -1,12 +1,13 @@
 declare var _debug_: Debug;
-import { Debug } from '../../debug.js';
+import type { Debug } from '../../debug/debug.js';
+import type { ClickFor } from '../../state/click-for.js';
+import type { StateControl } from '../../state-control/state-control.js';
 import { logNearestBezier } from '../log/log-nearest-bezier.js';
 import { getViewBoxForShape } from '../fs-consts-types/viewbox.js';
 import { logCpNode } from '../log/log-cp-node.js';
 import { logNearestLoopSet } from '../log/log-nearest-loop-set.js';
 import { logNearestLoopSimplified } from '../log/log-nearest-loop-simplified.js';
 import { getViewboxXY } from '../fs-consts-types/get-viewbox-xy.js';
-import { StateControl } from '../../state-control/state-control.js';
 import { logK } from '../log/log-k.js';
 import { logCurve } from '../log/log-curve.js';
 import { logThreeProng } from '../log/log-three-prong.js';
@@ -14,6 +15,9 @@ import { logTwoProng } from '../log/log-two-prong.js';
 import { logMatCurve } from '../log/log-mat-curve.js';
 import { logSalience } from '../log/log-salience.js';
 import { logFatBranch } from '../log/log-fat-branch.js';
+import { logPathMatchResult } from '../log/log-path-match-result.js';
+import { logProfileAlignment } from '../log/log-profile-alignment.js';
+import { logChildDtw } from '../log/log-child-dtw.js';
 
 
 function onClick(
@@ -45,7 +49,8 @@ function onClick(
         if (!svg$) { return; }
         const g = svg$.getElementsByTagName('g')[0];
 
-        const fs: { [key: string]: (g: SVGGElement, p: number[], delay: number) => void } = {
+        const fs: Record<ClickFor,
+                (g: SVGGElement, p: number[], delay: number) => void> = {
             twoProng          : logTwoProng(mats),
             threeProng        : logThreeProng(mats),
             bezier            : logNearestBezier(mats),
@@ -56,7 +61,11 @@ function onClick(
             curve             : logCurve(mats),
             matCurve          : logMatCurve(mats),
             salience          : logSalience(mats),
-            roundSalience     : logFatBranch(mats)
+            fatBranch         : logFatBranch(mats, false),
+            fatTree           : logFatBranch(mats, true),
+            pathMatchResult   : logPathMatchResult,
+            profileAlign      : logProfileAlignment,
+            childDtw          : logChildDtw(shapeIdx, pageState.pathWeights)
         }
         
         const { clickFor, showDelay } = pageState;

@@ -4,13 +4,11 @@ import type { PathCostWeights } from './path-cost-weights.js';
 import type { PathGeom } from './path-geom.js';
 import type { PathMatchOptions } from './path-match-options.js';
 import type { PathMatchResult } from './path-match-result.js';
-import { makeContext } from './make-context.js';
 import { matchPathPair } from './match-path-pair.js';
 import { swayTerm } from './sway-term.js';
-import { trunkCandidates, reversedOf } from './trunk-candidates.js';
-import { getPolyBezierTurningAngle } from './get-poly-bezier-turning-angle.js';
-
-const { abs, PI: π } = Math;
+import { trunkCandidates } from './trunk-candidates.js';
+import { turnTerm } from './turn-term.js';
+import { reverseGeom$ } from './reverse-geom.js';
 
 
 /**
@@ -28,7 +26,8 @@ const { abs, PI: π } = Math;
 
 
 const defaultPathWeights: PathCostWeights = {
-    shape: 1,
+    radius: 1,
+    turning: 0.15,
     position: 0.5,
     angle: 0.25,
     del: 3,
@@ -41,10 +40,19 @@ const defaultPathWeights: PathCostWeights = {
     gapExtend: 0.06
 };
 
-/** Trunk pairs kept for full-resolution evaluation (beam width); larger
- *  candidate sets are first ranked with a coarse-resolution alignment. */
+/**
+ * Trunk pairs kept for full-resolution evaluation (beam width); larger
+ * candidate sets are first ranked with a coarse-resolution alignment.
+ */
 const TRUNK_BEAM = 64;
 const TRUNK_BEAM_THRESHOLD = 512;
+
+
+interface Candidate {
+    pA: PathGeom;
+    pB: PathGeom;
+    rev: boolean;
+}
 
 
 /**
@@ -64,45 +72,40 @@ function matchPaths(
         ...opts.weights
     };
 
+    const matchPathPair_ = matchPathPair(tree1.roundSalience, tree2.roundSalience, weights);
     const turnTerm_ = turnTerm(weights.turn);
+    const swayTerm_ = swayTerm(weights.sway);
 
-    // const ctx = makeContext(tree1, tree2, weights);
-    const ctx = makeContext(tree1, tree2);
-
-    const { paths1, paths2 } = ctx;
-
-    const candA = trunkCandidates(tree1, paths1);
-    const candB = trunkCandidates(tree2, paths2);
+    const candA = trunkCandidates(tree1);
+    const candB = trunkCandidates(tree2);
 
     let cands: { pA: PathGeom; pB: PathGeom; rev: boolean }[] = [];
     for (const pA of candA) {
         for (const pB0 of candB) {
             cands.push({ pA, pB: pB0, rev: false });
-            cands.push({ pA, pB: reversedOf(pB0), rev: true });
+            cands.push({ pA, pB: reverseGeom$(pB0), rev: true });
         }
     }
 
     // Beam: rank with a coarse-resolution alignment (same cost structure),
     // keep the best for full-resolution evaluation. The plain trunk pair
     // always stays in (both orientations).
-    if (cands.length > TRUNK_BEAM_THRESHOLD) {
-        const plain = cands.slice(0, 2);
-        const ranked = cands.map(c => ({
-            c,
-            cost: matchPathPair(ctx, weights, c.pA, c.pB, true, true).cost +
-                turnTerm_(c.pA, c.pB) + swayTerm(c.pA, c.pB, weights.sway)
-        }));
-        ranked.sort((x, y) => x.cost - y.cost);
-        cands = [...plain, ...ranked.slice(0, TRUNK_BEAM).map(r => r.c)];
-    }
+    console.log(`# trunk candidates (bef): ${cands.length}`);
+    cands = reduceCandidates(matchPathPair_, turnTerm_, swayTerm_, cands);
+    // console.log(`# trunk candidates (aft): ${cands.length}`);
 
     let best: MatchedPath | undefined;
     let bestCost = Infinity;
     let flipped = false;
 
     for (const { pA, pB, rev } of cands) {
-        const m = matchPathPair(ctx, weights, pA, pB, true, false);
-        const cost = m.cost + turnTerm_(pA, pB) + swayTerm(pA, pB, weights.sway);
+        const m = matchPathPair_(pA, pB, true, false);
+
+        const cost =
+            m.cost +
+            turnTerm_(pA, pB) +
+            swayTerm_(pA, pB);
+
         if (cost < bestCost) {
             bestCost = cost;
             best = m;
@@ -114,28 +117,35 @@ function matchPaths(
 }
 
 
-/**
- * Returns `turnWeight` * (the absolute difference in turning angle between the
- * two given `PathGeom`s) / `π`
- * 
- * * i.e., a 180 degree turn imposes a penalty of `1` times `turnWeight`
- * 
- * @param turnWeight
- */
-function turnTerm(
-        turnWeight: number) {
+function reduceCandidates(
+        matchPathPair_: (pA: PathGeom, pB: PathGeom, trunkLevel: boolean, coarse: boolean) => MatchedPath,
+        turnTerm_: (pA: PathGeom, pB: PathGeom) => number,
+        swayTerm_: (pA: PathGeom, pB: PathGeom) => number,
+        
+        cands: Candidate[]): Candidate[] {
 
-    return function(
-        pA: PathGeom,
-        pB: PathGeom): number {
-
-        return turnWeight * abs(
-            getPolyBezierTurningAngle(pA.bz) - 
-            getPolyBezierTurningAngle(pB.bz)
-        ) / π;
+    if (cands.length <= TRUNK_BEAM_THRESHOLD) {
+        return cands;
     }
-}
 
+    const ranked = cands.map(c => {
+        const cost = 
+            matchPathPair_(c.pA, c.pB, true, true).cost +
+            turnTerm_(c.pA, c.pB) +
+            swayTerm_(c.pA, c.pB);
+
+        return { c, cost };
+    });
+
+    ranked.sort((x, y) => x.cost - y.cost);
+
+    return [
+        // Keep original 2 candidates so beam would not discard the straightforward
+        // trunk match in favor of rerouted candidates
+        cands[0], cands[1],
+        ...ranked.slice(0, TRUNK_BEAM).map(r => r.c)
+    ];
+}
 
 
 export { matchPaths, defaultPathWeights }

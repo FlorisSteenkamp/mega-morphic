@@ -1,11 +1,8 @@
-declare var _debug_: Debug; 
-
+import type { Loop } from 'flo-boolean';
+import type { Mat } from 'flo-mat';
 import { drawFs } from 'flo-draw';
-import { evalDeCasteljau, length } from 'flo-bezier3';
+import { evalDeCasteljau } from 'flo-bezier3';
 import { squaredDistanceBetweenPointAndLineSegment } from 'flo-vector2d';
-import { Debug } from '../../debug';
-import { Loop } from 'flo-boolean';
-import { Mat } from 'flo-mat';
 
 
 function logNearestLoopSet(

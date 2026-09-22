@@ -1,8 +1,8 @@
 import type { CpNode } from "flo-mat";
-import { getMatCurveToNext } from "flo-mat";
-import { getTAtLength, length, fromTo, toCubic } from 'flo-bezier3';
+import { getTAtLength, fromTo, toCubic } from 'flo-bezier3';
 import { sum } from "../utils/sum.js";
 import { clamp } from '../utils/clamp.js';
+import { totalLength$ } from "./fs/total-length.js";
 
 
 const EPS = 1e-9;
@@ -30,8 +30,8 @@ function distributeBezierListsWithRadii(
             { beziers: number[][][]; radii: number[]; us: number[] },
             { beziers: number[][][]; radii: number[]; us: number[] }] {
 
-    const l1 = b1.map(ps => length([0, 1], ps));
-    const l2 = b2.map(ps => length([0, 1], ps));
+    const l1 = b1.map(totalLength$);
+    const l2 = b2.map(totalLength$);
     const L1 = sum(l1);
     const L2 = sum(l2);
 
@@ -144,8 +144,8 @@ function distributeBezierListsEvenly(
         b1: number[][][],
         b2: number[][][]): [number[][][], number[][][]] {
 
-    const l1 = b1.map(ps => length([0, 1], ps));
-    const l2 = b2.map(ps => length([0, 1], ps));
+    const l1 = b1.map(totalLength$);
+    const l2 = b2.map(totalLength$);
     const L1 = sum(l1);
     const L2 = sum(l2);
 

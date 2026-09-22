@@ -9,10 +9,13 @@ interface FatBranch {
     /** the region's round salience (its absolute area, including disk sectors) */
     readonly roundSalience: number;
     /** edges to child fat branches (set by `getFatBranchTree`) */
-    children?: FatBranchEdge[];
+    readonly children: FatBranchEdge[];
 }
 
 
+/**
+ * Has a `FatBranch` as a property plus additional properties of it.
+ */
 interface FatBranchEdge {
     /** the child fat branch */
     readonly branch: FatBranch;

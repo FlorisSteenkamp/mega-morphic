@@ -1,4 +1,4 @@
-import type { DebugElemsMat } from "../../debug.js";
+import type { DebugElemsMat } from "../../debug/debug.js";
 import type { ToDraw } from "../../state/to-draw.js";
 
 

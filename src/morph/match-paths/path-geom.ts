@@ -8,8 +8,8 @@ interface PathGeom {
     /** composition recipe, start → end */
     readonly pieces: PathPiece[];
     /** composite skeleton, start → end */
-    readonly bz: number[][][];
-    readonly rd: number[];
+    readonly skelPss: number[][][];
+    readonly radii: number[];
     /** total skeleton length */
     readonly L: number;
     /** summed salience of off-path stubs */

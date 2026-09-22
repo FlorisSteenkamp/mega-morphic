@@ -1,21 +1,26 @@
 import type { PathGeom } from './path-geom.js';
-import { length } from 'flo-bezier3';
 import { unwrappedChordAngles } from '../intrinsic-skeleton/unwrapped-chord-angles.js';
 import { wrapAngle } from '../intrinsic-skeleton/wrap-angle.js';
+import { totalLength$ } from '../fs/total-length.js';
 
 const { abs, PI: π } = Math;
 
 
-// Absolute-orientation swing of the pairing: how much the whole morph
-// would rotate (the intrinsic lerp sweeps the orientation difference).
+/**
+ * Absolute-orientation swing of the pairing: how much the whole morph
+ * would rotate (the intrinsic lerp sweeps the orientation difference).
+ */
 function swayTerm(
-        pA: PathGeom,
-        pB: PathGeom,
-        sway: number): number {
+        sway: number) {
 
-    return sway * abs(wrapAngle(
-        meanAngle(pB.bz) - meanAngle(pA.bz)
-    )) / π;
+    return function(
+            pA: PathGeom,
+            pB: PathGeom): number {
+
+        return sway * abs(wrapAngle(
+            meanAngle(pB.skelPss) - meanAngle(pA.skelPss)
+        )) / π;
+    }
 }
 
 
@@ -29,7 +34,7 @@ function meanAngle(
     let sum = 0;
     let total = 0;
     for (let i=0; i<bz.length; i++) {
-        const l = length([0, 1], bz[i]);
+        const l = totalLength$(bz[i]);
         sum += ψs[i] * l;
         total += l;
     }

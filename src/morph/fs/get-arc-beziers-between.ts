@@ -42,7 +42,7 @@ function getArcBeziersBetween(
         // generateArcFromCubics sweeps increasing angle, so build backwards.
         const segment = generateArcFromCubics(center, p1, p0)
             .reverse()
-            .map(ps => ps.slice().reverse());
+            .map(ps => ps.toReversed());
         pss.push(...segment);
     }
 

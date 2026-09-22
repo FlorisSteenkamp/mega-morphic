@@ -1,3 +1,5 @@
+declare var _debug_: Debug; 
+import type { Debug } from '../../debug/debug.js';
 import type { FatBranch } from '../fat-branch/fat-branch.js';
 import type { MorphEntry, MutableMorphEntry } from '../morph-entry.js';
 import type { AnchorPair } from '../align-branches.js';
@@ -6,24 +8,20 @@ import type { PathPiece } from '../match-paths/path-piece.js';
 import type { PathCostWeights } from '../match-paths/path-cost-weights.js';
 import type { EntryLoc, Trim } from '../place-topology.js';
 import type { PoseRamp } from '../pose-ramp.js';
+import { getShapeArea } from 'flo-boolean';
 import { matchPaths } from '../match-paths/match-paths.js';
 import { procrustes } from '../procrustes/procrustes-analysis.js';
 import { resolveMorphAt } from '../resolve-morph-at.js';
 import { alignBranches, resampleAt } from '../align-branches.js';
-import {
-    buildSleeveSides, skeletonKnots, getEdgeSleeves
-} from '../anchored-sleeves.js';
-import {
-    getSkeletonBeziers, getSkeletonRadii
-} from '../fat-branch/get-fat-branch-tree.js';
+import { buildSleeveSides, skeletonKnots, getEdgeSleeves } from '../anchored-sleeves.js';
+import { getSkeletonBeziers } from '../fat-branch/get-fat-branch-tree.js';
 import { getLastP } from '../fs/get-last-p.js';
-import { getShapeArea } from 'flo-boolean';
-import { length } from 'flo-bezier3';
 import { clamp } from '../../utils/clamp.js';
 import { matchColors } from '../../page/events/match-colors.js';
 import { nearestIdx } from '../nearest-idx.js';
 import { placeTopology, pushCollapsedEntry } from '../place-topology.js';
 import { getPolyBezierLength } from '../fs/get-poly-bezier-length.js';
+import { getSkeletonRadii } from '../fat-branch/get-skeleton-radii.js';
 
 const { sqrt, sin, cos, round, PI: π } = Math;
 
@@ -65,6 +63,15 @@ function buildMorphEntries(
         poseOut?: { ramp?: PoseRamp }): MorphEntry[] {
 
     const pm = matchPaths(tree1, tree2, { weights });
+
+    if (typeof _debug_ !== 'undefined') {
+        // Keep only the LATEST result - readers use [0]/at(-1) and stale
+        // entries (whole trees) would otherwise accumulate.
+        _debug_.elems.pathMatchResult.length = 0;
+        _debug_.elems.matchTrees.length = 0;
+        _debug_.elems.pathMatchResult.push(pm);
+        _debug_.elems.matchTrees.push({ tree1, tree2 });
+    }
 
     // The sleeves walk the outline in its global direction - the trunk's
     // (mostly boundary) loop gives a reliable winding for the cap arcs.
@@ -438,9 +445,9 @@ function sliceGeom(
     let edges = getEdgeSleeves(branch).slice(fromEdge, toEdge);
 
     if (reversed) {
-        bz = bz.map(ps => [...ps].reverse()).reverse();
-        rd = [...rd].reverse();
-        edges = [...edges].reverse()
+        bz = bz.map(ps => ps.toReversed()).reverse();
+        rd = rd.toReversed();
+        edges = edges.toReversed()
             .map(e => ({ out: e.back, back: e.out }));
     }
 
@@ -481,7 +488,7 @@ function topoSetOf(
     const out = new Set<FatBranch>();
     const walk = (br: FatBranch): void => {
         if (!onPath.has(br)) { out.add(br); }
-        for (const e of br.children ?? []) { walk(e.branch); }
+        for (const e of br.children) { walk(e.branch); }
     };
     walk(root);
 

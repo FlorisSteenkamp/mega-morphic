@@ -1,46 +1,15 @@
 import type { FatBranch } from '../fat-branch/fat-branch.js';
 import type { PathGeom } from './path-geom.js';
 import type { TrunkPathEnd } from './trunk-path-end.js';
-import { length } from 'flo-bezier3';
-import { getSkeletonBeziers, getSkeletonRadii } from '../fat-branch/get-fat-branch-tree.js';
-import { edgeIndexAt } from '../edge-index-at.js';
+import { getSkeletonBeziers } from '../fat-branch/get-fat-branch-tree.js';
+import { skeletonKnotIndexAt } from '../skeleton-knot-index-at.js';
 import { sum } from '../../utils/sum.js';
+import { pathsOf$ } from './paths-of.js';
+import { reverseGeom$ } from './reverse-geom.js';
+import { totalLength$ } from '../fs/total-length.js';
+import { getSkeletonRadii } from '../fat-branch/get-skeleton-radii.js';
 
-const { max, PI: π } = Math;
-
-
-/** Reversal memoized per candidate (samples cache on the geometry). */
-const reversedCache = new WeakMap<PathGeom, PathGeom>();
-function reversedOf(pg: PathGeom): PathGeom {
-    let r = reversedCache.get(pg);
-    if (r === undefined) {
-        r = reverseGeom(pg);
-        reversedCache.set(pg, r);
-    }
-    return r;
-}
-
-
-/** The same path traversed end → start: pieces reversed (order + flags),
- *  geometry reversed, pooled forks mirrored (side/angle flip). */
-function reverseGeom(pg: PathGeom): PathGeom {
-    return {
-        pieces: [...pg.pieces].reverse()
-            .map(p => ({ ...p, reversed: !p.reversed })),
-        bz: pg.bz.map(ps => [...ps].reverse()).reverse(),
-        rd: [...pg.rd].reverse(),
-        L: pg.L,
-        stubSal: pg.stubSal,
-        stubN: pg.stubN,
-        pooled: pg.pooled.map(c => ({
-            edge: c.edge,
-            dist: pg.L - c.dist,
-            side: c.side === 1 ? -1 : 1,
-            // Reversing the travel direction maps θ to θ − sign(θ)·π.
-            angle: c.angle > 0 ? c.angle - π : c.angle + π
-        }))
-    };
-}
+const { max } = Math;
 
 
 /**
@@ -50,28 +19,42 @@ function reverseGeom(pg: PathGeom): PathGeom {
  * becomes an unmatched stub). One candidate per (start, end) choice.
  */
 function trunkCandidates(
-        trunk: FatBranch,
-        pathsOf: (br: FatBranch) => PathGeom[]): PathGeom[] {
+        trunk: FatBranch): PathGeom[] {
 
-    const bz = getSkeletonBeziers(trunk);
-    const rd = getSkeletonRadii(trunk);
-    const lens = bz.map(ps => length([0, 1], ps));
-    const children = trunk.children ?? [];
+    const pss = getSkeletonBeziers(trunk);
+    const radii = getSkeletonRadii(trunk);
+    const lens = pss.map(totalLength$);
+    const { children } = trunk;
 
     const starts: TrunkPathEnd[] = [{ j: 0, jLen: 0, stub: 0 }];
-    const ends: TrunkPathEnd[] = [{ j: bz.length, jLen: sum(lens), stub: 0 }];
+    const ends: TrunkPathEnd[] = [{ j: pss.length, jLen: sum(lens), stub: 0 }];
+
     for (const exit of children) {
-        const j = edgeIndexAt(bz, exit.distanceFromLeaf);
+        const j = skeletonKnotIndexAt(pss, exit.distanceFromLeaf);
         const jLen = sum(lens.slice(0, j));
-        for (const sub of pathsOf(exit.branch)) {
-            starts.push({ j, jLen, exit, sub,
-                stub: exit.roundSalienceFromLeaf });
-            // Complement of the tip piece MINUS the exit subtree itself
-            // (the rerouted-into material is ON the path, not stub).
-            ends.push({ j, jLen, exit, sub,
-                stub: max(0, trunk.roundSalience
-                    - exit.roundSalienceFromLeaf
-                    - exit.branch.roundSalience) });
+
+        const paths = pathsOf$(exit.branch);
+        for (const sub of paths) {
+            starts.push({
+                j, jLen, exit, sub,
+                stub: exit.roundSalienceFromLeaf
+            });
+            // Complement of the tip piece: the trunk's far-side remainder.
+            // (The rerouted-into subtree is never part of trunk.roundSalience
+            // - the trunk outline caps at the fork circles - so it must not
+            // be subtracted.)
+            const stub =
+                trunk.roundSalience -
+                exit.roundSalienceFromLeaf;
+            // console.log({
+            //     stub,
+            //     rel: stub / trunk.roundSalience,
+            //     at: exit.distanceFromLeaf / sum(lens)  // 0 = leaf tip, 1 = far end
+            // });
+            ends.push({
+                j, jLen, exit, sub,
+                stub: max(0, stub)
+            });
         }
     }
 
@@ -82,8 +65,8 @@ function trunkCandidates(
                 continue;
             }
 
-            const midBz = bz.slice(s.j, e.j);
-            const midRd = rd.slice(s.j, e.j + 1);
+            const midPss = pss.slice(s.j, e.j);
+            const midRadii = radii.slice(s.j, e.j + 1);
             const midL = e.jLen - s.jLen;
             const preL = s.sub?.L ?? 0;
 
@@ -99,15 +82,20 @@ function trunkCandidates(
 
             // End-side sub-path traversed junction → leaf (reversed).
             const post = e.sub === undefined
-                ? undefined : reverseGeom(e.sub);
+                ? undefined : reverseGeom$(e.sub);
 
             // Children swallowed inside the bypassed trunk stubs.
             const swallowedS = s.exit === undefined ? 0 : children
-                .filter(c => c !== s.exit &&
-                    c.distanceFromLeaf < s.jLen).length;
+                .filter(
+                    c => c !== s.exit &&
+                    c.distanceFromLeaf < s.jLen
+                ).length;
+
             const swallowedE = e.exit === undefined ? 0 : children
-                .filter(c => c !== e.exit &&
-                    c.distanceFromLeaf > e.jLen).length;
+                .filter(
+                    c => c !== e.exit &&
+                    c.distanceFromLeaf > e.jLen
+                ).length;
 
             out.push({
                 pieces: [
@@ -116,19 +104,19 @@ function trunkCandidates(
                       reversed: false },
                     ...(post?.pieces ?? [])
                 ],
-                bz: [
-                    ...(s.sub?.bz ?? []), ...midBz, ...(post?.bz ?? [])
+                skelPss: [
+                    ...(s.sub?.skelPss ?? []), ...midPss, ...(post?.skelPss ?? [])
                 ],
-                rd: [
-                    ...(s.sub?.rd ?? []), ...midRd,
-                    ...(post?.rd.slice(1) ?? [])
+                radii: [
+                    ...(s.sub?.radii ?? []), ...midRadii,
+                    ...(post?.radii.slice(1) ?? [])
                 ],
                 L: preL + midL + (post?.L ?? 0),
                 stubSal: (s.sub?.stubSal ?? 0) + s.stub +
                     (post?.stubSal ?? 0) + e.stub,
                 stubN: (s.sub?.stubN ?? 0) + (post?.stubN ?? 0) +
                     (s.exit !== undefined && s.j > 0 ? 1 : 0) +
-                    (e.exit !== undefined && e.j < bz.length ? 1 : 0) +
+                    (e.exit !== undefined && e.j < pss.length ? 1 : 0) +
                     swallowedS + swallowedE,
                 pooled: [
                     ...(s.sub?.pooled ?? []),
@@ -145,4 +133,4 @@ function trunkCandidates(
 }
 
 
-export { trunkCandidates, reversedOf }
+export { trunkCandidates }

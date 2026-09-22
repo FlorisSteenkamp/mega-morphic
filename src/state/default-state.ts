@@ -54,9 +54,12 @@ const defaultPageState: PageState = {
     viewMat: true,
     simplify: false,
     showSvgs: [true, true, true],
+    showWeights: true,
     morphFillOnly: false,
     procrustes: false,
     showPose: false,
+    showMatch: false,
+    showBranchNums: false,
     rot1: 0,
     flip1: false,
     pathWeights: defaultPathWeights,
@@ -64,7 +67,8 @@ const defaultPageState: PageState = {
 
 
 const defaultAppState: AppState = {
-    version: 4,
+    // v5: pathWeights.shape split into radius + turning
+    version: 5,
     pageState: defaultPageState
 };
 

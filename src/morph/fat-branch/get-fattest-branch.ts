@@ -5,7 +5,7 @@ import {
     getRealProngCount, isOnSameCircle
 } from "flo-mat";
 import { getShapeArea } from "flo-boolean";
-import { getFatSaliencePss } from "./get-fat-salience.js";
+import { getChainPss } from "./get-chain-pss.js";
 import { getArcBeziersBetween } from "../fs/get-arc-beziers-between.js";
 
 
@@ -162,8 +162,9 @@ function getFattestBranch(
 
     return {
         cpChain: bestChain,
-        pss: getFatSaliencePss(bestChain),
-        roundSalience: bestArea
+        pss: getChainPss(bestChain, false),
+        roundSalience: bestArea,
+        children: []
     };
 }
 

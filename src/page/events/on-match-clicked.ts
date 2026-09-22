@@ -1,62 +1,56 @@
+declare var _debug_: Debug;
+import type { Debug } from '../../debug/debug.js';
 import type { PageData } from '../page-data.js';
 import type { FatBranch } from '../../morph/fat-branch/fat-branch.js';
 import type { MatchedPath } from '../../morph/match-paths/matched-path.js';
-import { matchPaths } from '../../morph/match-paths/match-paths.js';
 import { matchColors } from './match-colors.js';
-import { getFatBranchTree, getFattestCpNode, getSkeletonBeziers } from '../../morph/fat-branch/get-fat-branch-tree.js';
+import { getSkeletonBeziers } from '../../morph/fat-branch/get-fat-branch-tree.js';
 import { drawBeziersAsSinglePath } from '../../draw/draw-beziers-as-single-path.js';
 
 
-function onMatchClicked(
-        refPageData: React.RefObject<PageData | null>) {
+/**
+ * Shows/hides the match overlay of the LAST match built by the morph
+ * button - no matching is performed here, the result is read from
+ * `_debug_.elems` (pushed by `buildMorphEntries`).
+ */
+function showMatch(
+        refPageData: React.RefObject<PageData | null>,
+        show: boolean): void {
 
-    //-------------
-    // Gather data
-    //-------------
-    const { props, svgRef1, svgRef2 } = refPageData.current!;
-    const { pageState } = props;
-    const { deduced, showDelay } = pageState;
-    const { mats1, mats2 } = deduced;
+    const { svgRef1, svgRef2 } = refPageData.current!;
+    const g1 = svgRef1.current?.getElementsByTagName('g')[0];
+    const g2 = svgRef2.current?.getElementsByTagName('g')[0];
+    if (g1 === undefined || g2 === undefined) { return; }
 
-    //---------------------
-    // Get fat branch tree
-    //---------------------
-    const fatTree1 = getFatBranchTree(getFattestCpNode(mats1[0].cpNode));
-    const fatTree2 = getFatBranchTree(getFattestCpNode(mats2[0].cpNode));
-    if (fatTree1 === undefined || fatTree2 === undefined) { return; }
+    g1.querySelectorAll('.match-viz').forEach($ => $.remove());
+    g2.querySelectorAll('.match-viz').forEach($ => $.remove());
 
-    //-------
-    // Match
-    //-------
-    const { trunk, flipped, cost } = matchPaths(
-        fatTree1, fatTree2, { weights: pageState.pathWeights }
-    );
+    if (!show || typeof _debug_ === 'undefined') { return; }
 
-    //-------
-    // Draw
-    //-------
-    const g1 = svgRef1.current!.getElementsByTagName('g')[0];
-    const g2 = svgRef2.current!.getElementsByTagName('g')[0];
+    const pm = _debug_.elems.pathMatchResult.at(-1);
+    const trees = _debug_.elems.matchTrees.at(-1);
+    if (pm === undefined || trees === undefined) {
+        console.log('no match available yet - click morph first');
+        return;
+    }
 
     // Same DFS preorder as buildMorphEntries - colors match the morph view.
     const painted1 = new Set<FatBranch>();
     const painted2 = new Set<FatBranch>();
 
     const { pairIdx, insCount, delCount } = walk(
-        trunk, painted1, painted2, g1, g2, showDelay
+        pm.trunk, painted1, painted2, g1, g2
     );
-
 
     // Everything no matched path touched (unmatched subtrees, stub
     // sub-branches) retracts/grows - red/green like the morph view.
-
-    sweep(fatTree1, g1, painted1, 'red', showDelay);
-    sweep(fatTree2, g2, painted2, 'green', showDelay);
+    sweep(trees.tree1, g1, painted1, 'red');
+    sweep(trees.tree2, g2, painted2, 'green');
 
     console.log(
         `matched ${pairIdx} path pairs,`,
         `${delCount} deleted, ${insCount} inserted subtrees,`,
-        `flipped ${flipped}, cost ${cost.toFixed(3)}`
+        `flipped ${pm.flipped}, cost ${pm.cost.toFixed(3)}`
     );
 }
 
@@ -75,19 +69,18 @@ function walk(
         painted2: Set<FatBranch>,
         g1: SVGGElement,
         g2: SVGGElement,
-        showDelay: number,
         pairIdx0 = 0) {
 
     const color = matchColors[pairIdx0 % matchColors.length];
     for (const p of mp.piecesA) {
         painted1.add(p.branch);
-        drawFatBranchPiece(g1, p, color, showDelay);
-        drawStubs(g1, p, 'red', showDelay);
+        drawFatBranchPiece(g1, p, color);
+        drawStubs(g1, p, 'red');
     }
     for (const p of mp.piecesB) {
         painted2.add(p.branch);
-        drawFatBranchPiece(g2, p, color, showDelay);
-        drawStubs(g2, p, 'green', showDelay);
+        drawFatBranchPiece(g2, p, color);
+        drawStubs(g2, p, 'green');
     }
 
     let pairIdx = pairIdx0 + 1;
@@ -96,7 +89,7 @@ function walk(
     for (const op of mp.children) {
         if (op.type === 'match') {
             const r = walk(
-                op.sub, painted1, painted2, g1, g2, showDelay, pairIdx);
+                op.sub, painted1, painted2, g1, g2, pairIdx);
             pairIdx = r.pairIdx;
             delCount += r.delCount;
             insCount += r.insCount;
@@ -121,12 +114,11 @@ function sweep(
         br: FatBranch,
         g: SVGGElement,
         painted: Set<FatBranch>,
-        color: string,
-        showDelay: number) {
+        color: string) {
 
-    if (!painted.has(br)) { drawFatBranch(g, br, color, showDelay); }
-    for (const e of br.children ?? []) {
-        sweep(e.branch, g, painted, color, showDelay);
+    if (!painted.has(br)) { drawFatBranch(g, br, color); }
+    for (const e of br.children) {
+        sweep(e.branch, g, painted, color);
     }
 }
 
@@ -139,41 +131,36 @@ function sweep(
 function drawStubs(
         g: SVGGElement,
         piece: { branch: FatBranch; fromEdge: number; toEdge: number },
-        color: string,
-        showDelay: number): void {
+        color: string): void {
 
     const len = getSkeletonBeziers(piece.branch).length;
     if (piece.fromEdge > 0) {
         drawFatBranchPiece(g, {
             branch: piece.branch, fromEdge: 0,
             toEdge: piece.fromEdge
-        }, color, showDelay);
+        }, color);
     }
     if (piece.toEdge < len) {
         drawFatBranchPiece(g, {
             branch: piece.branch, fromEdge: piece.toEdge,
             toEdge: len
-        }, color, showDelay);
+        }, color);
     }
 }
 
 
 /**
- * Draws a branch's full skeleton in the given color (removed again after
- * `showDelay` ms if set).
+ * Draws a branch's full skeleton in the given color (persistent, tagged
+ * `match-viz` for removal on hide).
  */
 function drawFatBranch(
         g: SVGGElement,
         branch: FatBranch,
-        color: string,
-        showDelay?: number) {
+        color: string) {
 
-    const [$medial] = drawBeziersAsSinglePath(
-        g, getSkeletonBeziers(branch), `thin10 ${color} nofill`
+    drawBeziersAsSinglePath(
+        g, getSkeletonBeziers(branch), `thin10 ${color} nofill match-viz`
     );
-    if (showDelay && $medial !== undefined) {
-        setTimeout(() => $medial.remove(), showDelay);
-    }
 }
 
 
@@ -184,20 +171,13 @@ function drawFatBranch(
 function drawFatBranchPiece(
         g: SVGGElement,
         branchPiece: { branch: FatBranch; fromEdge: number; toEdge: number },
-        color: string,
-        showDelay?: number) {
+        color: string) {
 
     const bz = getSkeletonBeziers(branchPiece.branch)
         .slice(branchPiece.fromEdge, branchPiece.toEdge);
 
-    const [$medial] = drawBeziersAsSinglePath(
-        g, bz, `thin20 ${color} nofill`
-    );
-
-    if (showDelay && $medial !== undefined) {
-        setTimeout(() => $medial.remove(), showDelay);
-    }
+    drawBeziersAsSinglePath(g, bz, `thin20 ${color} nofill match-viz`);
 }
 
 
-export { onMatchClicked }
+export { showMatch }

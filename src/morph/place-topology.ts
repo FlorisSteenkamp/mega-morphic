@@ -1,9 +1,10 @@
 import type { FatBranch } from './fat-branch/fat-branch.js';
 import type { Glue, MutableMorphEntry } from './morph-entry.js';
-import { getSkeletonBeziers, getSkeletonRadii } from './fat-branch/get-fat-branch-tree.js';
+import { getSkeletonBeziers } from './fat-branch/get-fat-branch-tree.js';
 import { buildSleeveSides, getEdgeSleeves, skeletonKnots } from './anchored-sleeves.js';
 import { getLastP } from './fs/get-last-p.js';
 import { nearestIdx } from './nearest-idx.js';
+import { getSkeletonRadii } from './fat-branch/get-skeleton-radii.js';
 
 
 /**
@@ -56,7 +57,7 @@ function placeTopology(
     walk(root);
 
     function walk(parent: FatBranch): void {
-        for (const edge of parent.children ?? []) {
+        for (const edge of parent.children) {
             const child = edge.branch;
 
             if (topoSet.has(child)) { place(parent, child); }

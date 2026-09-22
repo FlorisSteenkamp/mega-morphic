@@ -4,53 +4,64 @@ import { drawBeziersAsSinglePath } from '../../draw/draw-beziers-as-single-path.
 import { getChainMatCurves } from '../../morph/fat-branch/get-chain-mat-curves.js';
 
 
-function drawFatBranch(
+function drawFatBranchTree(
         g: SVGGElement,
         showDelay = 0,
         fatBranch: FatBranch,
+        fullTree: boolean,
         logit = false) {
 
     if (fatBranch === undefined) { return; }
 
     if (logit) { console.log(fatBranch); }
 
-        const { cpChain, pss } = fatBranch;
+    const { cpChain, pss } = fatBranch;
 
-        drawOutline(g, pss, 'red', showDelay);
-        getChainMatCurves(cpChain).forEach(ps => {
-            drawFs.bezier(g, ps, 'thin2 blue nofill', showDelay);
-        });
+    drawOutline(g, pss, 'red', showDelay);
+    drawMatCurves(g, cpChain, 'red', showDelay);
 
-        // Tree levels, each in its own color; log the edge metadata.
-        const levelColors = [
-            'green', 'orange', 'purple', 'cyan', 'deeppink', 'darkgreen', 'brown'
-        ];
-        let level = [fatBranch];
-        for (let depth = 0; level.length > 0; depth++) {
-            const color = levelColors[depth % levelColors.length];
-            const edges = level.flatMap(branch => branch.children ?? []);
+    if (!fullTree) { return; }
 
-            for (const edge of edges) {
-                const { branch, distanceFromLeaf, roundSalienceFromLeaf, angle } = edge;
+    // Tree levels, each in its own color; log the edge metadata.
+    const levelColors = [
+        'green', 'orange', 'purple', 'cyan', 'deeppink', 'darkgreen', 'brown'
+    ];
+    let level = [fatBranch];
+    for (let depth = 0; level.length > 0; depth++) {
+        const color = levelColors[depth % levelColors.length];
+        const edges = level.flatMap(branch => branch.children);
 
-                drawOutline(g, branch.pss, color, showDelay);
-                getChainMatCurves(branch.cpChain).forEach(ps => {
-                    drawFs.bezier(g, ps, 'thin2 blue nofill', showDelay);
-                });
+        for (const edge of edges) {
+            const { branch, distanceFromLeaf, roundSalienceFromLeaf, angle } = edge;
 
-                if (logit) {
-                    console.log(
-                        `level ${depth + 1} (${color}):`,
-                        'distanceFromLeaf', distanceFromLeaf,
-                        'roundSalienceFromLeaf', roundSalienceFromLeaf,
-                        'angle', angle,
-                        'roundSalience', branch.roundSalience
-                    );
-                }
+            drawOutline(g, branch.pss, color, showDelay);
+            drawMatCurves(g, branch.cpChain, color, showDelay);
+
+            if (logit) {
+                console.log(
+                    `level ${depth + 1} (${color}):`,
+                    'distanceFromLeaf', distanceFromLeaf,
+                    'roundSalienceFromLeaf', roundSalienceFromLeaf,
+                    'angle', angle,
+                    'roundSalience', branch.roundSalience
+                );
             }
-
-            level = edges.map(edge => edge.branch);
         }
+
+        level = edges.map(edge => edge.branch);
+    }
+}
+
+
+function drawMatCurves(
+        g: SVGGElement,
+        cpChain: FatBranch['cpChain'],
+        color: string,
+        showDelay?: number): void {
+
+    getChainMatCurves(cpChain).forEach(ps => {
+        drawFs.bezier(g, ps, `thin5 ${color} nofill`, showDelay);
+    });
 }
 
 
@@ -68,4 +79,4 @@ function drawOutline(
 }
 
 
-export { drawFatBranch }
+export { drawFatBranchTree }

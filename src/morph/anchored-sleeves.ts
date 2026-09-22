@@ -1,10 +1,11 @@
 import { getBoundaryBeziersToNext } from 'flo-mat';
-import { fromTo, getTAtLength, length, toCubic, evalDeCasteljau } from 'flo-bezier3';
+import { fromTo, getTAtLength, toCubic, evalDeCasteljau } from 'flo-bezier3';
 import type { FatBranch } from './fat-branch/fat-branch.js';
-import { getSkeletonEdgeCpPairs } from './fat-branch/get-fat-branch-tree.js';
 import { distributeBezierListsEvenly } from './distribute-beziers-evenly.js';
 import { clamp } from '../utils/clamp.js';
 import { getPolyBezierLength } from './fs/get-poly-bezier-length.js';
+import { totalLength$ } from './fs/total-length.js';
+import { getSkeletonEdgeCpPairs } from './fat-branch/get-skeleton-edge-cp-pairs.js';
 
 const { atan2, cos, sin, hypot, PI: π } = Math;
 
@@ -63,7 +64,7 @@ function getEdgeSleeves(
 
 /** Normalized cumulative arc-length knots of a skeleton bezier list. */
 function skeletonKnots(bz: number[][][]): number[] {
-    const lens = bz.map(ps => length([0, 1], ps));
+    const lens = bz.map(totalLength$);
     const total = lens.reduce((s, l) => s + l, 0);
 
     const knots = [0];
@@ -202,7 +203,7 @@ function cutByArcFraction(
         f0: number,
         f1: number): number[][][] {
 
-    const lens = pieces.map(ps => length([0, 1], ps));
+    const lens = pieces.map(totalLength$);
     const total = lens.reduce((s, l) => s + l, 0);
 
     if (total < EPS_LEN) {

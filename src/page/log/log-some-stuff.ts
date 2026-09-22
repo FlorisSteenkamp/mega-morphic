@@ -1,5 +1,5 @@
 declare var _debug_: Debug;
-import { Debug } from '../../debug';
+import { Debug } from '../../debug/debug';
 import { CpNodeFs } from 'flo-mat';
 import { mapObj } from '../../utils/map-obj';
 

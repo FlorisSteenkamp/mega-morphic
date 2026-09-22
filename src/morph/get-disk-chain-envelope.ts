@@ -128,7 +128,7 @@ function getDiskChainEnvelope(
         ...left,
         // end cap: left → right through +T
         ...capPts(n - 1, aEnd, -aEnd),
-        ...right.slice().reverse(),
+        ...right.toReversed(),
         // start cap: right → left through −T
         ...capPts(0, -aStart, aStart - 2*Math.PI),
     ];

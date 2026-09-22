@@ -1,5 +1,5 @@
 import { CpNode, Mat } from "flo-mat";
-import { DebugElems } from "../debug.js";
+import { DebugElems } from "../debug/debug.js";
 import { ToDraw } from "./to-draw.js";
 
 

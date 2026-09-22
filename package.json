@@ -34,6 +34,7 @@
         "@types/ramda": "^0.32.0",
         "@types/react": "^19.3.0",
         "@types/react-dom": "^19.3.0",
+        "circular-dependency-plugin": "^5.2.2",
         "concurrently": "^10.0.5",
         "jest": "^30.5.1",
         "jest-ts-webcompat-resolver": "^1.0.1",
