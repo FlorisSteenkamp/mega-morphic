@@ -50,7 +50,7 @@ function logProfileAlignment(
     }
 
     console.log('profile alignment:', {
-        shapeCost: best.shapeCost,
+        shapeCost: best.cost.shapeCost,
         tailA: best.tailA,
         tailB: best.tailB,
         align: al

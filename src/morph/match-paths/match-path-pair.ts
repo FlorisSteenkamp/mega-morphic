@@ -71,16 +71,18 @@ function matchPathPair(
             w.delFloor*(pA.stubN + pB.stubN) +
             w.stub*(pA.stubSal/sal1 + pB.stubSal/sal2);
 
-        const { ops, cost: childCost } = matchPooled(
+        const { ops, cost: childCost, dp } = matchPooled(
             sal1, sal2, w, pA.pooled, pB.pooled
         );
 
         return {
             piecesA: pA.pieces,
             piecesB: pB.pieces,
-            cost: shapeCost + tailCost + stubCost + childCost,
-            shapeCost,
-            childCost,
+            cost: {
+                totalCost: shapeCost + tailCost + stubCost + childCost,
+                shapeCost,
+                childCost
+            },
             tailA: al.tailStartA,
             tailB: al.tailStartB,
             children: ops,
@@ -92,7 +94,8 @@ function matchPathPair(
                     skelPssA: pA.skelPss, skelPssB: pB.skelPss,
                     radiiA: pA.radii, radiiB: pB.radii,
                     steps: al.steps
-                }
+                },
+                ...(dp !== undefined ? { pooledDp: dp } : {})
             } : {})
         };
     }

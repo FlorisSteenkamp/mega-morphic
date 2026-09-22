@@ -16,7 +16,8 @@ function alignSeq<A, B>(
         bs: B[],
         matchCost: (a: A, b: B) => number,
         delCost: (a: A) => number,
-        insCost: (b: B) => number): { cost: number; ops: SeqOp<A, B>[] } {
+        insCost: (b: B) => number):
+        { cost: number; ops: SeqOp<A, B>[]; D: number[][] } {
 
     const n = as.length;
     const m = bs.length;
@@ -62,8 +63,9 @@ function alignSeq<A, B>(
     }
     ops.reverse();
 
-    return { cost: D[n][m], ops };
+    return { cost: D[n][m], ops, D };
 }
 
 
 export { alignSeq }
+export type { SeqOp }

@@ -28,6 +28,7 @@ import { drawElements } from './fs-consts-types/draw-elems.js';
 import { getGlyphNames, loadPath } from './fs-consts-types/load-path.js';
 import { showMatch } from './events/on-match-clicked.js';
 import { showBranchNums } from './events/show-branch-nums.js';
+import { NeedleWindow } from './components/needle-window.js';
 import { onMorphClicked } from './events/on-morph-clicked.js';
 import { onFattestClicked } from './events/on-fattest-clicked.js';
 import { drawMorph } from './draw-morph.js';
@@ -109,6 +110,7 @@ function Page(props: Props) {
     const morphMarksRef = useRef<FeatureMark[] | null>(null);
     const morphPoseRef = useRef<PoseRamp | null>(null);
     const [morphT, setMorphT] = React.useState(0);  // slider value 0..100
+    const [showNeedle, setShowNeedle] = React.useState(false);
 
     const refPageData = useRef<PageData>(null);
     const pageData: PageData = {
@@ -574,9 +576,27 @@ function Page(props: Props) {
                 >
                     reset
                 </button>
+                <button
+                    onClick={() => setShowNeedle(show => !show)}
+                    style={{
+                        padding: '6px 12px',
+                        fontSize: '13px',
+                        fontWeight: 500,
+                        lineHeight: '1',
+                        color: showNeedle ? '#fff' : '#1976d2',
+                        backgroundColor: showNeedle ? '#1976d2' : '#fff',
+                        border: '1px solid #1976d2',
+                        borderRadius: '4px',
+                        cursor: 'pointer',
+                        marginBottom: '8px',
+                    }}
+                >
+                    needle
+                </button>
             </div>}
             <span ref={refX} style={{ userSelect: 'none', position: 'fixed', bottom: '13px', left: '10px' }} />
             <span ref={refY} style={{ userSelect: 'none', position: 'fixed', bottom: '13px', left: '120px' }} />
+            {showNeedle && <NeedleWindow onClose={() => setShowNeedle(false)} />}
             <div style={{ display: 'flex', gap: '16px', flex: 1, minHeight: 0 }}>
             <svg 
                 id="svg3"

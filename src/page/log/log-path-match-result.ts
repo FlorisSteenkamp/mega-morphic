@@ -53,7 +53,7 @@ function logPathMatchResult(
     if (best.type !== 'insert') { logChild('a', best.a); }
     if (best.type !== 'delete') { logChild('b', best.b); }
     if (best.type === 'match') {
-        console.log('  sub-match cost:', best.sub.cost);
+        console.log('  sub-match cost:', best.sub.cost.totalCost);
     }
 
 

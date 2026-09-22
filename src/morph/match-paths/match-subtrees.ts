@@ -26,7 +26,11 @@ const matchSubtrees$ = memoize(function(
         for (const pA of pathsOf$(brA)) {
             for (const pB of pathsOf$(brB)) {
                 const m = matchPathPair_(pA, pB, false, false);
-                if (best === undefined || m.cost < best.cost) { best = m; }
+
+                if (best === undefined ||
+                    m.cost.totalCost < best.cost.totalCost) {
+                    best = m;
+                }
             }
         }
 

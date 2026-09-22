@@ -102,7 +102,7 @@ function matchPaths(
         const m = matchPathPair_(pA, pB, true, false);
 
         const cost =
-            m.cost +
+            m.cost.totalCost +
             turnTerm_(pA, pB) +
             swayTerm_(pA, pB);
 
@@ -130,7 +130,7 @@ function reduceCandidates(
 
     const ranked = cands.map(c => {
         const cost = 
-            matchPathPair_(c.pA, c.pB, true, true).cost +
+            matchPathPair_(c.pA, c.pB, true, true).cost.totalCost +
             turnTerm_(c.pA, c.pB) +
             swayTerm_(c.pA, c.pB);
 

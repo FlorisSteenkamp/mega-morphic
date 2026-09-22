@@ -1,5 +1,8 @@
+declare var _debug_: Debug;
+import type { Debug } from '../../debug/debug.js';
 import type { PathChildOp } from './path-child-op.js';
 import type { PooledChild } from './pooled-child.js';
+import type { PooledDp } from './matched-path.js';
 import { alignSeq } from './align-seq.js';
 import { matchSubtrees$ } from './match-subtrees.js';
 import { PathCostWeights } from './path-cost-weights.js';
@@ -16,14 +19,17 @@ function matchPooled(
         sal2: number,
         w: PathCostWeights,
         pooledA: PooledChild[],
-        pooledB: PooledChild[]): { ops: PathChildOp[]; cost: number } {
+        pooledB: PooledChild[]):
+        { ops: PathChildOp[]; cost: number; dp?: PooledDp[] } {
 
     const matchSubtrees$_ = matchSubtrees$(sal1, sal2, w);
-    const relabelCost_ = relabelCost(w, sal1, sal2);
+    const matchCost_ = matchCost(w, sal1, sal2);
     const delCost_ = delCost(w, sal1);
     const insCost_ = insCost(w, sal2);
 
     const ops: PathChildOp[] = [];
+    const dp: PooledDp[] | undefined =
+        typeof _debug_ !== 'undefined' ? [] : undefined;
     let cost = 0;
 
     for (const side of [1, -1] as const) {
@@ -36,8 +42,9 @@ function matchPooled(
             .filter(c => c.side === side)
             .sort((x, y) => side * (x.dist - y.dist));
 
-        const r = alignSeq(As, Bs, relabelCost_, delCost_, insCost_);
+        const r = alignSeq(As, Bs, matchCost_, delCost_, insCost_);
         cost += r.cost;
+        dp?.push({ side, D: r.D, as: As, bs: Bs, ops: r.ops });
 
         for (const op of r.ops) {
             ops.push(op.type === 'match'
@@ -51,7 +58,39 @@ function matchPooled(
         }
     }
 
-    return { ops, cost };
+    return { ops, cost, ...(dp !== undefined ? { dp } : {}) };
+}
+
+
+/**
+ * Returns the Relable / Match cost (calculated recursiveliy on children)
+ * 
+ * @param weights 
+ * @param sal1 
+ * @param sal2 
+ * @param a
+ * @param b
+ */
+function matchCost(
+        weights: PathCostWeights,
+        sal1: number,
+        sal2: number) {
+
+    return function(a: PooledChild, b: PooledChild): number {
+        const { position: wPosition, angle: wAngle } = weights;
+        const unit1 = sqrt(sal1);
+        const unit2 = sqrt(sal2);
+        const matchSubtrees$_ = matchSubtrees$(sal1, sal2, weights);
+
+        const sPosition = abs(a.dist/unit1 - b.dist/unit2);
+        const sAngle = angleDist(a.angle, b.angle)/π;
+
+        return (
+            wPosition*sPosition +
+            wAngle*sAngle +
+            matchSubtrees$_(a.edge.branch, b.edge.branch).cost.totalCost
+        );
+    }
 }
 
 
@@ -73,35 +112,9 @@ function delCost(
         sal1: number) {
 
     return function(a: PooledChild): number {
-        return weights.delFloor + weights.del * a.edge.branch.roundSalience / sal1;
-    }
-}
-
-
-/**
- * Returns the Relable / Match cost (calculated recursiveliy on children)
- * 
- * @param weights 
- * @param sal1 
- * @param sal2 
- * @param a
- * @param b
- */
-function relabelCost(
-        weights: PathCostWeights,
-        sal1: number,
-        sal2: number) {
-
-    return function(a: PooledChild, b: PooledChild): number {
-        const { position, angle } = weights;
-        const unit1 = sqrt(sal1);
-        const unit2 = sqrt(sal2);
-        const matchSubtrees$_ = matchSubtrees$(sal1, sal2, weights);
-
         return (
-            position * abs(a.dist/unit1 - b.dist/unit2) +
-            angle * angleDist(a.angle, b.angle)/π +
-            matchSubtrees$_(a.edge.branch, b.edge.branch).cost
+            weights.delFloor +
+            weights.del * a.edge.branch.roundSalience / sal1
         );
     }
 }

@@ -78,7 +78,8 @@ function evaluate(
     for (const pA of pathsOf$(brA)) {
         for (const pB of pathsOf$(brB)) {
             const m = matchPathPair_(pA, pB, false, false);
-            if (best === undefined || m.cost < best.cost) { best = m; }
+            if (best === undefined ||
+                m.cost.totalCost < best.cost.totalCost) { best = m; }
         }
     }
     if (best === undefined) {
@@ -109,7 +110,7 @@ function evaluate(
     // vs DROP it (delete a + insert b).
     const relabelCost = angleTerm === undefined ||
         pooled.positionTerm === undefined
-        ? undefined : best.cost + angleTerm + pooled.positionTerm;
+        ? undefined : best.cost.totalCost + angleTerm + pooled.positionTerm;
     const deleteCost = weights.delFloor +
         weights.del * brA.roundSalience / tree1.roundSalience;
     const insertCost = weights.delFloor +
@@ -122,10 +123,11 @@ function evaluate(
             match: {
                 /** intrinsic pair cost = shape + tails/stubs + children */
                 pairCost: {
-                    total: best.cost,
-                    shapeCost: best.shapeCost,
-                    childCost: best.childCost,
-                    tailAndStubCost: best.cost - (best.shapeCost + best.childCost),
+                    total: best.cost.totalCost,
+                    shapeCost: best.cost.shapeCost,
+                    childCost: best.cost.childCost,
+                    tailAndStubCost: best.cost.totalCost -
+                        (best.cost.shapeCost + best.cost.childCost),
                 },
                 angleTerm,
                 positionTerm: pooled.positionTerm,
