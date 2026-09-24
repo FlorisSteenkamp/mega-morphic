@@ -24,9 +24,12 @@ interface PageState {
     readonly showWeights: boolean;
     /** Draw the morph as filled area only (no MAT skeletons, no outline stroke). */
     readonly morphFillOnly: boolean;
-    /** Procrustes pose alignment: morph shape in the aligned frame, ride
-     *  the pose change globally. */
-    readonly procrustes: boolean;
+    /** Pose alignment components (procrustes split): morph shape 2 in the
+     *  aligned frame, ride the enabled components back globally. */
+    readonly poseCentroid: boolean;
+    readonly poseScale: boolean;
+    /** principal-axis rotation (2nd moment of inertia) */
+    readonly poseMoment: boolean;
     /** Draw a pose gizmo on the morph (centroid ring ∝ √area + principal
      *  axis line), measured from the drawn outlines. */
     readonly showPose: boolean;

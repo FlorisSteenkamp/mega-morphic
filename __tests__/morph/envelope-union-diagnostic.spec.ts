@@ -6,7 +6,7 @@ import { resolve } from 'node:path';
 import { findMats, getPathsFromStr, MatOptions } from 'flo-mat';
 import { boolean, getShapeArea, enableDebugForBooleanOp } from 'flo-boolean';
 import type { FatBranch } from '../../src/morph/fat-branch/fat-branch.js';
-import { buildMorphEntries } from '../../src/morph/build-morph-entries.js';
+import { buildMorphEntries } from '../../src/morph/build-morph-entries/build-morph-entries.js';
 import { resolveMorphAt } from '../../src/morph/resolve-morph-at.js';
 import { getFatBranchTree } from '../../src/morph/fat-branch/get-fat-branch-tree.js';
 import { parseSvgFont } from '../../src/load-svg/load-svg-font.js';

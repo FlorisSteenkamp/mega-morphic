@@ -7,9 +7,9 @@ import type { MatchedPath } from '../match-paths/matched-path.js';
 import type { PathPiece } from '../match-paths/path-piece.js';
 import type { PathCostWeights } from '../match-paths/path-cost-weights.js';
 import type { EntryLoc, Trim } from '../place-topology.js';
-import type { PoseRamp } from '../pose-ramp.js';
+import type { PoseRamp, PoseComponents } from '../pose-ramp.js';
 import { getShapeArea } from 'flo-boolean';
-import { matchPaths } from '../match-paths/match-paths.js';
+import { matchPathsViaSegments } from '../segment-graph/match-paths-via-segments.js';
 import { procrustes } from '../procrustes/procrustes-analysis.js';
 import { resolveMorphAt } from '../resolve-morph-at.js';
 import { alignBranches, resampleAt } from '../align-branches.js';
@@ -57,14 +57,21 @@ function buildMorphEntries(
         tree2: FatBranch,
         marks: FeatureMark[],
         weights?: Partial<PathCostWeights>,
-        /** pass to enable procrustes pose alignment: shape 2's frame is
-         *  aligned onto shape 1 for the morph, and the returned `ramp`
-         *  restores its true pose over t (apply when drawing) */
-        poseOut?: { ramp?: PoseRamp }): MorphEntry[] {
+        /** pass to enable pose alignment: the ENABLED components of shape
+         *  2's frame are aligned onto shape 1 for the morph, and the
+         *  returned `ramp` restores its true pose over t (apply when
+         *  drawing) */
+        poseOut?: { components: PoseComponents; ramp?: PoseRamp }):
+        MorphEntry[] {
 
-    const pm = matchPaths(tree1, tree2, { weights });
+    // Segment-graph matcher (freely routed paths, no stub special cases in
+    // the matching itself); the classic matchPaths is kept for experiments.
+    const pm = matchPathsViaSegments(tree1, tree2, { weights });
 
-    if (typeof _debug_ !== 'undefined') {
+    // The morph arrays only exist when morph debugging is enabled (other
+    // debug configs, e.g. flo-boolean-only in tests, lack them).
+    if (typeof _debug_ !== 'undefined' &&
+        _debug_.elems?.pathMatchResult !== undefined) {
         // Keep only the LATEST result - readers use [0]/at(-1) and stale
         // entries (whole trees) would otherwise accumulate.
         _debug_.elems.pathMatchResult.length = 0;
@@ -116,7 +123,8 @@ function buildMorphEntries(
         rootStubs2, marks);
 
     if (poseOut !== undefined) {
-        poseOut.ramp = applyProcrustes(tree1, tree2, entries);
+        poseOut.ramp = applyProcrustes(
+            tree1, tree2, entries, poseOut.components);
     }
 
     return entries as MorphEntry[];
@@ -319,19 +327,21 @@ function isFull(p: PathPiece): boolean {
 function applyProcrustes(
         tree1: FatBranch,
         tree2: FatBranch,
-        entries: MutableMorphEntry[]): PoseRamp {
+        entries: MutableMorphEntry[],
+        comp: PoseComponents): PoseRamp {
 
     const pose1 = procrustes(tree1.pss);
     const pose2 = procrustes(tree2.pss);
 
-    const s = pose1.scale / pose2.scale;
+    const s = comp.scale ? pose1.scale / pose2.scale : 1;
     // Principal axes are only defined mod π - take the smaller rotation.
-    const θ = wrapModPi(pose1.angle - pose2.angle);
+    const θ = comp.moment ? wrapModPi(pose1.angle - pose2.angle) : 0;
 
     const cosθ = cos(θ);
     const sinθ = sin(θ);
     const [c2x, c2y] = pose2.centroid;
-    const [c1x, c1y] = pose1.centroid;
+    // centroid off: rotate/scale shape 2 in place (about its own centroid)
+    const [c1x, c1y] = comp.centroid ? pose1.centroid : pose2.centroid;
     const tf = ([x, y]: number[]): number[] => {
         const ux = x - c2x;
         const uy = y - c2y;
@@ -356,6 +366,19 @@ function applyProcrustes(
     // noise and nearest-branch chaining random-walks by ±π/2 hops -
     // accumulating spurious full turns); unmeasurable stretches are filled
     // by interpolation between confident neighbors.
+    // Only needed when the moment component is pinned (33 morph resolves).
+    if (!comp.moment) {
+        return {
+            c1: pose1.centroid,
+            c2: pose2.centroid,
+            s1: pose1.scale,
+            s2: pose2.scale,
+            thD0: 0,
+            thD1: 0,
+            ths: [0, 0],
+            pin: comp
+        };
+    }
     const N = 32;
     const MIN_ANISO = 0.05;
     const angles: number[] = [];
@@ -414,7 +437,8 @@ function applyProcrustes(
         s2: pose2.scale,
         thD0,
         thD1: thsEnd + rotEnd + 2*π*m,
-        ths
+        ths,
+        pin: comp
     };
 }
 

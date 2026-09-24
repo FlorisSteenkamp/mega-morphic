@@ -1,6 +1,6 @@
 import type { PageData } from '../page-data.js';
 import type { FeatureMark } from '../../morph/build-morph-entries/build-morph-entries.js';
-import type { PoseRamp } from '../../morph/pose-ramp.js';
+import type { PoseRamp, PoseComponents } from '../../morph/pose-ramp.js';
 import { buildMorphEntries } from '../../morph/build-morph-entries/build-morph-entries.js';
 import { drawMorph } from '../draw-morph.js';
 import { getFatBranchTree, getSkeletonBeziers } from '../../morph/fat-branch/get-fat-branch-tree.js';
@@ -30,8 +30,15 @@ function onMorphClicked(
     // Match tree branches and build morph entries
     //--------------------------------------------
     const marks: FeatureMark[] = [];
-    const poseOut = pageState.procrustes
-        ? {} as { ramp?: PoseRamp }
+    const { poseCentroid, poseScale, poseMoment } = pageState;
+    const poseOut = poseCentroid || poseScale || poseMoment
+        ? {
+            components: {
+                centroid: poseCentroid,
+                scale: poseScale,
+                moment: poseMoment
+            }
+        } as { components: PoseComponents; ramp?: PoseRamp }
         : undefined;
     morphRef.current = buildMorphEntries(
         tree1, tree2, marks, pageState.pathWeights, poseOut);

@@ -240,8 +240,16 @@ function Page(props: Props) {
         drawMorph(refPageData, morphT / 100);
     }
 
-    function onProcrustesChanged(procrustes: boolean) {
-        upd(pageState, { procrustes });
+    function onPoseCentroidChanged(poseCentroid: boolean) {
+        upd(pageState, { poseCentroid });
+    }
+
+    function onPoseScaleChanged(poseScale: boolean) {
+        upd(pageState, { poseScale });
+    }
+
+    function onPoseMomentChanged(poseMoment: boolean) {
+        upd(pageState, { poseMoment });
     }
 
     function onShowPoseChanged(showPose: boolean) {
@@ -367,7 +375,9 @@ function Page(props: Props) {
                 <Checkbox checked={pageState.simplify} styles={showThreeProngChangedStyles} text="simplify" onChanged={onSimplifyChanged} />
                 <Checkbox checked={pageState.viewMat} styles={showThreeProngChangedStyles} text="mat/sat" onChanged={onViewMatChanged} />
                 <Checkbox checked={pageState.morphFillOnly} styles={showThreeProngChangedStyles} text="fill only" onChanged={onMorphFillOnlyChanged} />
-                <Checkbox checked={pageState.procrustes} styles={showThreeProngChangedStyles} text="procrustes" onChanged={onProcrustesChanged} />
+                <Checkbox checked={pageState.poseCentroid} styles={showThreeProngChangedStyles} text="centroid" onChanged={onPoseCentroidChanged} />
+                <Checkbox checked={pageState.poseScale} styles={showThreeProngChangedStyles} text="scale" onChanged={onPoseScaleChanged} />
+                <Checkbox checked={pageState.poseMoment} styles={showThreeProngChangedStyles} text="2nd moment" onChanged={onPoseMomentChanged} />
                 <Checkbox checked={pageState.showPose} styles={showThreeProngChangedStyles} text="pose" onChanged={onShowPoseChanged} />
             </div>
             <div style={{ display: 'flex', gap: '16px', alignItems: 'flex-end', paddingBottom: '8px' }}>
@@ -396,7 +406,7 @@ function Page(props: Props) {
                     />
                 </div>
                 <div style={{ display: 'flex' }}>
-                    <button
+                    {/* <button
                         onClick={() => onFattestClicked(refPageData)}
                         style={{
                             padding: '9px 20px',
@@ -411,7 +421,7 @@ function Page(props: Props) {
                         }}
                     >
                         fattest
-                    </button>
+                    </button> */}
                 </div>
                 <div style={{ display: 'flex' }}>
                     <button
@@ -467,7 +477,7 @@ function Page(props: Props) {
                         flip h
                     </button>
                 </div>
-                <div style={{ display: 'flex' }}>
+                <div style={{ display: 'flex', gap: '6px' }}>
                     <button
                         onClick={() => onMorphClicked(refPageData)}
                         style={{

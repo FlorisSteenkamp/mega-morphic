@@ -34,18 +34,23 @@ interface AnchorPair {
 const W_RADIUS = 1;
 /** turning-rate difference weight */
 const W_TURN = 0.15;
-/** affine gap penalties (deletion/insertion of a section) */
-const GAP_OPEN = 0.5;
-const GAP_EXTEND = 0.06;
+/**
+ * Drift-from-proportional weight: on featureless stretches the warp is
+ * otherwise under-constrained and bunches (a stretch maps to a point =
+ * grow/retract in the drawn morph); this stiffens it toward uniform
+ * arc-length correspondence while strong features can still pull locally.
+ */
+const W_DRIFT = 0.5;
 
 
 /**
  * Aligns two branches with a monotone, feature-based warp: anchors (known
  * feature correspondences, e.g. matched children's forks) are HARD
  * constraints - the branches are aligned piecewise between consecutive
- * anchors with an affine-gap Gotoh alignment on radius + turning profiles.
- * The result pairs breakpoints non-linearly and allows sections of either
- * branch to be deleted (paired to a point), including at the endpoints.
+ * anchors with a GAPLESS monotone DTW on radius + turning profiles,
+ * regularized toward proportional arc length (`W_DRIFT`). This is a DRAWN
+ * reparametrization, so no material is ever paired to a point - deleting
+ * material is the matcher's job, not the warp's.
  *
  * The returned breakpoints include both frames' original knots (so every
  * paired interval lies within a single original segment on its side) and
@@ -102,7 +107,7 @@ function alignBranches(
         const fA = sampleFeatures(bzA, rdA, knotsA, nAs, unitA, a0, a1);
         const fB = sampleFeatures(bzB, rdB, knotsB, nBs, unitB, b0, b1);
 
-        const path = gotoh(fA, fB);
+        const path = warpPath(fA, fB);
 
         const start = m === 0 ? 0 : 1;  // the joint pair is already in
         for (let c = start; c < path.length; c++) {
@@ -207,81 +212,54 @@ function angleAt(φs: number[], knots: number[], u: number): number {
 
 // ---- Affine-gap alignment (Gotoh) -------------------------------------------
 
-type Move = 0 | 1 | 2;  // 0 = diag (match), 1 = gap in B (A advances), 2 = gap in A
-
-function gotoh(
+/**
+ * Gapless monotone DTW, endpoints pinned: moves are diagonal or single-side
+ * advances (local many-to-one warping), with a drift penalty toward the
+ * proportional diagonal so featureless stretches warp uniformly. No affine
+ * gaps: cheap gap runs are exactly what bunched featureless material into
+ * points (visible as grow-from-fork / retract-into-tip in the morph).
+ */
+function warpPath(
         fA: Samples,
         fB: Samples): [number, number][] {
 
     const nA = fA.u.length;
     const nB = fB.u.length;
 
-    // Turning magnitude is mirror-invariant: mirrored pairs (e.g. "(" vs
-    // ")") have OPPOSITE-sign turning - comparing signed rates would make
-    // the whole diagonal expensive and push the alignment into huge
-    // spurious gap runs.
     const cost = (i: number, j: number): number =>
         W_RADIUS*abs(fA.r[i] - fB.r[j])
-        + W_TURN*abs(abs(fA.turn[i]) - abs(fB.turn[j])) / (2*Math.PI);
+        // mirror-invariant turning (mirrored pairs have opposite signs)
+        + W_TURN*abs(abs(fA.turn[i]) - abs(fB.turn[j])) / (2*Math.PI)
+        + W_DRIFT*abs(i/(nA - 1) - j/(nB - 1));
 
     const INF = Infinity;
-    // M = last move was a match; Ix = gap in B (A advancing); Iy = gap in A.
-    const M: number[][] = [];
-    const Ix: number[][] = [];
-    const Iy: number[][] = [];
-    const fromM: Move[][] = [];
+    const D: number[][] = [];
     for (let i = 0; i < nA; i++) {
-        M.push(new Array(nB).fill(INF));
-        Ix.push(new Array(nB).fill(INF));
-        Iy.push(new Array(nB).fill(INF));
-        fromM.push(new Array(nB).fill(0) as Move[]);
+        D.push(new Array(nB).fill(INF));
     }
-
-    M[0][0] = cost(0, 0);
-    for (let i = 1; i < nA; i++) {
-        Ix[i][0] = (i === 1 ? M[0][0] + GAP_OPEN : Ix[i - 1][0]) + GAP_EXTEND;
-    }
-    for (let j = 1; j < nB; j++) {
-        Iy[0][j] = (j === 1 ? M[0][0] + GAP_OPEN : Iy[0][j - 1]) + GAP_EXTEND;
-    }
+    D[0][0] = cost(0, 0);
+    for (let i = 1; i < nA; i++) { D[i][0] = D[i - 1][0] + cost(i, 0); }
+    for (let j = 1; j < nB; j++) { D[0][j] = D[0][j - 1] + cost(0, j); }
 
     for (let i = 1; i < nA; i++) {
         for (let j = 1; j < nB; j++) {
-            const prevM = M[i - 1][j - 1];
-            const prevIx = Ix[i - 1][j - 1];
-            const prevIy = Iy[i - 1][j - 1];
-            const best = min(prevM, prevIx, prevIy);
-            M[i][j] = best + cost(i, j);
-            fromM[i][j] = best === prevM ? 0 : best === prevIx ? 1 : 2;
-
-            Ix[i][j] = min(M[i - 1][j] + GAP_OPEN, Ix[i - 1][j]) + GAP_EXTEND;
-            Iy[i][j] = min(M[i][j - 1] + GAP_OPEN, Iy[i][j - 1]) + GAP_EXTEND;
+            D[i][j] = cost(i, j) +
+                min(D[i - 1][j - 1], D[i - 1][j], D[i][j - 1]);
         }
     }
 
-    // Trace back from the best terminal state.
     const path: [number, number][] = [];
     let i = nA - 1;
     let j = nB - 1;
-    let state: Move =
-        M[i][j] <= Ix[i][j] && M[i][j] <= Iy[i][j] ? 0
-        : Ix[i][j] <= Iy[i][j] ? 1 : 2;
-
     while (i > 0 || j > 0) {
         path.push([i, j]);
-        if (state === 0) {
-            const s = fromM[i][j];
-            i--; j--;
-            state = s;
-        } else if (state === 1) {
-            state = i > 1 && Ix[i - 1][j] <= M[i - 1][j] + GAP_OPEN ? 1 : 0;
-            i--;
-            if (i === 0 && j > 0) { state = 2; }
-        } else {
-            state = j > 1 && Iy[i][j - 1] <= M[i][j - 1] + GAP_OPEN ? 2 : 0;
-            j--;
-            if (j === 0 && i > 0) { state = 1; }
-        }
+        if (i === 0) { j--; continue; }
+        if (j === 0) { i--; continue; }
+        const d = D[i - 1][j - 1];
+        // prefer the diagonal on ties
+        if (d <= D[i - 1][j] && d <= D[i][j - 1]) { i--; j--; }
+        else if (D[i - 1][j] <= D[i][j - 1]) { i--; }
+        else { j--; }
     }
     path.push([0, 0]);
     path.reverse();

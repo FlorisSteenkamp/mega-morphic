@@ -1,5 +1,13 @@
 import type { Pose } from './procrustes/procrustes-analysis.js';
 
+/** Which pose components are aligned/pinned (procrustes split). */
+interface PoseComponents {
+    readonly centroid: boolean;
+    readonly scale: boolean;
+    /** principal-axis rotation (2nd moment of inertia) */
+    readonly moment: boolean;
+}
+
 /**
  * The desired pose path of a morph: centroid on a straight line, scale
  * geometric, principal-axis angle at a constant rate from `thD0` to `thD1`.
@@ -19,6 +27,8 @@ interface PoseRamp {
     readonly thD1: number;
     /** unwrapped measured axis angles at uniform t samples */
     readonly ths: number[];
+    /** which components the draw-time correction pins */
+    readonly pin: PoseComponents;
 }
 
 
@@ -43,14 +53,16 @@ function poseCorrectionAt(
         t: number,
         measured: Pose): { tf: (p: number[]) => number[]; scale: number } {
 
-    const cD = [
-        (1 - t)*r.c1[0] + t*r.c2[0],
-        (1 - t)*r.c1[1] + t*r.c2[1]
-    ];
-    const sD = Math.pow(r.s1, 1 - t) * Math.pow(r.s2, t);
-    const thD = r.thD0 + t*(r.thD1 - r.thD0);
-
-    const rot = thD - measuredAngleAt(r, t);
+    // disabled components pin to the MEASURED value = no correction
+    const cD = r.pin.centroid
+        ? [(1 - t)*r.c1[0] + t*r.c2[0], (1 - t)*r.c1[1] + t*r.c2[1]]
+        : measured.centroid;
+    const sD = r.pin.scale
+        ? Math.pow(r.s1, 1 - t) * Math.pow(r.s2, t)
+        : measured.scale;
+    const rot = r.pin.moment
+        ? r.thD0 + t*(r.thD1 - r.thD0) - measuredAngleAt(r, t)
+        : 0;
 
     const s = sD / measured.scale;
     const c = Math.cos(rot);
@@ -72,4 +84,4 @@ function poseCorrectionAt(
 
 
 export { poseCorrectionAt }
-export type { PoseRamp }
+export type { PoseRamp, PoseComponents }
