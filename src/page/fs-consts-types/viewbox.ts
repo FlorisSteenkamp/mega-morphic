@@ -36,7 +36,7 @@ function getViewBoxForShape(bezierLoops: number[][][][]) {
     let _cy = Math.max(width, height) * 0.1
     let cy_ = Math.max(width, height) * 0.1;
 
-    return [[minX_-_cx, minY_-_cy], [maxX_+cx_, maxY_+cx_]];
+    return [[minX_-_cx, minY_-_cy], [maxX_+cx_, maxY_+cy_]];
 }
 
 

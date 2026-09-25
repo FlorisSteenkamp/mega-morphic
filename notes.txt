@@ -15,6 +15,6 @@ npm account name: floris / florissteenkamp
 
 TODO
 ----
-* more accurate by adding 2-prongs at dull corners
-* more accurate by checking when adding 2 prongs that if they're close but
-points are quite opposing then don't fail them
+* Better boundary lerping - currently jagged / intersecting
+* better retract/grow logic of dropped branches
+* round cap-ends

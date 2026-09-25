@@ -8,10 +8,10 @@ import type { SleeveSide } from './anchored-sleeves.js';
  * for control point, optionally glued to a parent entry.
  */
 interface MorphEntry {
-    /** cubic Bézier control polygons at the start frame (t=0) */
-    readonly a: number[][][];
-    /** cubic Bézier control polygons at the end frame (t=1), aligned with `a` */
-    readonly b: number[][][];
+    /** skeleton cubic Bézier control polygons at the start frame (t=0) */
+    readonly skelPssA: number[][][];
+    /** skeleton cubic Bézier control polygons at the end frame (t=1), aligned with `a` */
+    readonly skelPssB: number[][][];
     readonly classes: string;
     /** optional attachment of this entry's junction end to parent entry boundaries */
     readonly glue?: Glue;
@@ -26,9 +26,11 @@ interface MorphEntry {
     /** disk-anchored boundary, back side (end → tip) */
     readonly sleeveBack?: SleeveSide;
     /** winding sign of the outline (±1) - the tip cap arcs sweep this way */
-    readonly capSign?: number;
-    /** which frame is a collapsed point (topology entries) - its chord
-     *  angles are meaningless fill */
+    readonly capSign: number;
+    /**
+     * which frame is a collapsed point (topology entries) - its chord
+     * angles are meaningless fill
+     */
     readonly collapsed?: 'a' | 'b';
 }
 

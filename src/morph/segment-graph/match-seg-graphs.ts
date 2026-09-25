@@ -9,6 +9,8 @@ import { sampleSegGraph } from './sample-seg-graph.js';
 import { productDtw } from './product-dtw.js';
 import { alignSeq } from '../match-paths/align-seq.js';
 import { wrapAngle } from '../intrinsic-skeleton/wrap-angle.js';
+import { sum } from '../../utils/sum.js';
+import { mean } from '../../utils/mean.js';
 
 const { abs, max, min, round, atan2, PI: π } = Math;
 
@@ -39,10 +41,15 @@ interface SegChild {
     /**
      * the real tree edge when the subtree is a whole fat-branch subtree;
      * undefined for a CONTINUATION leftover (the route's own branch past a
-     * fork) - those can't be matched unless `matchContinuations` (the
-     * builder can't express covered continuations)
+     * fork) - matchable like any child (the builder suppresses stubs for
+     * covered slices)
      */
     readonly edge?: FatBranchEdge;
+    /** set for children at the route's end/start vertex: ordered by the
+     *  fork sweep (seam order) instead of dist/side */
+    readonly terminal?: 'start' | 'end';
+    /** sweep-order key within the terminal group */
+    readonly sweep?: number;
 }
 
 type RouteStep = { seg: Segment; reversed: boolean };
@@ -83,19 +90,15 @@ interface SegMatchResult {
     readonly cost: number;
 }
 
-interface SegMatchOptions {
-    /** allow matching continuation leftovers (experimental - the morph
-     *  builder cannot express these; overlay/scoring only) */
-    readonly matchContinuations?: boolean;
-}
-
 
 /**
  * Hierarchical segment matching (the segment-graph analog of `matchPaths`):
- * the trunk pair is the best freely-routed leaf-to-leaf path pair (product
- * DTW), then the subtrees hanging off the two routes are NW-aligned per
- * side (position + angle + a pinned-start product DTW as relabel cost) and
- * matched pairs recurse. Score is diagnostic-grade: a matched child's
+ * the trunk pair is the best freely-routed path pair (product DTW; routes
+ * run leaf/fork to leaf/fork - terminal stretches beyond an end fork
+ * compete as ordinary children), then the subtrees hanging off the two
+ * routes are NW-aligned per side (position + angle + a pinned-start
+ * product DTW as relabel cost; terminal children in fork-sweep seam order)
+ * and matched pairs recurse. Score is diagnostic-grade: a matched child's
  * deeper subtrees are priced as covered-or-dropped inside its DTW rather
  * than by its own recursion.
  */
@@ -104,15 +107,12 @@ function matchSegGraphs(
         gB: SegGraph,
         unitA: number,
         unitB: number,
-        weights: PathCostWeights,
-        opts: SegMatchOptions = {}): SegMatchResult {
+        weights: PathCostWeights): SegMatchResult {
 
-    const matchContinuations = opts.matchContinuations === true;
+    const lenOf = (segs: Segment[]) => sum(segs.map(s => s.len));
 
-    const lenOf = (segs: Segment[]) =>
-        segs.reduce((s, x) => s + x.len, 0);
-    const δA = lenOf(gA.segments) / TARGET_SAMPLES;
-    const δB = lenOf(gB.segments) / TARGET_SAMPLES;
+    const δA = sum(gA.segments.map(s => s.len)) / TARGET_SAMPLES;
+    const δB = sum(gB.segments.map(s => s.len)) / TARGET_SAMPLES;
 
     const sA = sampleSegGraph(gA, unitA, TARGET_SAMPLES);
     const sB = sampleSegGraph(gB, unitB, TARGET_SAMPLES);
@@ -178,8 +178,9 @@ function matchSegGraphs(
         };
 
         const matchCost = (a: SegChild, b: SegChild): number => {
-            if (!matchContinuations &&
-                (a.edge === undefined || b.edge === undefined)) {
+            // terminal (seam) children only match terminal children -
+            // regular ones only regular (side/seam sequences correspond)
+            if ((a.terminal === undefined) !== (b.terminal === undefined)) {
                 return Infinity;
             }
             return weights.position*abs(a.dist/unitA - b.dist/unitB) +
@@ -196,11 +197,19 @@ function matchSegGraphs(
             typeof _debug_ !== 'undefined' ? [] : undefined;
         let cost = shapeCost;
 
+        // Per-side sequences in sleeve-boundary order: regular children by
+        // dist, then that side's seam terminals in fork-sweep order (end
+        // fork → out side's tail; start fork → back side's tail).
+        const seqOf = (ch: SegChild[], side: 1 | -1): SegChild[] => [
+            ...ch.filter(c => c.side === side && c.terminal === undefined)
+                .sort((x, y) => side*(x.dist - y.dist)),
+            ...ch.filter(c => c.terminal === (side === 1 ? 'end' : 'start'))
+                .sort((x, y) => x.sweep! - y.sweep!)
+        ];
+
         for (const side of [1, -1] as const) {
-            const As = chA.filter(c => c.side === side)
-                .sort((x, y) => side*(x.dist - y.dist));
-            const Bs = chB.filter(c => c.side === side)
-                .sort((x, y) => side*(x.dist - y.dist));
+            const As = seqOf(chA, side);
+            const Bs = seqOf(chB, side);
 
             const r = alignSeq(As, Bs, matchCost, delCost, insCost);
             dp?.push({ side, D: r.D, as: As, bs: Bs, ops: r.ops });
@@ -321,6 +330,9 @@ function childrenOf(
     const out: SegChild[] = [];
     const claimed = new Set<Segment>();
 
+    const startV = verts[0];
+    const endV = verts[verts.length - 1];
+
     for (let i = 0; i < verts.length; i++) {
         const v = verts[i];
         for (const entry of adj.get(v) ?? []) {
@@ -332,6 +344,7 @@ function childrenOf(
             const rd = dirs[i];
             const cross = rd[0]*cd[1] - rd[1]*cd[0];
             const dot = rd[0]*cd[0] + rd[1]*cd[1];
+            const θ = atan2(cross, dot);
 
             // edge-rooted iff the entry segment's branch attaches HERE -
             // otherwise the subtree is a continuation leftover
@@ -340,16 +353,30 @@ function childrenOf(
                 ? info.edge
                 : undefined;
 
+            // Seam terminals: children AT a route end, ordered by the fork
+            // sweep (the sleeve boundary walks the end cap from the out
+            // side: descending θ; the start cap toward the out side:
+            // ascending θ). The cut sits at the route's own prong, so the
+            // order is well defined even for collinear continuations.
+            const terminal = i === verts.length - 1 && v === endV
+                ? 'end' as const
+                : i === 0 && v === startV
+                ? 'start' as const
+                : undefined;
+            const sweep = terminal === 'end' ? -θ
+                : terminal === 'start' ? θ
+                : undefined;
+
             out.push({
                 attachV: v,
                 dist: dists[i],
                 side: cross >= 0 ? 1 : -1,
-                angle: atan2(cross, dot),
+                angle: θ,
                 entry,
                 segs,
-                material: segs.reduce((s, x) => s +
-                    2*meanRadius(x)*x.len, 0) / (unit*unit),
-                ...(edge !== undefined ? { edge } : {})
+                material: sum(segs.map(s => 2*mean(s.radii)*s.len)),
+                ...(edge !== undefined ? { edge } : {}),
+                ...(terminal !== undefined ? { terminal, sweep } : {})
             });
         }
     }
@@ -416,11 +443,6 @@ function meanDir(d1: number[], d2: number[]): number[] {
     const mx = d1[0]/l1 + d2[0]/l2;
     const my = d1[1]/l1 + d2[1]/l2;
     return Math.hypot(mx, my) < 1e-9 ? d1 : [mx, my];
-}
-
-
-function meanRadius(seg: Segment): number {
-    return seg.radii.reduce((s, r) => s + r, 0) / seg.radii.length;
 }
 
 

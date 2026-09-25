@@ -2,15 +2,20 @@ import * as React from 'react';
 import { memo } from 'react';
 
 
+interface CheckboxStyles {
+    readonly div: React.CSSProperties
+}
+
+
 interface Props {
     text: string;
-    styles?: { div: React.CSSProperties },
+    styles?: CheckboxStyles,
     checked: boolean;
     onChanged?: (checked: boolean) => void;
 }
 
 
-const Checkbox = memo(function SimpleCheckbox(props: Props) {
+const Checkbox = memo(function(props: Props) {
     const { styles, text, onChanged, checked } = props;
     const idStr = Math.random().toString();
 
@@ -21,7 +26,6 @@ const Checkbox = memo(function SimpleCheckbox(props: Props) {
     }
 
     return (
-        //<div style={styles?.div}>
         <div style={styles ? styles.div : undefined}>
             <input type="checkbox" id={idStr} onChange={onChange} checked={checked} />
             <label htmlFor={idStr}>{text}</label>
@@ -30,5 +34,5 @@ const Checkbox = memo(function SimpleCheckbox(props: Props) {
 });
 
 
+export type { CheckboxStyles }
 export { Checkbox }
-    

@@ -18,12 +18,15 @@ import { logFatBranch } from '../log/log-fat-branch.js';
 import { logPathMatchResult } from '../log/log-path-match-result.js';
 import { logProfileAlignment } from '../log/log-profile-alignment.js';
 import { logChildDtw } from '../log/log-child-dtw.js';
+import { logMorphBezier } from '../log/log-morph-bezier.js';
+import type { PageData } from '../page-data.js';
 
 
 function onClick(
         stateControl: StateControl,
         svgRef: React.RefObject<SVGSVGElement | null>,
-        shapeIdx: 1|2|3) {
+        shapeIdx: 1|2|3,
+        refPageData?: React.RefObject<PageData | null>) {
 
     return (event: React.MouseEvent<SVGSVGElement, MouseEvent>) => {
         if (event.shiftKey) { 
@@ -31,8 +34,17 @@ function onClick(
             return;
         }
 
-        // The morph svg only supports zoom/unzoom - no click-for logging.
-        if (shapeIdx === 3) { return; }
+        // The morph svg supports only the m-bezier inspector.
+        if (shapeIdx === 3) {
+            const { pageState } = stateControl.state.appState;
+            const svg3$ = svgRef.current;
+            if (pageState.clickFor !== 'mBezier' ||
+                refPageData === undefined || !svg3$) { return; }
+            const g3 = svg3$.getElementsByTagName('g')[0];
+            const p = getViewboxXY(svg3$, event.clientX, event.clientY);
+            logMorphBezier(refPageData)(g3, p, pageState.showDelay);
+            return;
+        }
 
         const { state } = stateControl;
         const { pageState } = state.appState;
@@ -65,7 +77,9 @@ function onClick(
             fatTree           : logFatBranch(mats, true),
             pathMatchResult   : logPathMatchResult,
             profileAlign      : logProfileAlignment,
-            childDtw          : logChildDtw(shapeIdx, pageState.pathWeights)
+            childDtw          : logChildDtw(shapeIdx, pageState.pathWeights),
+            mBezier           : () =>
+                console.log('m-bezier inspects the MORPH svg - click there')
         }
         
         const { clickFor, showDelay } = pageState;

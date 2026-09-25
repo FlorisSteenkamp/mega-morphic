@@ -2,7 +2,7 @@ import type { PageData } from '../page-data.js';
 import type { FeatureMark } from '../../morph/build-morph-entries/build-morph-entries.js';
 import type { PoseRamp, PoseComponents } from '../../morph/pose-ramp.js';
 import { buildMorphEntries } from '../../morph/build-morph-entries/build-morph-entries.js';
-import { drawMorph } from '../draw-morph.js';
+import { drawMorph } from '../../morph/draw-morph/draw-morph.js';
 import { getFatBranchTree, getSkeletonBeziers } from '../../morph/fat-branch/get-fat-branch-tree.js';
 import { XMLNS } from '../../draw/xmlns.js';
 import { getFattestCpNode } from '../../morph/fat-branch/get-fattest-cp-node.js';

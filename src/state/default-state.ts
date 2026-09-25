@@ -63,7 +63,8 @@ const defaultPageState: PageState = {
     showMatch: false,
     showBranchNums: false,
     rot1: 0,
-    flip1: false,
+    flipH: false,
+    flipV: false,
     pathWeights: defaultPathWeights,
 }
 

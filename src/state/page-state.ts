@@ -37,10 +37,12 @@ interface PageState {
     readonly showMatch: boolean;
     /** Show the fat trees' branch indices on svgs 1 and 2. */
     readonly showBranchNums: boolean;
-    /** test rotation of shape 1 (degrees, applied before the MAT) */
+    /** rotation of shape 1 (degrees, applied before the MAT) */
     readonly rot1: number;
-    /** test horizontal mirror of shape 1 (applied before the MAT) */
-    readonly flip1: boolean;
+    /** horizontal mirror of shape 1 (applied before the MAT) */
+    readonly flipH: boolean;
+    /** vertical mirror of shape 1 (applied before the MAT) */
+    readonly flipV: boolean;
     /** path-matching cost weights (match + morph) */
     readonly pathWeights: PathCostWeights;
 }

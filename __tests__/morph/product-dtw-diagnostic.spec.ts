@@ -7,7 +7,7 @@ import { resolve } from 'node:path';
 import { findMats, getPathsFromStr, MatOptions } from 'flo-mat';
 import type { FatBranch } from '../../src/morph/fat-branch/fat-branch.js';
 import type { MatchedPath } from '../../src/morph/match-paths/matched-path.js';
-import { getFatBranchTree } from '../../src/morph/fat-branch/get-fat-branch-tree.js';
+import { getFatBranchTree, getSkeletonBeziers } from '../../src/morph/fat-branch/get-fat-branch-tree.js';
 import { getFattestCpNode } from '../../src/morph/fat-branch/get-fattest-cp-node.js';
 import { matchPaths, defaultPathWeights } from '../../src/morph/match-paths/match-paths.js';
 import { segGraphOf } from '../../src/morph/segment-graph/segment-graph.js';
@@ -15,7 +15,7 @@ import { sampleSegGraph } from '../../src/morph/segment-graph/sample-seg-graph.j
 import { productDtw } from '../../src/morph/segment-graph/product-dtw.js';
 import { matchSegGraphs } from '../../src/morph/segment-graph/match-seg-graphs.js';
 import { buildMorphEntries } from '../../src/morph/build-morph-entries/build-morph-entries.js';
-import { resolveMorphAt } from '../../src/morph/resolve-morph-at.js';
+import { resolveMorphAt } from '../../src/morph/resolve-morph-at/resolve-morph-at.js';
 import { boolean, getShapeArea } from 'flo-boolean';
 import { parseSvgFont } from '../../src/load-svg/load-svg-font.js';
 
@@ -164,7 +164,10 @@ describe('product-graph DTW vs current matcher (score-only)', () => {
     test('end-to-end: morph entries via the segment matcher tile the ' +
             'glyphs at t=0/t=1', () => {
         for (const [nA, nB] of [
-                ['v', 'Q_V'], ['parenleft', 'parenright']] as const) {
+                ['v', 'Q_V'], ['parenleft', 'parenright'],
+                // regression: fork-terminated trunk + matched terminal =>
+                // one branch covered by TWO entries (glue must pick right)
+                ['an_one', 'aq_J']] as const) {
             const { tree: tA, loops: loopsA } = loadGlyph(nA);
             const { tree: tB, loops: loopsB } = loadGlyph(nB);
 
@@ -180,6 +183,32 @@ describe('product-graph DTW vs current matcher (score-only)', () => {
             expect(Math.abs(a1/trueB - 1)).toBeLessThan(0.10);
         }
     }, 240_000);
+    test('every branch is drawn at t=0 even when drops are free ' +
+            '(delFloor 0)', () => {
+        // regression: trunk crossing a branch between interior forks left
+        // both remainders unplaced (children glued 90 units away)
+        const { tree: tA } = loadGlyph('v');
+        const { tree: tB } = loadGlyph('Q_V');
+        const entries = buildMorphEntries(tA, tB, [], { delFloor: 0 });
+        const pts: number[][] = resolveMorphAt(entries, 0).drawn.flat(2);
+
+        const missing: string[] = [];
+        (function walk(br: FatBranch): void {
+            const tip = getSkeletonBeziers(br)[0][0];
+            let best = Infinity;
+            for (const p of pts) {
+                const d = Math.hypot(p[0] - tip[0], p[1] - tip[1]);
+                if (d < best) { best = d; }
+            }
+            if (best > 3) {
+                missing.push(`(${tip[0].toFixed(0)},${tip[1].toFixed(0)}) ` +
+                    `dist ${best.toFixed(1)}`);
+            }
+            for (const e of br.children) { walk(e.branch); }
+        })(tA);
+
+        expect(missing).toEqual([]);
+    }, 120_000);
 });
 
 

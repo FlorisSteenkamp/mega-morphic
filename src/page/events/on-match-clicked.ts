@@ -5,6 +5,7 @@ import type { FatBranch } from '../../morph/fat-branch/fat-branch.js';
 import type { MatchedPath } from '../../morph/match-paths/matched-path.js';
 import { matchColors } from './match-colors.js';
 import { getSkeletonBeziers } from '../../morph/fat-branch/get-fat-branch-tree.js';
+import { coveredEdgesOf } from '../../morph/build-morph-entries/build-morph-entries.js';
 import { drawBeziersAsSinglePath } from '../../draw/draw-beziers-as-single-path.js';
 
 
@@ -38,8 +39,14 @@ function showMatch(
     const painted1 = new Set<FatBranch>();
     const painted2 = new Set<FatBranch>();
 
+    // A piece's bypassed slices may be COVERED by another matched pair
+    // (fork-terminated trunks + matched terminals share branches) - only
+    // truly uncovered slices are stubs.
+    const covered1 = coveredEdgesOf(pm.trunk, 'a');
+    const covered2 = coveredEdgesOf(pm.trunk, 'b');
+
     const { pairIdx, insCount, delCount } = walk(
-        pm.trunk, painted1, painted2, g1, g2
+        pm.trunk, painted1, painted2, g1, g2, covered1, covered2
     );
 
     // Everything no matched path touched (unmatched subtrees, stub
@@ -69,18 +76,20 @@ function walk(
         painted2: Set<FatBranch>,
         g1: SVGGElement,
         g2: SVGGElement,
+        covered1: Map<FatBranch, Set<number>>,
+        covered2: Map<FatBranch, Set<number>>,
         pairIdx0 = 0) {
 
     const color = matchColors[pairIdx0 % matchColors.length];
     for (const p of mp.piecesA) {
         painted1.add(p.branch);
         drawFatBranchPiece(g1, p, color);
-        drawStubs(g1, p, 'red');
+        drawStubs(g1, p, 'red', covered1);
     }
     for (const p of mp.piecesB) {
         painted2.add(p.branch);
         drawFatBranchPiece(g2, p, color);
-        drawStubs(g2, p, 'green');
+        drawStubs(g2, p, 'green', covered2);
     }
 
     let pairIdx = pairIdx0 + 1;
@@ -89,7 +98,8 @@ function walk(
     for (const op of mp.children) {
         if (op.type === 'match') {
             const r = walk(
-                op.sub, painted1, painted2, g1, g2, pairIdx);
+                op.sub, painted1, painted2, g1, g2,
+                covered1, covered2, pairIdx);
             pairIdx = r.pairIdx;
             delCount += r.delCount;
             insCount += r.insCount;
@@ -124,28 +134,35 @@ function sweep(
 
 
 /**
- * Draws the piece's UNCOVERED slices (the bypassed leaf-side stub of a
- * partially absorbed branch, or a rerouted trunk's tip stretches) - they
- * retract during the morph, so they get the unmatched color.
+ * Draws the piece's UNCOVERED slices (bypassed stub stretches) - slices
+ * another matched pair covers are ITS material and get ITS color, so only
+ * contiguous runs of edges no pair covers are drawn as stubs.
  */
 function drawStubs(
         g: SVGGElement,
         piece: { branch: FatBranch; fromEdge: number; toEdge: number },
-        color: string): void {
+        color: string,
+        covered: Map<FatBranch, Set<number>>): void {
 
     const len = getSkeletonBeziers(piece.branch).length;
-    if (piece.fromEdge > 0) {
-        drawFatBranchPiece(g, {
-            branch: piece.branch, fromEdge: 0,
-            toEdge: piece.fromEdge
-        }, color);
-    }
-    if (piece.toEdge < len) {
-        drawFatBranchPiece(g, {
-            branch: piece.branch, fromEdge: piece.toEdge,
-            toEdge: len
-        }, color);
-    }
+    const cov = covered.get(piece.branch);
+
+    const drawUncoveredRuns = (from: number, to: number): void => {
+        let runStart = -1;
+        for (let e = from; e <= to; e++) {
+            const isCov = e >= to || cov?.has(e) === true;
+            if (!isCov && runStart < 0) { runStart = e; }
+            if (isCov && runStart >= 0) {
+                drawFatBranchPiece(g, {
+                    branch: piece.branch, fromEdge: runStart, toEdge: e
+                }, color);
+                runStart = -1;
+            }
+        }
+    };
+
+    drawUncoveredRuns(0, piece.fromEdge);
+    drawUncoveredRuns(piece.toEdge, len);
 }
 
 

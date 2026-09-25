@@ -8,7 +8,10 @@ import { getSkeletonRadii } from './fat-branch/get-skeleton-radii.js';
 
 
 /**
- * Which entry a fat branch lives in, and on which side ('a' = shape 1).
+ * Which entry a fat branch (slice) lives in, and on which side ('a' =
+ * shape 1). A branch can be covered by SEVERAL entries (e.g. a
+ * fork-terminated trunk covers its middle, a matched terminal pair its
+ * tip) - consumers keep one list per branch and pick by boundary distance.
  */
 type EntryLoc = {
     idx: number;
@@ -44,11 +47,12 @@ function placeTopology(
         classes: string,
         capSign: number,
         trims: Map<FatBranch, Trim>,
-        entryLoc: Map<FatBranch, EntryLoc>,
+        entryLoc: Map<FatBranch, EntryLoc[]>,
         bnds: { a?: number[][]; b?: number[][] }[],
         entries: MutableMorphEntry[],
-        /** bypassed trunk-stub entries: glue candidates for root children */
-        rootStubEntries: number[] = [],
+        /** bypassed trunk-stub entries per host branch: glue candidates for
+         *  children hanging off the bypassed stretch */
+        stubEntries: Map<FatBranch, number[]> = new Map(),
         /** attachment-point dot marks (own frame) */
         marks?: { pA?: number[]; pB?: number[]; classes: string;
             dot?: boolean;
@@ -97,10 +101,11 @@ function placeTopology(
             candBranches.push(pTrim.absorber);
         }
         for (const cand of candBranches) {
-            const loc = entryLoc.get(cand);
-            if (loc !== undefined) { candidateEs.push(loc.idx); }
+            for (const loc of entryLoc.get(cand) ?? []) {
+                candidateEs.push(loc.idx);
+            }
+            candidateEs.push(...(stubEntries.get(cand) ?? []));
         }
-        if (parent === root) { candidateEs.push(...rootStubEntries); }
 
         let bestAt: { e: number; k: number } | undefined;
         let bestD = Infinity;
@@ -127,12 +132,12 @@ function placeTopology(
             at: { e: bestAt.e, k1: bestAt.k, k2: bestAt.k }
         });
 
-        entryLoc.set(child, {
+        entryLoc.set(child, [{
             idx: pushCollapsedEntry(
                 bz, radii, edges, side, classes, capSign, glue,
                 bnds, entries),
             side
-        });
+        }]);
     }
 }
 
@@ -180,8 +185,8 @@ function pushCollapsedEntry(
     const idx = entries.length;
     bnds.push(side === 'a' ? { a: boundaries(bz) } : { b: boundaries(bz) });
     entries.push({
-        a: side === 'a' ? bz : collapsed,
-        b: side === 'a' ? collapsed : bz,
+        skelPssA: side === 'a' ? bz : collapsed,
+        skelPssB: side === 'a' ? collapsed : bz,
         ra: side === 'a' ? radii : rZero,
         rb: side === 'a' ? rZero : radii,
         us,

@@ -11,7 +11,7 @@ import type { PoseRamp, PoseComponents } from '../pose-ramp.js';
 import { getShapeArea } from 'flo-boolean';
 import { matchPathsViaSegments } from '../segment-graph/match-paths-via-segments.js';
 import { procrustes } from '../procrustes/procrustes-analysis.js';
-import { resolveMorphAt } from '../resolve-morph-at.js';
+import { resolveMorphAt } from '../resolve-morph-at/resolve-morph-at.js';
 import { alignBranches, resampleAt } from '../align-branches.js';
 import { buildSleeveSides, skeletonKnots, getEdgeSleeves } from '../anchored-sleeves.js';
 import { getSkeletonBeziers } from '../fat-branch/get-fat-branch-tree.js';
@@ -89,8 +89,9 @@ function buildMorphEntries(
 
     const entries: MutableMorphEntry[] = [];
 
-    /** entry location of every fat branch */
-    const entryLoc = new Map<FatBranch, EntryLoc>();
+    /** entry location(s) of every fat branch (a branch may be covered by
+     *  several entries - trunk middle + matched terminal tip) */
+    const entryLoc = new Map<FatBranch, EntryLoc[]>();
 
     /** per entry: its resampled segment boundary points, per side */
     const bnds: { a?: number[][]; b?: number[][] }[] = [];
@@ -103,13 +104,18 @@ function buildMorphEntries(
     const trims1 = new Map<FatBranch, Trim>();
     const trims2 = new Map<FatBranch, Trim>();
 
+    // Every edge covered by SOME matched piece (per tree): bypassed slices
+    // that another pair covers must NOT also retract as stubs/trims.
+    const covered1 = coveredEdgesOf(pm.trunk, 'a');
+    const covered2 = coveredEdgesOf(pm.trunk, 'b');
+
     let pairIdx = 0;
     /**
-     * bypassed trunk-stub entries, per side (glue candidates for root
-     *  children in placeTopology)
+     * bypassed trunk-stub entries per HOST BRANCH (glue candidates for
+     * children hanging off the bypassed stretch), per side
      */
-    const rootStubs1: number[] = [];
-    const rootStubs2: number[] = [];
+    const stubEntries1 = new Map<FatBranch, number[]>();
+    const stubEntries2 = new Map<FatBranch, number[]>();
 
     buildPair(pm.trunk, true);
 
@@ -117,10 +123,10 @@ function buildMorphEntries(
     // in full, stub hosts trimmed to their leaf-side remainders.
     placeTopology(tree1, topoSetOf(tree1, onPath1, trims1), 'a',
         'red thin35 nofill', capSign, trims1, entryLoc, bnds, entries,
-        rootStubs1, marks);
+        stubEntries1, marks);
     placeTopology(tree2, topoSetOf(tree2, onPath2, trims2), 'b',
         'green thin35 nofill', capSign, trims2, entryLoc, bnds, entries,
-        rootStubs2, marks);
+        stubEntries2, marks);
 
     if (poseOut !== undefined) {
         poseOut.ramp = applyProcrustes(
@@ -144,8 +150,10 @@ function buildMorphEntries(
         const gA = composePieces(mp.piecesA);
         const gB = composePieces(mp.piecesB);
 
-        registerPieces(entryLoc, mp.piecesA, 'a', idx, tree1, onPath1, trims1);
-        registerPieces(entryLoc, mp.piecesB, 'b', idx, tree2, onPath2, trims2);
+        registerPieces(entryLoc, mp.piecesA, 'a', idx, tree1, onPath1,
+            trims1, covered1, isTrunk);
+        registerPieces(entryLoc, mp.piecesB, 'b', idx, tree2, onPath2,
+            trims2, covered2, isTrunk);
 
         // Feature anchors: ALL matched child forks along the paths (incl.
         // absorbed stretches - the matcher pooled them).
@@ -180,8 +188,8 @@ function buildMorphEntries(
         bnds.push({ a: bndA, b: bndB });
 
         entries.push({
-            a: mA.beziers,
-            b: mB.beziers,
+            skelPssA: mA.beziers,
+            skelPssB: mB.beziers,
             ra: mA.radii,
             rb: mB.radii,
             us: al.usA,
@@ -193,10 +201,10 @@ function buildMorphEntries(
 
         // Bypassed trunk tip stretches retract into the trunk composite.
         if (isTrunk) {
-            pushTrunkStubs(capSign, entries, bnds, marks, mp.piecesA, 'a', tree1, idx, bndA,
-                'red thin35 nofill', rootStubs1);
-            pushTrunkStubs(capSign, entries, bnds, marks, mp.piecesB, 'b', tree2, idx, bndB,
-                'green thin35 nofill', rootStubs2);
+            pushTrunkStubs(capSign, entries, bnds, marks, mp.piecesA, 'a', idx, bndA,
+                'red thin35 nofill', stubEntries1, covered1);
+            pushTrunkStubs(capSign, entries, bnds, marks, mp.piecesB, 'b', idx, bndB,
+                'green thin35 nofill', stubEntries2, covered2);
         }
 
         // Children: build each matched sub-pair and glue it to this entry -
@@ -218,8 +226,8 @@ function buildMorphEntries(
                     });
                 }
             } else {
-                const k1 = nearestIdx(bndA, getLastP(entries[childIdx].a));
-                const k2 = nearestIdx(bndB, getLastP(entries[childIdx].b));
+                const k1 = nearestIdx(bndA, getLastP(entries[childIdx].skelPssA));
+                const k2 = nearestIdx(bndB, getLastP(entries[childIdx].skelPssB));
                 entries[childIdx].glue = { e1: idx, k1, e2: idx, k2 };
                 marks?.push({
                     pA: bndA[k1],
@@ -237,36 +245,80 @@ function buildMorphEntries(
 
 
 /** Registers a path's branches: entry location for all, fully-covered
- *  ones as on-path, partially-covered hosts with their trim. */
+ *  ones as on-path, partially-covered hosts with their trim (shrunk past
+ *  any slice another matched pair covers). */
 function registerPieces(
-        entryLoc: Map<FatBranch, EntryLoc>,
+        entryLoc: Map<FatBranch, EntryLoc[]>,
         pieces: PathPiece[],
         side: 'a' | 'b',
         idx: number,
         root: FatBranch,
         onPath: Set<FatBranch>,
-        trims: Map<FatBranch, Trim>): void {
+        trims: Map<FatBranch, Trim>,
+        covered: Map<FatBranch, Set<number>>,
+        isTrunk: boolean): void {
 
     // The absorber must stay mapped to THIS entry (full pieces are
-    // never re-mapped by placeTopology).
-    const absorber = pieces.find(p => isFull(p))!.branch;
+    // never re-mapped by placeTopology). Fork-terminated routes may have
+    // no full piece - fall back to the longest one.
+    const absorber = (
+        pieces.find(p => isFull(p)) ??
+            pieces.reduce((a, b) => b.toEdge - b.fromEdge > a.toEdge - a.fromEdge ? b : a)
+    ).branch;
 
     for (const p of pieces) {
-        entryLoc.set(p.branch, { idx, side });
-        if (isFull(p) || p.branch === root || p.fromEdge === 0) {
+        let locs = entryLoc.get(p.branch);
+        if (locs === undefined) { entryLoc.set(p.branch, locs = []); }
+        locs.push({ idx, side });
+        // ALL trunk pieces' remainders are handled by pushTrunkStubs (the
+        // trunk may cross a branch between two interior forks, leaving
+        // remainders on BOTH sides - trims are one-sided)
+        if (isTrunk) {
+            onPath.add(p.branch);
+            continue;
+        }
+        // shrink the leaf-side remainder past covered (matched) slices
+        const cov = covered.get(p.branch);
+        let k = p.fromEdge;
+        while (k > 0 && cov?.has(k - 1)) { k--; }
+        if (isFull(p) || p.branch === root || k === 0) {
             // Full, the trunk (stubs handled separately), or an empty
             // stub - nothing left to retract via placeTopology.
             onPath.add(p.branch);
         } else {
-            trims.set(p.branch, { fromEdge: p.fromEdge, absorber });
+            trims.set(p.branch, { fromEdge: k, absorber });
         }
     }
 }
 
 
-/** Collapse entries for a trunk piece's bypassed tip stretches: the
- *  start stub in its own orientation, the end stub reversed - both
- *  ending at their fork knot, glued onto the trunk pair's entry. */
+/** Every skeleton edge covered by some matched piece, per branch. */
+function coveredEdgesOf(
+        trunk: MatchedPath,
+        side: 'a' | 'b'): Map<FatBranch, Set<number>> {
+
+    const out = new Map<FatBranch, Set<number>>();
+    const walk = (mp: MatchedPath): void => {
+        for (const p of side === 'a' ? mp.piecesA : mp.piecesB) {
+            let s = out.get(p.branch);
+            if (s === undefined) { out.set(p.branch, s = new Set()); }
+            for (let e = p.fromEdge; e < p.toEdge; e++) { s.add(e); }
+        }
+        for (const op of mp.children) {
+            if (op.type === 'match') { walk(op.sub); }
+        }
+    };
+    walk(trunk);
+    return out;
+}
+
+
+/** Collapse entries for the trunk route's bypassed stretches (each
+ *  piece's uncovered remainders - the trunk may cross branches between
+ *  interior forks): the tip-side stub in its own orientation, the
+ *  junction-side stub reversed - both ending at their fork knot, glued
+ *  onto the trunk pair's entry. Slices covered by a matched pair
+ *  (terminal children) are skipped. */
 function pushTrunkStubs(
         capSign: number,
         entries: MutableMorphEntry[],
@@ -274,38 +326,51 @@ function pushTrunkStubs(
         marks: FeatureMark[],
         pieces: PathPiece[],
         side: 'a' | 'b',
-        root: FatBranch,
         pairIdx_: number,
         bnd: number[][],
         classes: string,
-        outList: number[]): void {
+        stubEntries: Map<FatBranch, number[]>,
+        covered: Map<FatBranch, Set<number>>): void {
 
-    const p = pieces.find(q => q.branch === root);
-    if (p === undefined) { return; }
+    const ends = new Set(pieces);
 
-    const len = getSkeletonBeziers(root).length;
-    const stubs: { from: number; to: number; reversed: boolean }[] = [];
-    if (p.fromEdge > 0) {
-        stubs.push({ from: 0, to: p.fromEdge, reversed: false });
-    }
-    if (p.toEdge < len) {
-        stubs.push({ from: p.toEdge, to: len, reversed: true });
-    }
+    for (const p of ends) {
+        const len = getSkeletonBeziers(p.branch).length;
+        const cov = covered.get(p.branch);
+        const stubs: { from: number; to: number; reversed: boolean }[] = [];
 
-    for (const s of stubs) {
-        const g = sliceGeom(root, s.from, s.to, s.reversed);
-        const junction = getLastP(g.bz);
-        const k = nearestIdx(bnd, junction);
-        outList.push(pushCollapsedEntry(
-            g.bz, g.rd, g.edges, side, classes, capSign,
-            { e1: pairIdx_, k1: k, e2: pairIdx_, k2: k },
-            bnds, entries));
-        marks?.push({
-            [side === 'a' ? 'pA' : 'pB']: bnd[k],
-            classes: `${side === 'a' ? 'red' : 'green'} nostroke`,
-            dot: true,
-            at: { e: pairIdx_, k1: k, k2: k }
-        });
+        // tip-side remainder [0..fromEdge): keep only the uncovered prefix
+        let f = p.fromEdge;
+        while (f > 0 && cov?.has(f - 1)) { f--; }
+        if (f > 0) {
+            stubs.push({ from: 0, to: f, reversed: false });
+        }
+        // junction-side remainder [toEdge..len): uncovered suffix
+        let t = p.toEdge;
+        while (t < len && cov?.has(t)) { t++; }
+        if (t < len) {
+            stubs.push({ from: t, to: len, reversed: true });
+        }
+
+        for (const s of stubs) {
+            const g = sliceGeom(p.branch, s.from, s.to, s.reversed);
+            const junction = getLastP(g.bz);
+            const k = nearestIdx(bnd, junction);
+            let list = stubEntries.get(p.branch);
+            if (list === undefined) {
+                stubEntries.set(p.branch, list = []);
+            }
+            list.push(pushCollapsedEntry(
+                g.bz, g.rd, g.edges, side, classes, capSign,
+                { e1: pairIdx_, k1: k, e2: pairIdx_, k2: k },
+                bnds, entries));
+            marks?.push({
+                [side === 'a' ? 'pA' : 'pB']: bnd[k],
+                classes: `${side === 'a' ? 'red' : 'green'} nostroke`,
+                dot: true,
+                at: { e: pairIdx_, k1: k, k2: k }
+            });
+        }
     }
 }
 
@@ -355,8 +420,8 @@ function applyProcrustes(
         // Deleted (side-a) topo entries live entirely in shape 1's frame.
         if (e.collapsed === 'b') { continue; }
         // An inserted entry's collapsed frame is in shape 2's coords too.
-        if (e.collapsed === 'a') { e.a = e.a.map(ps => ps.map(tf)); }
-        e.b = e.b.map(ps => ps.map(tf));
+        if (e.collapsed === 'a') { e.skelPssA = e.skelPssA.map(ps => ps.map(tf)); }
+        e.skelPssB = e.skelPssB.map(ps => ps.map(tf));
         if (e.rb !== undefined) { e.rb = e.rb.map(r => r * s); }
     }
 
@@ -531,5 +596,5 @@ function boundaries(g: number[][][]) {
 }
 
 
-export { buildMorphEntries }
+export { buildMorphEntries, coveredEdgesOf }
 export type { FeatureMark }

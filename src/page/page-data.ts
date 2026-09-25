@@ -1,5 +1,5 @@
 import type { Props } from './props.js';
-import type { MorphEntry } from './draw-morph.js';
+import type { MorphEntry } from '../morph/draw-morph/draw-morph.js';
 import type { FeatureMark } from '../morph/build-morph-entries/build-morph-entries.js';
 import type { PoseRamp } from '../morph/pose-ramp.js';
 

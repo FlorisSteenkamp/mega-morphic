@@ -52,8 +52,9 @@ function logChildDtw(
         }
 
         if (shapeIdx === 1) { selA = nearest; } else { selB = nearest; }
-        highlight(g,
-            nearest === tree ? getSkeletonBeziers(tree) : nearest.pss,
+        // detection is skeleton-based for the trunk, but the highlight
+        // shows its REGION outline (filling the skeleton is meaningless)
+        highlight(g, nearest.pss,
             shapeIdx === 1 ? 'red' : 'green', showDelay);
 
         if (selA === undefined || selB === undefined) {

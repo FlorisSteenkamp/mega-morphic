@@ -2,6 +2,7 @@ import type { SegGraph } from './segment-graph.js';
 import { unwrappedChordAngles } from '../intrinsic-skeleton/unwrapped-chord-angles.js';
 import { totalLength$ } from '../fs/total-length.js';
 import { clamp } from '../../utils/clamp.js';
+import { sum } from '../../utils/sum.js';
 
 const { max, round, min } = Math;
 
@@ -48,7 +49,8 @@ function sampleSegGraph(
         target: number,
         rootV?: number): SampledSegGraph {
 
-    const totalLen = g.segments.reduce((s, x) => s + x.len, 0);
+    const totalLen = sum(g.segments.map(s => s.len));
+
     const δ = totalLen / target;
     const step = δ / unit;
 
@@ -129,17 +131,22 @@ function sampleSegGraph(
         degree.set(s.v1, (degree.get(s.v1) ?? 0) + 1);
     }
     const isLeaf = (v: number): boolean => degree.get(v) === 1;
+    const isFork = (v: number): boolean => (degree.get(v) ?? 0) >= 3;
+
+    // Routes may start/end at leaves OR STOP at a fork (the terminal
+    // stretch beyond it then competes as an ordinary child).
+    const isEnd = (v: number): boolean => isLeaf(v) || isFork(v);
 
     const starts: number[] = [];
     const ends: number[] = [];
     const leafOf = new Map<number, number>();
     for (const run of runs) {
-        if (rootV !== undefined ? run.tail === rootV : isLeaf(run.tail)) {
+        if (rootV !== undefined ? run.tail === rootV : isEnd(run.tail)) {
             const id = run.ids[0];
             starts.push(id);
             leafOf.set(id, run.tail);
         }
-        if (isLeaf(run.head) && run.head !== rootV) {
+        if (isEnd(run.head) && run.head !== rootV) {
             const id = run.ids[run.ids.length - 1];
             ends.push(id);
             leafOf.set(id, run.head);

@@ -5,7 +5,7 @@ import type { ToDraw } from '../state/to-draw.js';
 import type { ClickFor } from '../state/click-for.js';
 import type { Props } from './props.js';
 import type { PageData } from './page-data.js';
-import type { MorphEntry } from './draw-morph.js';
+import type { MorphEntry } from '../morph/draw-morph/draw-morph.js';
 import type { FeatureMark } from '../morph/build-morph-entries/build-morph-entries.js';
 import type { PoseRamp } from '../morph/pose-ramp.js';
 import type { PathCostWeights } from '../morph/match-paths/path-cost-weights.js';
@@ -14,7 +14,7 @@ import { useRef, useEffect } from 'react';
 import { Slider } from '../components/simple-slider.js';
 import { SimpleSelect } from '../components/simple-select.js';
 import { ButtonGroup } from '../components/simple-button-group.js';
-import { Checkbox } from '../components/simple-checkbox.js';
+import { Checkbox, CheckboxStyles } from '../components/simple-checkbox.js';
 import { loadDeducedProps } from './load-deduced-props.js';
 import { logSomeStuff } from './log/log-some-stuff.js';
 import { toViewBoxStr, unionViewbox } from './fs-consts-types/viewbox.js';
@@ -31,11 +31,11 @@ import { showBranchNums } from './events/show-branch-nums.js';
 import { NeedleWindow } from './components/needle-window.js';
 import { onMorphClicked } from './events/on-morph-clicked.js';
 import { onFattestClicked } from './events/on-fattest-clicked.js';
-import { drawMorph } from './draw-morph.js';
+import { drawMorph } from '../morph/draw-morph/draw-morph.js';
 import { beziersToSvgPathStr } from 'flo-boolean';
 
 
-const toDrawCheckboxStyles = { 
+const toDrawCheckboxStyles: CheckboxStyles = { 
     div: {
         display: 'inline-block', 
         marginBottom: '5px', 
@@ -45,14 +45,33 @@ const toDrawCheckboxStyles = {
 }
 
 
-const showThreeProngChangedStyles = { 
-    ...toDrawCheckboxStyles, 
+const showChangedStyles: CheckboxStyles = { 
     div: { 
         ...toDrawCheckboxStyles.div, 
         width: '150px' 
     }
 }
 
+
+const btnStyleBlue: React.CSSProperties = {
+    padding: '9px 20px',
+    fontSize: '14px',
+    fontWeight: 500,
+    lineHeight: '1',
+    borderRadius: '4px',
+    cursor: 'pointer',
+    color: '#fff',               // unflipped
+    backgroundColor: '#1976d2',  // ...
+    border: 'none',                // ...
+}
+
+
+const btnStyleBlueFlipped: React.CSSProperties = {
+    ...btnStyleBlue,
+    color: '#1976d2',             // flipped
+    backgroundColor: '#fff',      // ...
+    border: '1px solid #1976d2',  // ...
+}
 
 const getGlyphNames_ = await getGlyphNames();
 
@@ -90,8 +109,13 @@ function Page(props: Props) {
     const { stateControl, pageState } = props;
     const { upd, transientState } = stateControl;
     const { $svgs, $svgs2 } = transientState;
-    const { toDraw, viewbox1, viewbox2, viewbox3, deduced } = pageState;
-    const { mats1, mats2 } = deduced;
+    const {
+        toDraw, viewbox1, viewbox2, viewbox3, deduced, showSvgs, flipH, flipV,
+        showWeights, glyph1Name, glyph2Name, clickFor,
+        simplify, viewMat, morphFillOnly, poseCentroid, poseScale,
+        poseMoment, showPose, satScale, showDelay, pathWeights
+    } = pageState;
+    const { mats1, mats2, pathStr1, pathStr2 } = deduced;
 
     // Hooks
     const svgRef1 = useRef<SVGSVGElement>(null);
@@ -299,7 +323,13 @@ function Page(props: Props) {
 
     /** Toggle shape 1's horizontal mirror and rebuild everything (testing). */
     function onFlipHClicked() {
-        upd(pageState, { flip1: !pageState.flip1 });
+        upd(pageState, { flipH: !flipH });
+        lazyLoadDeduced(false);
+    }
+
+    /** Toggle shape 1's vertical mirror and rebuild everything (testing). */
+    function onFlipVClicked() {
+        upd(pageState, { flipV: !flipV });
         lazyLoadDeduced(false);
     }
 
@@ -350,15 +380,16 @@ function Page(props: Props) {
                     fatTree: { text: 'fat tree' },
                     pathMatchResult: { text: 'path match' },
                     profileAlign: { text: 'align' },
-                    childDtw: { text: 'child dtw' }
+                    childDtw: { text: 'child dtw' },
+                    mBezier: { text: 'm-bezier' }
                 }}
-                value={pageState.clickFor}
+                value={clickFor}
                 onChanged={onClickForChanged}
             />
             <div style={{ display: 'flex', gap: '16px', alignItems: 'center', marginTop: '10px', marginBottom: '2px' }}>
                 <div>
                     <SimpleSelect
-                        value={pageState.glyph1Name}
+                        value={glyph1Name}
                         options={getGlyphNames_}
                         style={{ minWidth: '200px' }}
                         onChanged={vector1Changed}
@@ -366,19 +397,19 @@ function Page(props: Props) {
                 </div>
                 <div>
                     <SimpleSelect
-                        value={pageState.glyph2Name}
+                        value={glyph2Name}
                         options={getGlyphNames_}
                         style={{ minWidth: '200px' }}
                         onChanged={vector2Changed}
                     />
                 </div>
-                <Checkbox checked={pageState.simplify} styles={showThreeProngChangedStyles} text="simplify" onChanged={onSimplifyChanged} />
-                <Checkbox checked={pageState.viewMat} styles={showThreeProngChangedStyles} text="mat/sat" onChanged={onViewMatChanged} />
-                <Checkbox checked={pageState.morphFillOnly} styles={showThreeProngChangedStyles} text="fill only" onChanged={onMorphFillOnlyChanged} />
-                <Checkbox checked={pageState.poseCentroid} styles={showThreeProngChangedStyles} text="centroid" onChanged={onPoseCentroidChanged} />
-                <Checkbox checked={pageState.poseScale} styles={showThreeProngChangedStyles} text="scale" onChanged={onPoseScaleChanged} />
-                <Checkbox checked={pageState.poseMoment} styles={showThreeProngChangedStyles} text="2nd moment" onChanged={onPoseMomentChanged} />
-                <Checkbox checked={pageState.showPose} styles={showThreeProngChangedStyles} text="pose" onChanged={onShowPoseChanged} />
+                <Checkbox checked={simplify} styles={showChangedStyles} text="simplify" onChanged={onSimplifyChanged} />
+                <Checkbox checked={viewMat} styles={showChangedStyles} text="mat/sat" onChanged={onViewMatChanged} />
+                <Checkbox checked={morphFillOnly} styles={showChangedStyles} text="fill only" onChanged={onMorphFillOnlyChanged} />
+                <Checkbox checked={poseCentroid} styles={showChangedStyles} text="centroid" onChanged={onPoseCentroidChanged} />
+                <Checkbox checked={poseScale} styles={showChangedStyles} text="scale" onChanged={onPoseScaleChanged} />
+                <Checkbox checked={poseMoment} styles={showChangedStyles} text="2nd moment" onChanged={onPoseMomentChanged} />
+                <Checkbox checked={showPose} styles={showChangedStyles} text="pose" onChanged={onShowPoseChanged} />
             </div>
             <div style={{ display: 'flex', gap: '16px', alignItems: 'flex-end', paddingBottom: '8px' }}>
                 <div style={{ minWidth: '225px'}}>
@@ -386,7 +417,7 @@ function Page(props: Props) {
                         SAT Scale
                     </p>
                     <Slider
-                        value={pageState.satScale}
+                        value={satScale}
                         aria-labelledby="slider"
                         min={1} max={10} step={0.025}
                         valueLabelDisplay="auto"
@@ -398,7 +429,7 @@ function Page(props: Props) {
                         Show delay
                     </p>
                     <Slider
-                        value={pageState.showDelay}
+                        value={showDelay}
                         aria-labelledby="slider"
                         min={0} max={50_000} step={100}
                         valueLabelDisplay="auto"
@@ -426,35 +457,27 @@ function Page(props: Props) {
                 <div style={{ display: 'flex' }}>
                     <button
                         onClick={onZoomOutClicked}
-                        style={{
-                            padding: '9px 20px',
-                            fontSize: '14px',
-                            fontWeight: 500,
-                            lineHeight: '1',
-                            color: '#fff',
-                            backgroundColor: '#1976d2',
-                            border: 'none',
-                            borderRadius: '4px',
-                            cursor: 'pointer',
-                        }}
+                        style={btnStyleBlue}
                     >
                         zoom out
                     </button>
                 </div>
-                <div style={{ display: 'flex' }}>
+                <div style={{ display: 'flex', position: 'relative' }}>
+                    <span style={{
+                        position: 'absolute',
+                        top: '-16px',
+                        left: '50%',
+                        transform: 'translateX(-50%)',
+                        fontSize: '12px',
+                        color: '#1976d2',
+                        userSelect: 'none',
+                        whiteSpace: 'nowrap',
+                    }}>
+                        {pageState.rot1}°
+                    </span>
                     <button
                         onClick={onRotate10Clicked}
-                        style={{
-                            padding: '9px 20px',
-                            fontSize: '14px',
-                            fontWeight: 500,
-                            lineHeight: '1',
-                            color: '#fff',
-                            backgroundColor: '#1976d2',
-                            border: 'none',
-                            borderRadius: '4px',
-                            cursor: 'pointer',
-                        }}
+                        style={btnStyleBlue}
                     >
                         rotate 10
                     </button>
@@ -462,19 +485,17 @@ function Page(props: Props) {
                 <div style={{ display: 'flex' }}>
                     <button
                         onClick={onFlipHClicked}
-                        style={{
-                            padding: '9px 20px',
-                            fontSize: '14px',
-                            fontWeight: 500,
-                            lineHeight: '1',
-                            color: pageState.flip1 ? '#1976d2' : '#fff',
-                            backgroundColor: pageState.flip1 ? '#fff' : '#1976d2',
-                            border: '1px solid #1976d2',
-                            borderRadius: '4px',
-                            cursor: 'pointer',
-                        }}
+                        style={flipH ? btnStyleBlueFlipped : btnStyleBlue}
                     >
                         flip h
+                    </button>
+                </div>
+                <div style={{ display: 'flex' }}>
+                    <button
+                        onClick={onFlipVClicked}
+                        style={flipV ? btnStyleBlueFlipped : btnStyleBlue}
+                    >
+                        flip v
                     </button>
                 </div>
                 <div style={{ display: 'flex', gap: '6px' }}>
@@ -509,7 +530,7 @@ function Page(props: Props) {
                 </div>
                 <div style={{ display: 'flex', gap: '6px', alignItems: 'flex-end' }}>
                     {[0, 1, 2].map(i => {
-                        const on = pageState.showSvgs[i];
+                        const on = showSvgs[i];
                         return (
                             <button
                                 key={i}
@@ -531,14 +552,14 @@ function Page(props: Props) {
                         );
                     })}
                     <button
-                        onClick={() => upd(pageState, { showWeights: !pageState.showWeights })}
+                        onClick={() => upd(pageState, { showWeights: !showWeights })}
                         style={{
                             padding: '9px 14px',
                             fontSize: '14px',
                             fontWeight: 500,
                             lineHeight: '1',
-                            color: pageState.showWeights ? '#fff' : '#1976d2',
-                            backgroundColor: pageState.showWeights ? '#1976d2' : '#fff',
+                            color: showWeights ? '#fff' : '#1976d2',
+                            backgroundColor: showWeights ? '#1976d2' : '#fff',
                             border: '1px solid #1976d2',
                             borderRadius: '4px',
                             cursor: 'pointer',
@@ -548,7 +569,7 @@ function Page(props: Props) {
                     </button>
                 </div>
             </div>
-            {pageState.showWeights &&
+            {showWeights &&
             <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap', alignItems: 'flex-end', paddingBottom: '6px' }}>
                 {(Object.keys(weightRanges) as (keyof PathCostWeights)[])
                     .map(key => {
@@ -556,10 +577,10 @@ function Page(props: Props) {
                         return (
                             <div key={key} style={{ minWidth: '110px' }}>
                                 <p style={{ marginTop: 0, marginBottom: '0.1em', fontSize: '12px', color }}>
-                                    {key}: {pageState.pathWeights[key]}
+                                    {key}: {pathWeights[key]}
                                 </p>
                                 <Slider
-                                    value={pageState.pathWeights[key]}
+                                    value={pathWeights[key]}
                                     min={0}
                                     max={weightRanges[key].max}
                                     step={weightRanges[key].step}
@@ -613,14 +634,14 @@ function Page(props: Props) {
                 ref={svgRef3}
                 xmlns="http://www.w3.org/2000/svg" version="1.1" x="0px"  y="0px"
                 viewBox={toViewBoxStr(viewbox3)}
-                style={{ width: '100%', height: '100%', minWidth: 0, border: '1px solid #ccc', display: pageState.showSvgs[2] ? undefined : 'none' }}
+                style={{ width: '100%', height: '100%', minWidth: 0, border: '1px solid #ccc', display: showSvgs[2] ? undefined : 'none' }}
                 onMouseDown={e => {
                     panMouseDown(stateControl, svgRef3)(e);
                     mouseDown(stateControl, svgRef3, viewbox3)(e);
                 }}
-                onMouseUp={mouseUp(stateControl, svgRef3, viewbox3, 3)}
+                onMouseUp={mouseUp(stateControl, svgRef3, viewbox1, 3)}
                 onMouseMove={mouseMove(stateControl, svgRef3, refX, refY, 3)}
-                onClick={onClick(stateControl, svgRef3, 3)}
+                onClick={onClick(stateControl, svgRef3, 3, refPageData)}
             >
                 <g />
             </svg>
@@ -629,7 +650,7 @@ function Page(props: Props) {
                 ref={svgRef1}
                 xmlns="http://www.w3.org/2000/svg" version="1.1" x="0px" y="0px"
                 viewBox={toViewBoxStr(viewbox1)}
-                style={{ width: '100%', height: '100%', minWidth: 0, border: '1px solid #ccc', display: pageState.showSvgs[0] ? undefined : 'none' }}
+                style={{ width: '100%', height: '100%', minWidth: 0, border: '1px solid #ccc', display: showSvgs[0] ? undefined : 'none' }}
                 onMouseDown={mouseDown(stateControl, svgRef1, viewbox1)}
                 onMouseUp={mouseUp(stateControl, svgRef1, viewbox1, 1)}
                 onMouseMove={mouseMove(stateControl, svgRef1, refX, refY, 1)}
@@ -638,7 +659,7 @@ function Page(props: Props) {
                 <path 
                     id="svg-path"
                     className="shape"
-                    d={pageState.deduced.pathStr1}
+                    d={pathStr1}
                 />
                 <g />
         </svg>
@@ -647,7 +668,7 @@ function Page(props: Props) {
                 ref={svgRef2}
                 xmlns="http://www.w3.org/2000/svg" version="1.1" x="0px"  y="0px"
                 viewBox={toViewBoxStr(viewbox2)}
-                style={{ width: '100%', height: '100%', minWidth: 0, border: '1px solid #ccc', display: pageState.showSvgs[1] ? undefined : 'none' }}
+                style={{ width: '100%', height: '100%', minWidth: 0, border: '1px solid #ccc', display: showSvgs[1] ? undefined : 'none' }}
                 onMouseDown={mouseDown(stateControl, svgRef2, viewbox2)}
                 onMouseUp={mouseUp(stateControl, svgRef2, viewbox2, 2)}
                 onMouseMove={mouseMove(stateControl, svgRef2, refX, refY, 2)}
@@ -656,7 +677,7 @@ function Page(props: Props) {
                 <path 
                     id="svg-path2"
                     className="shape"
-                    d={pageState.deduced.pathStr2}
+                    d={pathStr2}
                 />
                 <g />
             </svg>

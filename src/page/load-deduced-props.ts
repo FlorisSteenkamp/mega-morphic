@@ -19,10 +19,12 @@ function loadDeducedProps(
     const { state } = stateControl;
     const { appState } = state;
     const { pageState } = appState;
-    const { viewMat, simplify, satScale, rot1, flip1 } = pageState;
+    const { viewMat, simplify, satScale, rot1, flipH, flipV } = pageState;
 
     const bezierLoops1 = rotateLoops(
-        flipLoops(getPathsFromStr(pathStr1), flip1), rot1);
+        flipLoops(getPathsFromStr(pathStr1), flipH, flipV),
+        rot1
+    );
 
     // console.log(beziersToSvgPathStr(bezierLoops1[0]))
     const viewbox1 = getViewBoxForShape(bezierLoops1);
@@ -61,20 +63,28 @@ function loadDeducedProps(
 }
 
 
-/** Mirrors all loops about their bbox center's vertical axis (testing);
- *  orientation re-reversed so windings stay valid for the MAT. */
+/** Mirrors all loops about their bbox center's vertical and/or horizontal
+ *  axis (testing); a single mirror reverses orientation, so windings are
+ *  re-reversed then (both mirrors = 180° rotation, orientation preserved). */
 function flipLoops(
         loops: number[][][][],
-        flip: boolean): number[][][][] {
+        flipH: boolean,
+        flipV: boolean): number[][][][] {
 
-    if (!flip) { return loops; }
+    if (!flipH && !flipV) { return loops; }
 
-    const [[minX], [maxX]] = getViewBoxForShape(loops);
+    const [[minX, minY], [maxX, maxY]] = getViewBoxForShape(loops);
     const cx = (minX + maxX) / 2;
+    const cy = (minY + maxY) / 2;
 
-    return loops.map(loop => reverseShapeOrientation(
-        loop.map(ps => ps.map(([x, y]) => [2*cx - x, y]))
-    ));
+    const flipped = loops.map(loop => loop.map(ps => ps.map(([x, y]) => [
+        flipH ? 2*cx - x : x,
+        flipV ? 2*cy - y : y
+    ])));
+
+    return flipH !== flipV
+        ? flipped.map(loop => reverseShapeOrientation(loop))
+        : flipped;
 }
 
 
