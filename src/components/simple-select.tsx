@@ -149,7 +149,7 @@ function SimpleSelect(props: Props) {
                 onClick={toggleOpen}
                 onKeyDown={onButtonKeyDown}
                 style={{
-                    minWidth: '270px',
+                    minWidth: '220px',
                     width: '100%',
                     display: 'flex',
                     alignItems: 'center',

@@ -61,7 +61,9 @@ function onMorphClicked(
     drawMorph(refPageData, morphT / 100);
 
     // Refresh the overlay for the newly built match.
-    if (pageState.showMatch) { showMatch(refPageData, true); }
+    if (pageState.showMatch) {
+        showMatch(refPageData, true, pageState.showMatchBoundary);
+    }
     if (pageState.showBranchNums) { showBranchNums(refPageData, true); }
 }
 

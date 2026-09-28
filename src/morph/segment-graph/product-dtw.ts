@@ -29,9 +29,6 @@ interface ProductDtwResult {
     }[];
 }
 
-/** end-state candidates kept for recursion-aware route re-ranking */
-const MAX_CANDIDATES = 8;
-
 
 /**
  * Gotoh affine-gap DTW over the PRODUCT of two sampled segment DAGs: one DP
@@ -39,10 +36,12 @@ const MAX_CANDIDATES = 8;
  * sharing a prefix share DP states), using the same step-cost structure as
  * `alignProfiles` (radius + radius-weighted turning, integrated over
  * normalized arc). Off-route material is priced like the matcher's drops:
- * each consumed sample earns back `del` × its local material (≈ salience
- * fraction), so routes compete on alignment quality MINUS covered material -
- * without this, two tiny near-identical pathlets win trivially. Score-only:
- * no tails, no pooled-children terms.
+ * each DIAGONALLY consumed sample earns back `del` × its local material
+ * (≈ salience fraction), so routes compete on alignment quality MINUS
+ * corresponded material - without this, two tiny near-identical pathlets win
+ * trivially. Gap-consumed material earns NOTHING (it retracts like a drop;
+ * the gap price comes on top). Score-only: no tails, no pooled-children
+ * terms.
  */
 function productDtw(
         A: SampledSegGraph,
@@ -119,14 +118,17 @@ function productDtw(
             const bestC = best === m ? CM[i] : best === ix ? CIx[i] : CIy[i];
 
             for (const aN of A.succ[a]) {
-                // gap in A: consume A alone (still covered material)
+                // gap in A: consume A alone - NO coverage reward (a gap is a
+                // retraction: the material keeps its drop price, else gap
+                // runs launder drop costs into near-free coverage and
+                // mismatched routes/pairings win)
                 const openIt = m + gapOpen <= ix;
-                const gx = min(m + gapOpen, ix) + extA - del*matA(aN);
+                const gx = min(m + gapOpen, ix) + extA;
                 const gi = aN*nB + b;
                 if (gx < Ix[gi]) {
                     Ix[gi] = gx;
                     SIx[gi] = openIt ? SM[i] : SIx[i];
-                    CIx[gi] = (openIt ? CM[i] : CIx[i]) + matA(aN);
+                    CIx[gi] = openIt ? CM[i] : CIx[i];
                 }
                 // diagonal
                 for (const bN of B.succ[b]) {
@@ -142,12 +144,12 @@ function productDtw(
             }
             for (const bN of B.succ[b]) {
                 const openIt = m + gapOpen <= iy;
-                const gy = min(m + gapOpen, iy) + extB - del*matB(bN);
+                const gy = min(m + gapOpen, iy) + extB;
                 const gi = a*nB + bN;
                 if (gy < Iy[gi]) {
                     Iy[gi] = gy;
                     SIy[gi] = openIt ? SM[i] : SIy[i];
-                    CIy[gi] = (openIt ? CM[i] : CIy[i]) + matB(bN);
+                    CIy[gi] = openIt ? CM[i] : CIy[i];
                 }
             }
         }
@@ -188,7 +190,6 @@ function productDtw(
         }
     }
     candidates.sort((x, y) => x.totalCost - y.totalCost);
-    candidates.length = min(candidates.length, MAX_CANDIDATES);
 
     // v = shape − del·covered  ⇒  shape = v + del·covered;
     // total re-adds the constant drop price of ALL material.

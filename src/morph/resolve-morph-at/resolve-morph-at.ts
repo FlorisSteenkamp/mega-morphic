@@ -11,6 +11,8 @@ interface ResolvedMorph {
     /** per entry: its lerped boundary radii (undefined if entry has none) */
     readonly radii: (number[] | undefined)[];
     readonly outlines: number[][][][];
+    /** per outline loop: the entry index it belongs to */
+    readonly outlineEntry: number[];
 }
 
 
@@ -31,6 +33,7 @@ function resolveMorphAt(
     const skels: (number[][][] | undefined)[] = entries.map(() => undefined);
     const radii: (number[] | undefined)[] = [];
     const outlines: number[][][][] = [];
+    const outlineEntry: number[] = [];
 
     for (let i=0; i<entries.length; i++) {
         const { ra, rb } = entries[i];
@@ -55,12 +58,14 @@ function resolveMorphAt(
             ? reverseShapeOrientation(loop)
             : loop
         );
+        outlineEntry.push(i);
     }
 
     return {
         drawn: skels as number[][][][],
         radii,
-        outlines
+        outlines,
+        outlineEntry
     };
 }
 

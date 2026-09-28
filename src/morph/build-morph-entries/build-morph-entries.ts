@@ -51,21 +51,24 @@ interface FeatureMark {
  * child forks along the whole path are alignment anchors and glue points,
  * and everything unmatched (whole subtrees, off-path leaf-side stubs)
  * collapses via topology entries glued to the entry owning its fork.
+ * 
+ * @param tree1
+ * @param tree2
+ * @param marks
+ * @param weights
+ * @param poseOut pass to enable pose alignment: the ENABLED components of shape
+ * 2's frame are aligned onto shape 1 for the morph, and the
+ * returned `ramp` restores its true pose over t (apply when
+ * drawing)
  */
 function buildMorphEntries(
         tree1: FatBranch,
         tree2: FatBranch,
         marks: FeatureMark[],
         weights?: Partial<PathCostWeights>,
-        /** pass to enable pose alignment: the ENABLED components of shape
-         *  2's frame are aligned onto shape 1 for the morph, and the
-         *  returned `ramp` restores its true pose over t (apply when
-         *  drawing) */
         poseOut?: { components: PoseComponents; ramp?: PoseRamp }):
         MorphEntry[] {
 
-    // Segment-graph matcher (freely routed paths, no stub special cases in
-    // the matching itself); the classic matchPaths is kept for experiments.
     const pm = matchPathsViaSegments(tree1, tree2, { weights });
 
     // The morph arrays only exist when morph debugging is enabled (other

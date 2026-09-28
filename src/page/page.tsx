@@ -9,7 +9,7 @@ import type { MorphEntry } from '../morph/draw-morph/draw-morph.js';
 import type { FeatureMark } from '../morph/build-morph-entries/build-morph-entries.js';
 import type { PoseRamp } from '../morph/pose-ramp.js';
 import type { PathCostWeights } from '../morph/match-paths/path-cost-weights.js';
-import { defaultPathWeights } from '../morph/match-paths/match-paths.js';
+import { defaultPathWeights } from '../morph/match-paths/path-cost-weights.js';
 import { useRef, useEffect } from 'react';
 import { Slider } from '../components/simple-slider.js';
 import { SimpleSelect } from '../components/simple-select.js';
@@ -17,7 +17,7 @@ import { ButtonGroup } from '../components/simple-button-group.js';
 import { Checkbox, CheckboxStyles } from '../components/simple-checkbox.js';
 import { loadDeducedProps } from './load-deduced-props.js';
 import { logSomeStuff } from './log/log-some-stuff.js';
-import { toViewBoxStr, unionViewbox } from './fs-consts-types/viewbox.js';
+import { toViewBoxStr, unionViewbox, getFlipTransform } from './fs-consts-types/viewbox.js';
 import { onClick } from './mouse/on-click.js';
 import { toDrawKeyToText } from './fs-consts-types/to-draw-key-to-text.js';
 import { mouseMove } from './mouse/mouse-move.js';
@@ -48,7 +48,6 @@ const toDrawCheckboxStyles: CheckboxStyles = {
 const showChangedStyles: CheckboxStyles = { 
     div: { 
         ...toDrawCheckboxStyles.div, 
-        width: '150px' 
     }
 }
 
@@ -79,9 +78,8 @@ const getGlyphNames_ = await getGlyphNames();
 /** cost-class color per weight group (mirrors PathCostWeights grouping) */
 const weightGroupColors = {
     dtw: '#1976d2',       // profile alignment (shapeCost + tailCost)
-    stub: '#d32f2f',      // reroute stubs (stubCost)
     children: '#388e3c',  // pooled children (childCost)
-    trunk: '#f57c00'      // trunk orientation (turn + sway)
+    trunk: '#f57c00'      // trunk orientation (sway)
 } as const;
 
 /** slider range + cost-class group per path-matching weight */
@@ -93,13 +91,11 @@ const weightRanges: Record<keyof PathCostWeights,
     gapOpen: { max: 1, step: 0.01, group: 'dtw' },
     gapExtend: { max: 0.3, step: 0.005, group: 'dtw' },
     tail: { max: 2, step: 0.05, group: 'dtw' },
-    stub: { max: 10, step: 0.1, group: 'stub' },
     del: { max: 10, step: 0.1, group: 'children' },
     delFloor: { max: 1, step: 0.01, group: 'children' },
     position: { max: 2, step: 0.05, group: 'children' },
     angle: { max: 2, step: 0.05, group: 'children' },
-    turn: { max: 2, step: 0.05, group: 'trunk' },
-    sway: { max: 2, step: 0.05, group: 'trunk' }
+    sway: { max: 4, step: 0.05, group: 'trunk' }
 };
 // console.log(getGlyphNames_);
 
@@ -264,6 +260,11 @@ function Page(props: Props) {
         drawMorph(refPageData, morphT / 100);
     }
 
+    function onShowMorphBoundsChanged(showMorphBounds: boolean) {
+        upd(pageState, { showMorphBounds });
+        drawMorph(refPageData, morphT / 100);
+    }
+
     function onPoseCentroidChanged(poseCentroid: boolean) {
         upd(pageState, { poseCentroid });
     }
@@ -283,7 +284,12 @@ function Page(props: Props) {
 
     function onShowMatchChanged(show: boolean) {
         upd(pageState, { showMatch: show });
-        showMatch(refPageData, show);
+        showMatch(refPageData, show, pageState.showMatchBoundary);
+    }
+
+    function onShowMatchBoundaryChanged(show: boolean) {
+        upd(pageState, { showMatchBoundary: show });
+        showMatch(refPageData, pageState.showMatch, show);
     }
 
     function onShowBranchNumsChanged(show: boolean) {
@@ -358,6 +364,12 @@ function Page(props: Props) {
                 onChanged={onShowMatchChanged}
             />
             <Checkbox
+                checked={pageState.showMatchBoundary}
+                styles={toDrawCheckboxStyles}
+                text="match bnds"
+                onChanged={onShowMatchBoundaryChanged}
+            />
+            <Checkbox
                 checked={pageState.showBranchNums}
                 styles={toDrawCheckboxStyles}
                 text="branch #s"
@@ -391,7 +403,7 @@ function Page(props: Props) {
                     <SimpleSelect
                         value={glyph1Name}
                         options={getGlyphNames_}
-                        style={{ minWidth: '200px' }}
+                        style={{ minWidth: '150px' }}
                         onChanged={vector1Changed}
                     />
                 </div>
@@ -399,13 +411,14 @@ function Page(props: Props) {
                     <SimpleSelect
                         value={glyph2Name}
                         options={getGlyphNames_}
-                        style={{ minWidth: '200px' }}
+                        style={{ minWidth: '150px' }}
                         onChanged={vector2Changed}
                     />
                 </div>
                 <Checkbox checked={simplify} styles={showChangedStyles} text="simplify" onChanged={onSimplifyChanged} />
                 <Checkbox checked={viewMat} styles={showChangedStyles} text="mat/sat" onChanged={onViewMatChanged} />
                 <Checkbox checked={morphFillOnly} styles={showChangedStyles} text="fill only" onChanged={onMorphFillOnlyChanged} />
+                <Checkbox checked={pageState.showMorphBounds} styles={showChangedStyles} text="bounds" onChanged={onShowMorphBoundsChanged} />
                 <Checkbox checked={poseCentroid} styles={showChangedStyles} text="centroid" onChanged={onPoseCentroidChanged} />
                 <Checkbox checked={poseScale} styles={showChangedStyles} text="scale" onChanged={onPoseScaleChanged} />
                 <Checkbox checked={poseMoment} styles={showChangedStyles} text="2nd moment" onChanged={onPoseMomentChanged} />
@@ -643,7 +656,7 @@ function Page(props: Props) {
                 onMouseMove={mouseMove(stateControl, svgRef3, refX, refY, 3)}
                 onClick={onClick(stateControl, svgRef3, 3, refPageData)}
             >
-                <g />
+                <g transform={getFlipTransform(viewbox3)} />
             </svg>
             <svg 
                 id="svg"
@@ -656,12 +669,13 @@ function Page(props: Props) {
                 onMouseMove={mouseMove(stateControl, svgRef1, refX, refY, 1)}
                 onClick={onClick(stateControl, svgRef1, 1)}
             >
-                <path 
-                    id="svg-path"
-                    className="shape"
-                    d={pathStr1}
-                />
-                <g />
+                <g transform={getFlipTransform(viewbox1)}>
+                    <path 
+                        id="svg-path"
+                        className="shape"
+                        d={pathStr1}
+                    />
+                </g>
         </svg>
             <svg 
                 id="svg2"
@@ -674,12 +688,13 @@ function Page(props: Props) {
                 onMouseMove={mouseMove(stateControl, svgRef2, refX, refY, 2)}
                 onClick={onClick(stateControl, svgRef2, 2)}
             >
-                <path 
-                    id="svg-path2"
-                    className="shape"
-                    d={pathStr2}
-                />
-                <g />
+                <g transform={getFlipTransform(viewbox2)}>
+                    <path 
+                        id="svg-path2"
+                        className="shape"
+                        d={pathStr2}
+                    />
+                </g>
             </svg>
             </div>
         </div>

@@ -5,8 +5,25 @@ import type { FatBranch } from '../../morph/fat-branch/fat-branch.js';
 import type { MatchedPath } from '../../morph/match-paths/matched-path.js';
 import { matchColors } from './match-colors.js';
 import { getSkeletonBeziers } from '../../morph/fat-branch/get-fat-branch-tree.js';
+import { getEdgeSleeves } from '../../morph/anchored-sleeves.js';
 import { coveredEdgesOf } from '../../morph/build-morph-entries/build-morph-entries.js';
 import { drawBeziersAsSinglePath } from '../../draw/draw-beziers-as-single-path.js';
+
+
+/** overlay option for the current showMatch call (UI module state) */
+let withBoundary = false;
+
+/** per-branch edge sleeves, computed lazily per overlay draw */
+const sleeveCache = new WeakMap<FatBranch,
+    { out: number[][][]; back: number[][][] }[]>();
+
+function sleevesOf(branch: FatBranch) {
+    let s = sleeveCache.get(branch);
+    if (s === undefined) {
+        sleeveCache.set(branch, s = getEdgeSleeves(branch));
+    }
+    return s;
+}
 
 
 /**
@@ -16,7 +33,10 @@ import { drawBeziersAsSinglePath } from '../../draw/draw-beziers-as-single-path.
  */
 function showMatch(
         refPageData: React.RefObject<PageData | null>,
-        show: boolean): void {
+        show: boolean,
+        showBoundary = false): void {
+
+    withBoundary = showBoundary;
 
     const { svgRef1, svgRef2 } = refPageData.current!;
     const g1 = svgRef1.current?.getElementsByTagName('g')[0];
@@ -178,6 +198,7 @@ function drawFatBranch(
     drawBeziersAsSinglePath(
         g, getSkeletonBeziers(branch), `thin10 ${color} nofill match-viz`
     );
+    drawBoundary(g, branch, 0, Infinity, color);
 }
 
 
@@ -194,6 +215,36 @@ function drawFatBranchPiece(
         .slice(branchPiece.fromEdge, branchPiece.toEdge);
 
     drawBeziersAsSinglePath(g, bz, `thin20 ${color} nofill match-viz`);
+    drawBoundary(g, branchPiece.branch,
+        branchPiece.fromEdge, branchPiece.toEdge, color);
+}
+
+
+/**
+ * Draws the boundary pieces alongside the skeleton edge slice [from..to)
+ * (both sides) in the piece's color - only when the boundary option is on.
+ */
+function drawBoundary(
+        g: SVGGElement,
+        branch: FatBranch,
+        fromEdge: number,
+        toEdge: number,
+        color: string): void {
+
+    if (!withBoundary) { return; }
+    const sleeves = sleevesOf(branch);
+    const to = Math.min(toEdge, sleeves.length);
+    for (let e = fromEdge; e < to; e++) {
+        const { out, back } = sleeves[e];
+        if (out.length > 0) {
+            drawBeziersAsSinglePath(
+                g, out, `thin10 ${color} nofill match-viz`);
+        }
+        if (back.length > 0) {
+            drawBeziersAsSinglePath(
+                g, back, `thin10 ${color} nofill match-viz`);
+        }
+    }
 }
 
 

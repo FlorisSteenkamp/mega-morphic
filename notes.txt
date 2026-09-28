@@ -16,5 +16,6 @@ npm account name: floris / florissteenkamp
 TODO
 ----
 * Better boundary lerping - currently jagged / intersecting
+* shapes to recheck: seven/three, M/N, hyphen-2/hyphen, Q/H, 
 * better retract/grow logic of dropped branches
-* round cap-ends
+

@@ -1,5 +1,6 @@
 import { StateControl } from "../../state-control/state-control.js";
 import { getViewboxXY } from "../fs-consts-types/get-viewbox-xy.js";
+import { flipViewboxXY } from "../fs-consts-types/viewbox.js";
 
 
 function mouseDown(
@@ -13,7 +14,10 @@ function mouseDown(
         let svg$ = svgRef.current;
         if (!svg$) { return; }
         
-        let viewboxXY = getViewboxXY(svg$, event.clientX, event.clientY);
+        // model coords: the display flip mirrors content about the
+        // viewbox y-center
+        let viewboxXY = flipViewboxXY(viewbox,
+            getViewboxXY(svg$, event.clientX, event.clientY));
         
         clickedForNewViewboxFirst(stateControl, viewboxXY);
     }

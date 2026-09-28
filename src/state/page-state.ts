@@ -35,6 +35,10 @@ interface PageState {
     readonly showPose: boolean;
     /** Show the last morph's match overlay on svgs 1 and 2. */
     readonly showMatch: boolean;
+    /** also draw each matched piece's boundary in the pair's color */
+    readonly showMatchBoundary: boolean;
+    /** draw each morph entry's outline in its entry color on svg3 */
+    readonly showMorphBounds: boolean;
     /** Show the fat trees' branch indices on svgs 1 and 2. */
     readonly showBranchNums: boolean;
     /** rotation of shape 1 (degrees, applied before the MAT) */

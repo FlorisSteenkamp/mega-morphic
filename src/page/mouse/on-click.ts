@@ -8,6 +8,7 @@ import { logCpNode } from '../log/log-cp-node.js';
 import { logNearestLoopSet } from '../log/log-nearest-loop-set.js';
 import { logNearestLoopSimplified } from '../log/log-nearest-loop-simplified.js';
 import { getViewboxXY } from '../fs-consts-types/get-viewbox-xy.js';
+import { flipViewboxXY } from '../fs-consts-types/viewbox.js';
 import { logK } from '../log/log-k.js';
 import { logCurve } from '../log/log-curve.js';
 import { logThreeProng } from '../log/log-three-prong.js';
@@ -41,7 +42,8 @@ function onClick(
             if (pageState.clickFor !== 'mBezier' ||
                 refPageData === undefined || !svg3$) { return; }
             const g3 = svg3$.getElementsByTagName('g')[0];
-            const p = getViewboxXY(svg3$, event.clientX, event.clientY);
+            const p = flipViewboxXY(pageState.viewbox3,
+                getViewboxXY(svg3$, event.clientX, event.clientY));
             logMorphBezier(refPageData)(g3, p, pageState.showDelay);
             return;
         }
@@ -54,8 +56,8 @@ function onClick(
         const mats = shapeIdx === 1 ? mats1 : mats2;
         const viewbox = shapeIdx === 1 ? viewbox1 : viewbox2;
 
-        const [viewboxX,viewboxY] = 
-            getViewboxXY(svgRef.current!, event.clientX, event.clientY);
+        const [viewboxX,viewboxY] = flipViewboxXY(viewbox,
+            getViewboxXY(svgRef.current!, event.clientX, event.clientY));
         
         const svg$ = svgRef.current;
         if (!svg$) { return; }

@@ -61,8 +61,31 @@ function toViewBoxStr(viewbox: number[][]) {
 }
 
 
+/**
+ * Mirrors content vertically about the viewbox's own y-center, so the
+ * (internally still y-down) model coordinates DISPLAY with y increasing
+ * upward. Self-consistent per-window (uses that viewbox's own minY/maxY),
+ * so it composes correctly with zooming/panning to any sub-window.
+ */
+function getFlipTransform(viewbox: number[][]) {
+    let c = viewbox[0][1] + viewbox[1][1];
+    return `matrix(1 0 0 -1 0 ${c})`;
+}
+
+
+/**
+ * Raw viewbox coords (mouse, via CTM) ↔ model coords under the display
+ * flip: mirrors y about the viewbox's y-center (self-inverse).
+ */
+function flipViewboxXY(viewbox: number[][], xy: number[]): number[] {
+    return [xy[0], viewbox[0][1] + viewbox[1][1] - xy[1]];
+}
+
+
 export { 
     getViewBoxForShape,
     toViewBoxStr,
-    unionViewbox
+    unionViewbox,
+    getFlipTransform,
+    flipViewboxXY,
 };

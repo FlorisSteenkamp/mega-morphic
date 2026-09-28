@@ -16,13 +16,13 @@ function drawMorph(
 
     const { morphRef, morphMarksRef, morphPoseRef, svgRef3, props } =
         refPageData.current!;
-    const { morphFillOnly: fillOnly, showPose } =
+    const { morphFillOnly: fillOnly, showPose, showMorphBounds } =
         props.stateControl.state.appState.pageState;
 
     const entries = morphRef.current;
     if (!entries) { return; }
 
-    let { drawn, radii, outlines } = resolveMorphAt(entries, t);
+    let { drawn, radii, outlines, outlineEntry } = resolveMorphAt(entries, t);
 
     // Pin the drawn shape's MEASURED pose onto the interpolated pose path
     // (procrustes): straight centroid line, constant angular rate,
@@ -48,6 +48,16 @@ function drawMorph(
     if (showPose) { drawPoseGizmo(g3, outlines); }
 
     if (fillOnly) { return; }
+
+    // Per-entry boundary loops in the entry's color (over the gray union).
+    if (showMorphBounds) {
+        for (let k = 0; k < outlines.length; k++) {
+            const { classes } = entries[outlineEntry[k]];
+            drawLoopsAsPath(g3, [outlines[k]],
+                classes.replace(/thin\d+/, 'thin10')
+                    .replace('fill25', 'nofill'));
+        }
+    }
 
     for (let i = 0; i < entries.length; i++) {
         const pss = drawn[i];

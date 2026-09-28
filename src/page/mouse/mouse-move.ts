@@ -1,5 +1,6 @@
 import { StateControl } from "../../state-control/state-control.js";
 import { getViewboxXY } from "../fs-consts-types/get-viewbox-xy.js";
+import { flipViewboxXY } from "../fs-consts-types/viewbox.js";
 
 
 function mouseMove(
@@ -17,8 +18,12 @@ function mouseMove(
         let { pageState } = state.appState;
         let { zoomState } = transientState;
 
-        let [viewboxX,viewboxY] = 
-            getViewboxXY(svg$, event.clientX, event.clientY);
+        const viewbox = shapeIdx === 1 ? pageState.viewbox1
+            : shapeIdx === 2 ? pageState.viewbox2
+            : pageState.viewbox3;
+
+        let [viewboxX,viewboxY] = flipViewboxXY(viewbox,
+            getViewboxXY(svg$, event.clientX, event.clientY));
 
         let spanX = refX.current;
         if (spanX) { spanX.innerHTML = viewboxX.toFixed(5); }

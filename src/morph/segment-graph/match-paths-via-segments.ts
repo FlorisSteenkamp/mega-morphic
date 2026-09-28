@@ -1,7 +1,7 @@
 declare var _debug_: Debug;
 import type { Debug } from '../../debug/debug.js';
 import type { FatBranch, FatBranchEdge } from '../fat-branch/fat-branch.js';
-import type { MatchedPath, PooledDp } from '../match-paths/matched-path.js';
+import type { MatchedPath, PooledDp, PathAlignDebug } from '../match-paths/matched-path.js';
 import type { PathChildOp } from '../match-paths/path-child-op.js';
 import type { PooledChild } from '../match-paths/pooled-child.js';
 import type { PathPiece } from '../match-paths/path-piece.js';
@@ -9,20 +9,23 @@ import type { PathCostWeights } from '../match-paths/path-cost-weights.js';
 import type { PathMatchOptions } from '../match-paths/path-match-options.js';
 import type { PathMatchResult } from '../match-paths/path-match-result.js';
 import type { RouteStep, SegMatchedPair, SegChild } from './match-seg-graphs.js';
-import { defaultPathWeights } from '../match-paths/match-paths.js';
+import { defaultPathWeights } from '../match-paths/path-cost-weights.js';
 import { sampleFeatures$ } from '../match-paths/sample-features.js';
 import { alignProfiles } from '../match-paths/align-profiles.js';
 import { segGraphOf } from './segment-graph.js';
-import { matchSegGraphs } from './match-seg-graphs.js';
+import { matchSegGraphs, composeRoute } from './match-seg-graphs.js';
+import { procrustes } from '../procrustes/procrustes-analysis.js';
 
 const { sqrt } = Math;
 
 
 /**
- * The segment-graph matcher behind the classic `matchPaths` interface:
- * routes become `PathPiece` chains and matched subtree pairs become child
- * ops, so `buildMorphEntries` (and the match overlay) consume it unchanged.
- * Continuation leftovers are never matched (the builder can't express
+ * The segment-graph matcher:
+ * 
+ * * routes become `PathPiece` chains and matched subtree pairs become child
+ *   ops, so `buildMorphEntries` (and the match overlay) consume it unchanged.
+ * 
+ * * Continuation leftovers are never matched (the builder can't express
  * covered continuations) - they retract via the usual piece-stub semantics.
  */
 function matchPathsViaSegments(
@@ -38,8 +41,12 @@ function matchPathsViaSegments(
     const unit1 = sqrt(tree1.roundSalience);
     const unit2 = sqrt(tree2.roundSalience);
 
+    // sway visibility factor (trunk pss = whole glyph loop)
+    const aniso = (procrustes(tree1.pss).anisotropy +
+        procrustes(tree2.pss).anisotropy) / 2;
+
     const r = matchSegGraphs(
-        segGraphOf(tree1), segGraphOf(tree2), unit1, unit2, weights);
+        segGraphOf(tree1), segGraphOf(tree2), unit1, unit2, weights, aniso);
 
     return {
         trunk: toMatchedPath(r.root, true, unit1, unit2, weights),
@@ -106,17 +113,6 @@ function debugFields(
         unit2: number,
         weights: PathCostWeights): Partial<MatchedPath> {
 
-    const gA = composeRoute(pair.routeA);
-    const gB = composeRoute(pair.routeB);
-    const fA = sampleFeatures$(160, unit1)(gA.skelPss, gA.radii);
-    const fB = sampleFeatures$(160, unit2)(gB.skelPss, gB.radii);
-    const al = alignProfiles(
-        fA, fB,
-        (gA.L/unit1) / (fA.u.length - 1),
-        (gB.L/unit2) / (fB.u.length - 1),
-        trunkLevel,
-        weights);
-
     const pooledDp: PooledDp[] | undefined = pair.dp?.map(d => ({
         side: d.side,
         D: d.D,
@@ -131,34 +127,39 @@ function debugFields(
     }));
 
     return {
-        align: {
-            usA: fA.u, usB: fB.u,
-            skelPssA: gA.skelPss, skelPssB: gB.skelPss,
-            radiiA: gA.radii, radiiB: gB.radii,
-            steps: al.steps
-        },
+        align: alignOfRoutes(
+            pair.routeA, pair.routeB, unit1, unit2, weights, trunkLevel),
         ...(pooledDp !== undefined ? { pooledDp } : {})
     };
 }
 
 
-/** Route steps → composed skeleton geometry (as composePieces). */
-function composeRoute(route: RouteStep[]): {
-        skelPss: number[][][]; radii: number[]; L: number } {
+/** Classic Gotoh re-run on chosen routes (viz-equivalent alignment). */
+function alignOfRoutes(
+        routeA: RouteStep[],
+        routeB: RouteStep[],
+        unit1: number,
+        unit2: number,
+        weights: PathCostWeights,
+        trunkLevel: boolean): PathAlignDebug {
 
-    const skelPss: number[][][] = [];
-    const radii: number[] = [];
-    let L = 0;
-    for (const { seg, reversed } of route) {
-        const pss = reversed
-            ? seg.pss.map(ps => ps.toReversed()).reverse()
-            : seg.pss;
-        const rd = reversed ? seg.radii.toReversed() : seg.radii;
-        skelPss.push(...pss);
-        radii.push(...(radii.length > 0 ? rd.slice(1) : rd));
-        L += seg.len;
-    }
-    return { skelPss, radii, L };
+    const gA = composeRoute(routeA);
+    const gB = composeRoute(routeB);
+    const fA = sampleFeatures$(160, unit1)(gA.skelPss, gA.radii);
+    const fB = sampleFeatures$(160, unit2)(gB.skelPss, gB.radii);
+    const al = alignProfiles(
+        fA, fB,
+        (gA.L/unit1) / (fA.u.length - 1),
+        (gB.L/unit2) / (fB.u.length - 1),
+        trunkLevel,
+        weights);
+
+    return {
+        usA: fA.u, usB: fB.u,
+        skelPssA: gA.skelPss, skelPssB: gB.skelPss,
+        radiiA: gA.radii, radiiB: gB.radii,
+        steps: al.steps
+    };
 }
 
 
@@ -213,4 +214,4 @@ function toPieces(route: RouteStep[]): PathPiece[] {
 }
 
 
-export { matchPathsViaSegments }
+export { matchPathsViaSegments, alignOfRoutes }

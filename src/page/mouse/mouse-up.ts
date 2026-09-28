@@ -1,5 +1,6 @@
 import { StateControl } from "../../state-control/state-control.js";
 import { getViewboxXY } from "../fs-consts-types/get-viewbox-xy.js";
+import { flipViewboxXY } from "../fs-consts-types/viewbox.js";
 
 
 function mouseUp(
@@ -34,6 +35,9 @@ function clickedForNewViewboxSecond(
         : pageState.viewbox3;
     let { zoomState } = transientState;
     let { prevViewboxXY } = zoomState;
+
+    // into model coords (prevViewboxXY was flipped at mouse-down)
+    viewboxXY = flipViewboxXY(viewbox, viewboxXY);
 
     // Update transient info
     zoomState.mouseIsDown = false;

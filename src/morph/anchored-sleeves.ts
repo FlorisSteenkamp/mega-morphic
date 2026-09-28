@@ -18,10 +18,14 @@ const EPS_LEN = 1e-9;
  *
  * Per resampled skeleton segment (in the side's outline travel direction:
  * `out` runs boundary k → k+1, `back` runs k+1 → k):
- * - `anchorsA`/`anchorsB`: `[fromθ, fromρ, toθ, toρ]` - the segment's two
- *   boundary anchors in the local disk frame of their skeleton boundary
- *   (θ = angle in the (T, N) basis, ρ = distance / disk radius, so the
- *   anchor rides the interpolated maximal disk).
+ * - `anchorsA`/`anchorsB`: `[fromθ, fromρ, toθ, toρ, fromτ, toτ]` - the
+ *   segment's two boundary anchors in the local disk frame of their
+ *   skeleton boundary (θ = angle in the (T, N) basis, ρ = distance / disk
+ *   radius, so the anchor rides the interpolated maximal disk) plus the
+ *   boundary's TRAVEL-direction tangent angle τ at each anchor in the same
+ *   basis (NaN when degenerate). In/out τ's of a joint live on ADJACENT
+ *   segments, so corners keep their (interpolated) opening angle while
+ *   smooth joints stay G1 at every t.
  * - `piecesA`/`piecesB`: the boundary pieces between the two anchors,
  *   normalized into the anchors' chord frame, control-point corresponding.
  */
@@ -140,11 +144,15 @@ function buildSide(
 
         anchorsA.push([
             ...polarAnchor(sA.from, bidxFrom, A, TsA),
-            ...polarAnchor(sA.to, bidxTo, A, TsA)
+            ...polarAnchor(sA.to, bidxTo, A, TsA),
+            tangentAngle(dirAtStart(pA[0]), TsA[bidxFrom]),
+            tangentAngle(dirAtEnd(pA[pA.length - 1]), TsA[bidxTo])
         ]);
         anchorsB.push([
             ...polarAnchor(sB.from, bidxFrom, B, TsB),
-            ...polarAnchor(sB.to, bidxTo, B, TsB)
+            ...polarAnchor(sB.to, bidxTo, B, TsB),
+            tangentAngle(dirAtStart(pB[0]), TsB[bidxFrom]),
+            tangentAngle(dirAtEnd(pB[pB.length - 1]), TsB[bidxTo])
         ]);
 
         piecesA.push(normalizeSeg(pA, sA.from, sA.to));
@@ -154,7 +162,46 @@ function buildSide(
     fillDegenerateThetas(anchorsA, isOut);
     fillDegenerateThetas(anchorsB, isOut);
 
+    unifySeamAnchors(anchorsA, segsA, isOut);
+    unifySeamAnchors(anchorsB, segsB, isOut);
+
     return { anchorsA, anchorsB, piecesA, piecesB };
+}
+
+
+/**
+ * Coincident seam anchors (segment k's entry point = its neighbor's exit
+ * point at the same boundary cut) must share ONE polar representation:
+ * they're stored independently, and independent degenerate-θ fills (or
+ * float noise) make the same boundary point interpolate to two DIFFERENT
+ * places mid-morph - the seam opens and the assembly bridges it with a
+ * reversing micro-line (visible jagged stitches).
+ */
+function unifySeamAnchors(
+        anchors: number[][],
+        segs: { from: number[]; to: number[] }[],
+        isOut: boolean): void {
+
+    const EPS_SEAM = 1e-4;
+    for (let j = 1; j < anchors.length; j++) {
+        if (isOut) {
+            // seam at boundary index j: seg j-1's `to` ↔ seg j's `from`
+            const p = segs[j - 1].to;
+            const q = segs[j].from;
+            if (hypot(p[0] - q[0], p[1] - q[1]) < EPS_SEAM) {
+                anchors[j][0] = anchors[j - 1][2];
+                anchors[j][1] = anchors[j - 1][3];
+            }
+        } else {
+            // back side: seg j-1's `from` ↔ seg j's `to` (both at index j)
+            const p = segs[j - 1].from;
+            const q = segs[j].to;
+            if (hypot(p[0] - q[0], p[1] - q[1]) < EPS_SEAM) {
+                anchors[j - 1][0] = anchors[j][2];
+                anchors[j - 1][1] = anchors[j][3];
+            }
+        }
+    }
 }
 
 
@@ -295,6 +342,14 @@ function fillDegenerateThetas(anchors: number[][], isOut: boolean): void {
 
         anchors[idx[i][0]][idx[i][1]] = filled;
     }
+}
+
+
+/** The direction's angle in the (T, N) basis (NaN for a zero direction). */
+function tangentAngle(v: number[], T: number[]): number {
+    if (v[0] === 0 && v[1] === 0) { return NaN; }
+    const N = [-T[1], T[0]];
+    return atan2(v[0]*N[0] + v[1]*N[1], v[0]*T[0] + v[1]*T[1]);
 }
 
 

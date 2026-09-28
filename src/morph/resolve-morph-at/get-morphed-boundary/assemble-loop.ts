@@ -5,6 +5,10 @@ const { hypot } = Math;
 
 const MIN_LEN = 1e-6;
 
+/** gaps up to this are welded shut (below visual relevance); larger ones
+ *  get an explicit bridge segment */
+const SNAP_LEN = 1e-3;
+
 
 /**
  * Chains ordered open pieces into one closed loop: consecutive pieces are
@@ -32,7 +36,7 @@ function assembleLoop(
             continue;
         }
 
-        if (gap > MIN_LEN) {
+        if (gap > SNAP_LEN) {
             loop.push([q, ps[0]]);  // bridge
         } else {
             ps = [q, ...ps.slice(1)];  // snap for exact continuity
@@ -46,7 +50,7 @@ function assembleLoop(
     const first = loop[0][0];
     const last = getLastP(loop);
     const gap = hypot(first[0] - last[0], first[1] - last[1]);
-    if (gap > MIN_LEN) {
+    if (gap > SNAP_LEN) {
         loop.push([last, first]);
     } else {
         const lastPs = loop[loop.length - 1];

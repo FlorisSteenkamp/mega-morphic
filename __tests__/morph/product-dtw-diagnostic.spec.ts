@@ -1,15 +1,13 @@
-// Product-graph DTW diagnostic: can FREE segment-level routing find better
-// (shape-wise) trunk correspondences than the current reroute machinery?
-// Score-only - compares against matchPaths' chosen trunk pair.
+// Product-graph DTW diagnostic: scores + routes of the segment matcher's
+// free segment-level routing (score-only trunk DTW + hierarchical match).
 import { describe, test, expect } from '@jest/globals';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { findMats, getPathsFromStr, MatOptions } from 'flo-mat';
 import type { FatBranch } from '../../src/morph/fat-branch/fat-branch.js';
-import type { MatchedPath } from '../../src/morph/match-paths/matched-path.js';
 import { getFatBranchTree, getSkeletonBeziers } from '../../src/morph/fat-branch/get-fat-branch-tree.js';
 import { getFattestCpNode } from '../../src/morph/fat-branch/get-fattest-cp-node.js';
-import { matchPaths, defaultPathWeights } from '../../src/morph/match-paths/match-paths.js';
+import { defaultPathWeights } from '../../src/morph/match-paths/path-cost-weights.js';
 import { segGraphOf } from '../../src/morph/segment-graph/segment-graph.js';
 import { sampleSegGraph } from '../../src/morph/segment-graph/sample-seg-graph.js';
 import { productDtw } from '../../src/morph/segment-graph/product-dtw.js';
@@ -66,19 +64,9 @@ function union(outlines: number[][][][]): number[][][][] {
     }
 }
 
-function fmtPieces(mp: MatchedPath): string {
-    const fmt = (ps: typeof mp.piecesA) => ps.map(p =>
-        `[${p.fromEdge}..${p.toEdge})${p.reversed ? 'ʳ' : ''}`).join(' > ');
-    return `A: ${fmt(mp.piecesA)}  B: ${fmt(mp.piecesB)}`;
-}
-
 function comparePair(nameA: string, nameB: string) {
     const tA = loadTree(nameA);
     const tB = loadTree(nameB);
-
-    const t0 = performance.now();
-    const pm = matchPaths(tA, tB);
-    const t1 = performance.now();
 
     const gA = segGraphOf(tA);
     const gB = segGraphOf(tB);
@@ -95,10 +83,6 @@ function comparePair(nameA: string, nameB: string) {
 
     console.log(
         `=== ${nameA} → ${nameB} ===\n` +
-        `matcher : shapeCost ${pm.trunk.cost.shapeCost.toFixed(4)} ` +
-        `(total ${pm.trunk.cost.totalCost.toFixed(4)}, flipped ${pm.flipped}) ` +
-        `[${(t1 - t0).toFixed(0)}ms]\n` +
-        `  route ${fmtPieces(pm.trunk)}\n` +
         `product : shape ${pd.shapeCost.toFixed(4)} total ${
         pd.totalCost.toFixed(4)} covered ${(100*pd.covered).toFixed(1)}% ` +
         `(${pd.states} states, ${gA.segments.length}/${gB.segments.length} segs) ` +
@@ -106,7 +90,7 @@ function comparePair(nameA: string, nameB: string) {
         `  route A ${fmtLeaf(gA, pd.startA)}→${fmtLeaf(gA, pd.endA)} ` +
         `B ${fmtLeaf(gB, pd.startB)}→${fmtLeaf(gB, pd.endB)}`);
 
-    return { pm, pd };
+    return { pd };
 }
 
 
