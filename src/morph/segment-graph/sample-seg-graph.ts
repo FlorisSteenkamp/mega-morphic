@@ -4,7 +4,7 @@ import { totalLength$ } from '../fs/total-length.js';
 import { clamp } from '../../utils/clamp.js';
 import { sum } from '../../utils/sum.js';
 
-const { max, round, min } = Math;
+const { max, round, min, PI: π } = Math;
 
 
 /**
@@ -19,6 +19,8 @@ interface SampledSegGraph {
     readonly r: Float64Array;
     /** turning rate (dφ per normalized arc) per directed sample */
     readonly t: Float64Array;
+    /** absolute travel direction per directed sample (reversed run = φ+π) */
+    readonly φ: Float64Array;
     /** successor sample ids (within-run next, or continuations at a fork) */
     readonly succ: number[][];
     /** entry samples (runs leaving a leaf vertex) */
@@ -56,6 +58,7 @@ function sampleSegGraph(
 
     const r: number[] = [];
     const t: number[] = [];
+    const φ: number[] = [];
     const succ: number[][] = [];
     /** per segment per direction: its sample ids in travel order */
     const runs: { ids: number[]; tail: number; head: number }[] = [];
@@ -98,6 +101,7 @@ function sampleSegGraph(
                 ids.push(r.length);
                 r.push(rs[k]);
                 t.push(ts[k]);  // sign irrelevant (costs use |t|)
+                φ.push(φi[k] + (rev ? π : 0));
                 succ.push([]);
             }
             for (let i = 0; i + 1 < n; i++) {
@@ -156,6 +160,7 @@ function sampleSegGraph(
     return {
         r: Float64Array.from(r),
         t: Float64Array.from(t),
+        φ: Float64Array.from(φ),
         succ,
         starts,
         ends,

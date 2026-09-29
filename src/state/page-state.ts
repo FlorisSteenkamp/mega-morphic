@@ -49,6 +49,7 @@ interface PageState {
     readonly flipV: boolean;
     /** path-matching cost weights (match + morph) */
     readonly pathWeights: PathCostWeights;
+    readonly morphT: number;
 }
 
 

@@ -15,7 +15,12 @@ npm account name: floris / florissteenkamp
 
 TODO
 ----
-* Better boundary lerping - currently jagged / intersecting
-* shapes to recheck: seven/three, M/N, hyphen-2/hyphen, Q/H, 
+* shapes to recheck: seven/three, M/N, hyphen-2/hyphen, Q/H, parenleft
 * better retract/grow logic of dropped branches
+
+FUTURE
+------
+* Better boundary lerping - currently jagged / intersecting
+  - currently fixed by adding more 2-prongs by making maxLength === 10 (instead of 40)
+
 

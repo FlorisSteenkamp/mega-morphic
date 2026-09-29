@@ -68,6 +68,7 @@ const defaultPageState: PageState = {
     flipH: false,
     flipV: false,
     pathWeights: defaultPathWeights,
+    morphT: 0
 }
 
 

@@ -13,10 +13,10 @@ import { showBranchNums } from './show-branch-nums.js';
 function onMorphClicked(
         refPageData: React.RefObject<PageData | null>) {
 
-    const { props, morphRef, morphMarksRef, morphPoseRef, morphT,
+    const { props, morphRef, morphMarksRef, morphPoseRef,
         svgRef1, svgRef2 } = refPageData.current!;
     const { pageState } = props;
-    const { deduced } = pageState;
+    const { deduced, morphT } = pageState;
     const { mats1, mats2 } = deduced;
 
     //-----------

@@ -82,7 +82,7 @@ function evalChildPair(
     const price = priceChildPair(
         gA, gB, unitA, unitB,
         routeLenOf(a.pair.routeA), routeLenOf(b.pair.routeB),
-        weights, a.child, b.child);
+        weights, weights.sway*aniso, a.child, b.child);
     const dropCost = price.deleteCost + price.insertCost;
 
     const sameParent = a.pair === b.pair;

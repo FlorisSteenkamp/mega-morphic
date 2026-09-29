@@ -21,18 +21,21 @@ function logMorphBezier(
         refPageData: React.RefObject<PageData | null>) {
 
     return (g: SVGGElement, p: number[], showDelay = 1000): void => {
-        const pd = refPageData.current;
-        const entries = pd?.morphRef.current;
-        if (pd === null || entries === null || entries === undefined) {
+        const { morphRef, props, morphPoseRef } = refPageData.current!;
+        const { stateControl } = props;
+        const { morphT } = stateControl.state.appState.pageState;
+        const entries = morphRef.current;
+        
+        if (/*pd === null || */entries === null || entries === undefined) {
             console.log('no morph yet - click morph first');
             return;
         }
 
-        const t = pd.morphT / 100;
+        const t = morphT / 100;
         let { outlines } = resolveMorphAt(entries, t);
 
         // Match the DRAWN shape exactly - it may be pose-corrected.
-        const ramp = pd.morphPoseRef.current;
+        const ramp = morphPoseRef.current;
         if (ramp !== null && outlines.length > 0) {
             const measured = procrustes(outlines.flat());
             const { tf } = poseCorrectionAt(ramp, t, measured);

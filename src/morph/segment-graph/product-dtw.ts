@@ -1,5 +1,6 @@
 import type { SampledSegGraph } from './sample-seg-graph.js';
 import type { PathCostWeights } from '../match-paths/path-cost-weights.js';
+import { wrapAngle } from '../intrinsic-skeleton/wrap-angle.js';
 
 const { abs, min, PI: π } = Math;
 
@@ -9,6 +10,8 @@ interface ProductDtwResult {
     readonly shapeCost: number;
     /** objective = shapeCost + del × (material NOT covered by the routes) */
     readonly totalCost: number;
+    /** measured local sway along the winning warp (NOT in the objective) */
+    readonly swayCost: number;
     /** material covered by both routes, as a fraction of the total */
     readonly covered: number;
     /** chosen route endpoints: leaf vertex ids per glyph */
@@ -26,6 +29,8 @@ interface ProductDtwResult {
         readonly endB: number;
         readonly totalCost: number;
         readonly shapeCost: number;
+        /** measured local sway along this candidate's warp */
+        readonly swayCost: number;
     }[];
 }
 
@@ -42,13 +47,27 @@ interface ProductDtwResult {
  * trivially. Gap-consumed material earns NOTHING (it retracts like a drop;
  * the gap price comes on top). Score-only: no tails, no pooled-children
  * terms.
+ *
+ * @param sway LOCAL sway weight (weights.sway × glyph-pair anisotropy).
+ * MEASURED along the optimal intrinsic warp and reported as `swayCost` =
+ * sway × material-weighted MEAN (over corresponded samples) of
+ * |wrap(φA−φB)|/π (φ = absolute travel direction): how much corresponded
+ * material would locally ROTATE. The MEAN keeps the scale warp-gap-
+ * independent. It deliberately does NOT enter the DP objective, else the
+ * warp dodges it (gap-skipping rotating material / pairing same-direction
+ * strokes inside a flipped route) and flipped candidates look cheap.
+ * Callers add `swayCost` to selection and relabel prices. (Global
+ * route-mean angle diffs are NOT equivalent: stroke means can cancel or
+ * mis-penalize locally-clean pairings, e.g. M→N.)
  */
 function productDtw(
         A: SampledSegGraph,
         B: SampledSegGraph,
-        weights: PathCostWeights): ProductDtwResult {
+        weights: PathCostWeights,
+        sway = 0): ProductDtwResult {
 
     const { radius, turning, gapOpen, gapExtend, del } = weights;
+
     const nA = A.r.length;
     const nB = B.r.length;
     const N = nA * nB;
@@ -58,8 +77,9 @@ function productDtw(
     const diagStep = (A.step + B.step) / 2;
 
     // local material of one sample (≈ its salience fraction: 2r̂ dŝ)
-    const matA = (a: number): number => 2*A.r[a]*A.step;
-    const matB = (b: number): number => 2*B.r[b]*B.step;
+    const matA = mat(A);
+
+    const matB = (a: number): number => 2*B.r[a]*B.step;
 
     const cost = (a: number, b: number): number => {
         const rA = A.r[a];
@@ -68,10 +88,17 @@ function productDtw(
             + turning*((rA + rB)/2)*abs(abs(A.t[a]) - abs(B.t[b])) / (2*π));
     };
 
-    const INF = Infinity;
-    const M = new Float64Array(N).fill(INF);
-    const Ix = new Float64Array(N).fill(INF);
-    const Iy = new Float64Array(N).fill(INF);
+    // raw sway contribution of one corresponded sample: material × local
+    // orientation diff; mean taken at extraction
+    function swayOf(a: number, b: number): number {
+        return (
+            (matA(a) + matB(b))/2) * abs(wrapAngle(A.φ[a] - B.φ[b])
+        ) / π;
+    }
+
+    const M = new Float64Array(N).fill(Infinity);
+    const Ix = new Float64Array(N).fill(Infinity);
+    const Iy = new Float64Array(N).fill(Infinity);
     // start leaf pair per state, packed (leafA << 16) | leafB
     const SM = new Int32Array(N).fill(-1);
     const SIx = new Int32Array(N).fill(-1);
@@ -80,6 +107,10 @@ function productDtw(
     const CM = new Float64Array(N);
     const CIx = new Float64Array(N);
     const CIy = new Float64Array(N);
+    // measured sway along the state's best path (objective-neutral)
+    const WM = new Float64Array(N);
+    const WIx = new Float64Array(N);
+    const WIy = new Float64Array(N);
 
     for (const a0 of A.starts) {
         for (const b0 of B.starts) {
@@ -89,6 +120,7 @@ function productDtw(
             if (c < M[i]) {
                 M[i] = c;
                 CM[i] = cov;
+                WM[i] = swayOf(a0, b0);
                 SM[i] = (A.leafOf.get(a0)! << 16) | B.leafOf.get(b0)!;
             }
         }
@@ -111,11 +143,12 @@ function productDtw(
             const m = M[i];
             const ix = Ix[i];
             const iy = Iy[i];
-            if (m === INF && ix === INF && iy === INF) { continue; }
+            if (m === Infinity && ix === Infinity && iy === Infinity) { continue; }
 
             const best = min(m, ix, iy);
             const bestS = best === m ? SM[i] : best === ix ? SIx[i] : SIy[i];
             const bestC = best === m ? CM[i] : best === ix ? CIx[i] : CIy[i];
+            const bestW = best === m ? WM[i] : best === ix ? WIx[i] : WIy[i];
 
             for (const aN of A.succ[a]) {
                 // gap in A: consume A alone - NO coverage reward (a gap is a
@@ -129,6 +162,7 @@ function productDtw(
                     Ix[gi] = gx;
                     SIx[gi] = openIt ? SM[i] : SIx[i];
                     CIx[gi] = openIt ? CM[i] : CIx[i];
+                    WIx[gi] = openIt ? WM[i] : WIx[i];
                 }
                 // diagonal
                 for (const bN of B.succ[b]) {
@@ -139,6 +173,7 @@ function productDtw(
                         M[di] = v;
                         SM[di] = bestS;
                         CM[di] = bestC + cov;
+                        WM[di] = bestW + swayOf(aN, bN);
                     }
                 }
             }
@@ -150,18 +185,21 @@ function productDtw(
                     Iy[gi] = gy;
                     SIy[gi] = openIt ? SM[i] : SIy[i];
                     CIy[gi] = openIt ? CM[i] : CIy[i];
+                    WIy[gi] = openIt ? WM[i] : WIy[i];
                 }
             }
         }
     }
 
-    let bVal = INF;
+    let bVal = Infinity;
     let bCov = 0;
+    let bSway = 0;
     let bStart = -1;
     let bEndA = -1;
     let bEndB = -1;
     const candidates: { startA: number; startB: number; endA: number;
-        endB: number; totalCost: number; shapeCost: number }[] = [];
+        endB: number; totalCost: number; shapeCost: number;
+        swayCost: number }[] = [];
     for (const aE of A.ends) {
         for (const bE of B.ends) {
             const i = aE*nB + bE;
@@ -169,20 +207,25 @@ function productDtw(
             const ix = Ix[i];
             const iy = Iy[i];
             const v = min(m, ix, iy);
-            if (v === INF) { continue; }
+            if (v === Infinity) { continue; }
             const cov = v === m ? CM[i] : v === ix ? CIx[i] : CIy[i];
+            const sw = v === m ? WM[i] : v === ix ? WIx[i] : WIy[i];
             const start = v === m ? SM[i] : v === ix ? SIx[i] : SIy[i];
+            // mean over corresponded material (cov sums matA+matB per step)
+            const swayCost = cov > 0 ? sway * sw / (cov/2) : 0;
             candidates.push({
                 startA: start >>> 16,
                 startB: start & 0xffff,
                 endA: A.leafOf.get(aE)!,
                 endB: B.leafOf.get(bE)!,
                 totalCost: v + del*(A.material + B.material),
-                shapeCost: v + del*cov
+                shapeCost: v + del*cov,
+                swayCost
             });
             if (v < bVal) {
                 bVal = v;
                 bCov = cov;
+                bSway = swayCost;
                 bStart = start;
                 bEndA = A.leafOf.get(aE)!;
                 bEndB = B.leafOf.get(bE)!;
@@ -199,6 +242,7 @@ function productDtw(
     return {
         shapeCost,
         totalCost,
+        swayCost: bSway,
         covered: bCov / (A.material + B.material),
         startA: bStart >>> 16,
         startB: bStart & 0xffff,
@@ -207,6 +251,15 @@ function productDtw(
         states: N,
         candidates
     };
+}
+
+
+function mat(
+        ssg: SampledSegGraph) {
+
+    return function (a: number): number {
+        return 2*ssg.r[a]*ssg.step;
+    }
 }
 
 

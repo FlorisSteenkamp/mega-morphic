@@ -33,11 +33,14 @@ interface PathCostWeights {
     readonly angle: number;
 
     //------------------------------------------------------
-    // --- trunk orientation ---
+    // --- orientation (trunk selection + child relabel) ---
     //------------------------------------------------------
-    /** trunk absolute-orientation swing (mean chord-angle difference ×
-     *  shape anisotropy) - near-tie trunk pairings resolve toward the one
-     *  that makes the whole morph rotate least */
+    /** LOCAL sway (× shape anisotropy): material-weighted mean local
+     *  orientation difference of corresponded samples, MEASURED along each
+     *  candidate's optimal intrinsic DTW warp (objective-neutral - see
+     *  `productDtw`). Added to trunk candidate ranking/selection and to the
+     *  child relabel price - pairings whose corresponded material would
+     *  visibly rotate lose to same-orientation ones / drops */
     readonly sway: number;
 }
 

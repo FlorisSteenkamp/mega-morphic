@@ -109,7 +109,8 @@ function Page(props: Props) {
         toDraw, viewbox1, viewbox2, viewbox3, deduced, showSvgs, flipH, flipV,
         showWeights, glyph1Name, glyph2Name, clickFor,
         simplify, viewMat, morphFillOnly, poseCentroid, poseScale,
-        poseMoment, showPose, satScale, showDelay, pathWeights
+        poseMoment, showPose, satScale, showDelay, pathWeights,
+        morphT
     } = pageState;
     const { mats1, mats2, pathStr1, pathStr2 } = deduced;
 
@@ -129,13 +130,13 @@ function Page(props: Props) {
     const morphRef = useRef<MorphEntry[] | null>(null);
     const morphMarksRef = useRef<FeatureMark[] | null>(null);
     const morphPoseRef = useRef<PoseRamp | null>(null);
-    const [morphT, setMorphT] = React.useState(0);  // slider value 0..100
+    // const [morphT, setMorphT] = React.useState(0);  // slider value 0..100
     const [showNeedle, setShowNeedle] = React.useState(false);
 
     const refPageData = useRef<PageData>(null);
     const pageData: PageData = {
         props, svgRef1, svgRef2, svgRef3, morphRef, morphMarksRef,
-        morphPoseRef, morphT
+        morphPoseRef//, morphT
     };
     refPageData.current = pageData;
 
@@ -251,7 +252,8 @@ function Page(props: Props) {
             event: Event, value: number | number[], activeThumb: number) {
 
         const t = value as number;
-        setMorphT(t);
+        // setMorphT(t);
+        upd(pageState, { morphT: t })
         drawMorph(refPageData, t / 100);
     }
 

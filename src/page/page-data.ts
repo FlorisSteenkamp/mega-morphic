@@ -14,7 +14,7 @@ interface PageData {
     readonly morphMarksRef: React.RefObject<FeatureMark[] | null>,
     /** pose ramp of the current morph (set together with morphRef) */
     readonly morphPoseRef: React.RefObject<PoseRamp | null>,
-    readonly morphT: number;
+    // readonly morphT: number;
 }
 
 

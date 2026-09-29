@@ -11,6 +11,7 @@ import { getSkeletonBeziers } from '../../morph/fat-branch/get-fat-branch-tree.j
 import { totalLength$ } from '../../morph/fs/total-length.js';
 import { drawBeziersAsSinglePath } from '../../draw/draw-beziers-as-single-path.js';
 import { drawAlignSteps, distToPss, svgGroup } from './align-viz.js';
+import { matchColors } from '../events/match-colors.js';
 
 
 /** Two-click selection state (debug tool - module scope suffices). */
@@ -18,13 +19,25 @@ let selA: FatBranch | undefined;
 let selB: FatBranch | undefined;
 
 
+/** A matched pair as a click target: its per-side selection identity
+ *  branches + its DFS-preorder index (= the match view's color index). */
+interface PairSel {
+    readonly mp: MatchedPath;
+    readonly brA: FatBranch;
+    readonly brB: FatBranch;
+    readonly idx: number;
+}
+
+
 /**
- * Two-click child-pair DTW: a click on svg1/svg2 selects the nearest child
- * branch of that tree (or the TRUNK, via its skeleton); once both sides are
- * selected the pair is priced FRESH with the current weights using the
- * SEGMENT matcher's actual economics (`evalChildPair`) and the sub-DTW's
- * alignment is drawn on both svgs. Selecting both trunks shows the WINNING
- * trunk pair instead (actual routes + coverage).
+ * Two-click child-pair DTW: a click on svg1/svg2 selects the nearest
+ * MATCHED route piece (the material the match view paints - the pair's
+ * whole route is highlighted and its selection identity is the pair's own
+ * branch) or, when an unmatched branch's skeleton is nearer, that branch;
+ * once both sides are selected the pair is priced FRESH with the current
+ * weights using the SEGMENT matcher's actual economics (`evalChildPair`)
+ * and the sub-DTW's alignment is drawn on both svgs. Selecting both trunks
+ * shows the WINNING trunk pair instead (actual routes + coverage).
  */
 function logChildDtw(
         shapeIdx: 1 | 2,
@@ -39,29 +52,66 @@ function logChildDtw(
         }
 
         const tree = shapeIdx === 1 ? trees.tree1 : trees.tree2;
-        const children = descendantsOf(tree);
+        const pm = _debug_.elems.pathMatchResult[0];
+        const pairs = pm === undefined
+            ? []
+            : pairsOf(pm.trunk, trees.tree1, trees.tree2);
 
-        // the trunk competes via its skeleton line (its pss span the
-        // whole glyph and would hijack every click)
+        // matched route pieces first (they are what the match view paints;
+        // on a covered-edge tie the matched interpretation wins), then
+        // unmatched branches via their skeletons - one uniform metric
         let nearest: FatBranch = tree;
-        let bestD = distToPss(p, getSkeletonBeziers(tree));
-        for (const br of children) {
-            const d = distToPss(p, br.pss);
-            if (d < bestD) { bestD = d; nearest = br; }
+        let hitPair: PairSel | undefined;
+        let bestD = Infinity;
+        for (const pair of pairs) {
+            const pieces = shapeIdx === 1
+                ? pair.mp.piecesA : pair.mp.piecesB;
+            for (const piece of pieces) {
+                const d = distToPss(p, pieceSkeleton(piece));
+                if (d < bestD) {
+                    bestD = d;
+                    hitPair = pair;
+                    nearest = shapeIdx === 1 ? pair.brA : pair.brB;
+                }
+            }
+        }
+        for (const br of [tree, ...descendantsOf(tree)]) {
+            const d = distToPss(p, getSkeletonBeziers(br));
+            if (d < bestD) { bestD = d; hitPair = undefined; nearest = br; }
         }
 
         if (shapeIdx === 1) { selA = nearest; } else { selB = nearest; }
-        // detection is skeleton-based for the trunk, but the highlight
-        // shows its REGION outline (filling the skeleton is meaningless)
-        highlight(g, nearest.pss,
-            shapeIdx === 1 ? 'red' : 'green', showDelay);
+
+        const color = shapeIdx === 1 ? 'red' : 'green';
+        if (hitPair !== undefined) {
+            // the pair's whole matched route (covered slices only)
+            const pieces = shapeIdx === 1
+                ? hitPair.mp.piecesA : hitPair.mp.piecesB;
+            highlight(g, pieces.flatMap(pieceSkeleton),
+                `thin35 ${color} nofill`, showDelay);
+        } else if (nearest === tree) {
+            // the trunk's pss span ~the whole glyph - show its skeleton
+            highlight(g, getSkeletonBeziers(tree),
+                `thin35 ${color} nofill`, showDelay);
+        } else {
+            highlight(g, nearest.pss, `thin20 ${color} fill25`, showDelay);
+        }
+
+        const what = hitPair !== undefined
+            ? hitPair.idx === 0
+                ? 'the TRUNK pair route'
+                : `matched pair #${hitPair.idx} (${
+                    matchColors[hitPair.idx % matchColors.length]})`
+            : nearest === tree
+            ? 'the TRUNK'
+            : 'an unmatched branch';
 
         if (selA === undefined || selB === undefined) {
-            console.log(`selected a ${nearest === tree ? 'TRUNK' : 'child'} ` +
-                `on svg${shapeIdx} - ` +
+            console.log(`selected ${what} on svg${shapeIdx} - ` +
                 `now click a branch on svg${shapeIdx === 1 ? 2 : 1}`);
             return;
         }
+        console.log(`selected ${what} on svg${shapeIdx}`);
 
         if (selA === trees.tree1 && selB === trees.tree2) {
             logTrunkPair(showDelay);
@@ -270,6 +320,39 @@ function summarize(ops: PathChildOp[]): Record<PathChildOp['type'], number> {
 }
 
 
+/** The covered skeleton slice of a matched path piece. */
+function pieceSkeleton(piece: PathPiece): number[][][] {
+    return getSkeletonBeziers(piece.branch)
+        .slice(piece.fromEdge, piece.toEdge);
+}
+
+
+/**
+ * All matched pairs in the same DFS preorder as `buildMorphEntries` (idx =
+ * match-view color index) with their per-side selection identity: the tree
+ * roots for the trunk pair, the matched pooled child's own branch
+ * otherwise (continuation children carry a synthesized edge whose branch
+ * is the entry segment's - `locate` resolves both).
+ */
+function pairsOf(
+        trunk: MatchedPath,
+        tree1: FatBranch,
+        tree2: FatBranch): PairSel[] {
+
+    const out: PairSel[] = [];
+    const walk = (mp: MatchedPath, brA: FatBranch, brB: FatBranch): void => {
+        out.push({ mp, brA, brB, idx: out.length });
+        for (const op of mp.children) {
+            if (op.type === 'match') {
+                walk(op.sub, op.a.edge.branch, op.b.edge.branch);
+            }
+        }
+    };
+    walk(trunk, tree1, tree2);
+    return out;
+}
+
+
 /** All descendant branches of the tree (trunk itself excluded). */
 function descendantsOf(root: FatBranch): FatBranch[] {
     const out: FatBranch[] = [];
@@ -287,10 +370,10 @@ function descendantsOf(root: FatBranch): FatBranch[] {
 function highlight(
         g: SVGGElement,
         pss: number[][][],
-        color: string,
+        classes: string,
         showDelay?: number): void {
 
-    const [$path] = drawBeziersAsSinglePath(g, pss, `thin20 ${color} fill25`);
+    const [$path] = drawBeziersAsSinglePath(g, pss, classes);
     if ($path !== undefined && showDelay) {
         setTimeout(() => $path.remove(), showDelay);
     }

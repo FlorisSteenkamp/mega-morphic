@@ -46,7 +46,7 @@ function loadDeducedProps(
             simplify,
             satScale,
             maxCurviness: 0.25,
-            maxLength: 40,
+            maxLength: 10,
             angleIncrement: 15,
             simplifyTolerance: 2**-5
         };

@@ -10,8 +10,6 @@ import { sampleSegGraph } from './sample-seg-graph.js';
 import { productDtw } from './product-dtw.js';
 import { alignSeq } from '../match-paths/align-seq.js';
 import { wrapAngle } from '../intrinsic-skeleton/wrap-angle.js';
-import { unwrappedChordAngles } from '../intrinsic-skeleton/unwrapped-chord-angles.js';
-import { totalLength$ } from '../fs/total-length.js';
 import { sum } from '../../utils/sum.js';
 import { mean } from '../../utils/mean.js';
 
@@ -101,6 +99,7 @@ interface TrunkCandDebug {
     readonly dpTotal: number;
     /** cheap child-consistency estimate used in the ranking */
     readonly cheap: number;
+    /** local sway measured along the candidate's intrinsic warp */
     readonly sway: number;
     /** stage-2 rank = dp + sway + cheap */
     readonly rank: number;
@@ -124,15 +123,15 @@ interface SegMatchResult {
 
 
 /**
- * Hierarchical segment matching (the segment-graph analog of `matchPaths`):
- * the trunk pair is the best freely-routed path pair (product DTW; routes
- * run leaf/fork to leaf/fork - terminal stretches beyond an end fork
- * compete as ordinary children), then the subtrees hanging off the two
- * routes are NW-aligned per side (position + angle + a pinned-start
- * product DTW as relabel cost; terminal children in fork-sweep seam order)
- * and matched pairs recurse. Score is diagnostic-grade: a matched child's
- * deeper subtrees are priced as covered-or-dropped inside its DTW rather
- * than by its own recursion.
+ * Hierarchical segment matching:
+ * the trunk pair is the best freely-routed path pair (product-graph DTW:
+ * DP states = pairs of samples, one per glyph; routes run leaf/fork to
+ * leaf/fork - terminal stretches beyond an end fork compete as ordinary
+ * children), then the subtrees hanging off the two routes are NW-aligned
+ * per side (position + angle + a pinned-start product DTW as relabel cost;
+ * terminal children in fork-sweep seam order) and matched pairs recurse.
+ * Score is diagnostic-grade: a matched child's deeper subtrees are priced
+ * as covered-or-dropped inside its DTW rather than by its own recursion.
  *
  * @param aniso mean shape anisotropy of the two glyphs (|c₂₀|/(Ixx+Iyy)):
  * scales the sway tie-break of the trunk orientation (0 = pose-blind)
@@ -145,21 +144,25 @@ function matchSegGraphs(
         weights: PathCostWeights,
         aniso = 0): SegMatchResult {
 
-    const δA = sampleSpacing(gA);
-    const δB = sampleSpacing(gB);
+    const δA = getSampleSpacing(gA);
+    const δB = getSampleSpacing(gB);
+
+    // local-sway measurement factor (rides every DTW, objective-neutral)
+    const swayW = weights.sway*aniso;
 
     const sA = sampleSegGraph(gA, unitA, TARGET_SAMPLES);
     const sB = sampleSegGraph(gB, unitB, TARGET_SAMPLES);
-    const pd = productDtw(sA, sB, weights);
+    const pd = productDtw(sA, sB, weights, swayW);
 
     /** Sub-DTW-free child-alignment estimate: relabel = position + angle +
      *  del·|Δmaterial|; drops at full price. The route DP is blind to child
      *  correspondence, which can dominate the recursive cost (a wrong end
      *  choice orphans whole subtrees) - this ranks end choices by it
      *  BEFORE spending recursion slots. */
-    const cheapChildCost = (
+    function cheapChildCost(
             chA: SegChild[], chB: SegChild[],
-            lenRA: number, lenRB: number): number => {
+            lenRA: number, lenRB: number): number {
+
         const cheapMatch = (a: SegChild, b: SegChild): number =>
             terminalGated(a, b) ? Infinity
             : posCostOf(a, b, lenRA, lenRB, unitA, unitB, weights) +
@@ -171,16 +174,18 @@ function matchSegGraphs(
             cost += alignSeq(seqOf(chA, side), seqOf(chB, side),
                 cheapMatch, drop, drop).cost;
         }
+
         return cost;
-    };
+    }
+
 
     /** builds the pair node for a matched route pair, recursively */
-    const buildPair = (
+    function buildPair(
             scopeA: Segment[],
             rA: RouteStep[],
             scopeB: Segment[],
             rB: RouteStep[],
-            shapeCost: number): SegMatchedPair => {
+            shapeCost: number): SegMatchedPair {
 
         const chA = childrenOf(gA, scopeA, rA, unitA);
         const chB = childrenOf(gB, scopeB, rB, unitB);
@@ -196,13 +201,14 @@ function matchSegGraphs(
             let r = m.get(b);
             if (r === undefined) {
                 m.set(b, r = subDtwOf(
-                    gA, gB, unitA, unitB, δA, δB, weights, a, b));
+                    gA, gB, unitA, unitB, δA, δB, weights, swayW, a, b));
             }
             return r;
         };
 
         /** best sub-pair over the DTW's route candidates by RECURSIVE cost
-         *  (DP leaders first re-ranked by the cheap child estimate) */
+         *  (DP leaders first re-ranked by the cheap child estimate;
+         *  measured warp sway rides every rank/selection) */
         const evalBest = (a: SegChild, b: SegChild): SegMatchedPair => {
             const { dtw, subA, subB } = subOf(a, b);
             const leaders = dtw.candidates.slice(0, SUB_CHEAP_CANDS)
@@ -211,21 +217,25 @@ function matchSegGraphs(
                         routeSegments(subA, a.attachV, c.endA));
                     const rB = reverseRoute(
                         routeSegments(subB, b.attachV, c.endB));
-                    return { c, rA, rB, rank: c.totalCost + cheapChildCost(
-                        childrenOf(gA, a.segs, rA, unitA),
-                        childrenOf(gB, b.segs, rB, unitB),
-                        routeLenOf(rA), routeLenOf(rB)) };
+                    return { c, rA, rB,
+                        rank: c.totalCost + c.swayCost + cheapChildCost(
+                            childrenOf(gA, a.segs, rA, unitA),
+                            childrenOf(gB, b.segs, rB, unitB),
+                            routeLenOf(rA), routeLenOf(rB)) };
                 });
             leaders.sort((x, y) => x.rank - y.rank);
             const limit = leaders[0].rank + CAND_MARGIN;
             let best: SegMatchedPair | undefined;
+            let bestSel = Infinity;
             let evals = 0;
             for (const l of leaders) {
                 if (l.rank > limit || evals >= MAX_RECURSE_CANDS) { break; }
                 evals++;
                 const pair = buildPair(
                     a.segs, l.rA, b.segs, l.rB, l.c.shapeCost);
-                if (best === undefined || pair.cost < best.cost) {
+                const sel = pair.cost + l.c.swayCost;
+                if (sel < bestSel) {
+                    bestSel = sel;
                     best = pair;
                 }
             }
@@ -237,8 +247,11 @@ function matchSegGraphs(
 
         const matchCost = (a: SegChild, b: SegChild): number => {
             if (terminalGated(a, b)) { return Infinity; }
+            const { dtw } = subOf(a, b);
+            // + measured warp sway: a child pairing that would visibly
+            // rotate loses to a drop / a same-orientation partner
             return posCost(a, b) + angleCostOf(a, b, weights) +
-                subOf(a, b).dtw.totalCost;
+                dtw.totalCost + dtw.swayCost;
         };
         const delCost = (a: SegChild): number => dropCostOf(a, weights);
         const insCost = (b: SegChild): number => dropCostOf(b, weights);
@@ -275,33 +288,32 @@ function matchSegGraphs(
 
         return { routeA: rA, routeB: rB, shapeCost, cost, ops,
             ...(dp !== undefined ? { dp } : {}) };
-    };
+    }
 
     // Trunk candidates re-ranked by RECURSIVE cost too: orientation ties
     // (symmetric strokes) are invisible to the single-path DTW but decide
     // which side every child lands on - only recursion can break them right.
-    // The DP is also mirror-blind, so SWAY must enter BEFORE the beam cut
-    // (rank by dp + sway): symmetric shapes tie exactly on dp cost and the
-    // no-rotation pairing may otherwise not survive to the recursion at all.
+    // The DP objective is mirror-blind, so SWAY must enter BEFORE the beam
+    // cut (rank by dp + sway): symmetric shapes tie exactly on dp cost and
+    // the no-rotation pairing may otherwise not survive to the recursion.
+    // Sway = LOCAL orientation diff MEASURED along each candidate's optimal
+    // intrinsic warp (dtw swayCost) - a global route-mean angle diff cannot
+    // see local 180° rotation when stroke means cancel (M→N), and pricing
+    // sway INSIDE the DP objective lets the warp dodge it instead (gaps
+    // around rotating material) - measurement must stay objective-neutral.
     // Sway stays out of the reported cost (children/shape stay intrinsic).
     const routes = new Map<string, RouteStep[]>();
-    const means = new Map<string, number>();
-    const routeOf = (
-            g: SegGraph, tag: string, s: number, e: number): RouteStep[] => {
+    function routeOf(
+            g: SegGraph, tag: string, s: number, e: number): RouteStep[] {
+
         const k = `${tag}:${s}:${e}`;
         let r = routes.get(k);
-        if (r === undefined) { routes.set(k, r = routeSegments(g, s, e)); }
-        return r;
-    };
-    const meanOf = (
-            g: SegGraph, tag: string, s: number, e: number): number => {
-        const k = `${tag}:${s}:${e}`;
-        let m = means.get(k);
-        if (m === undefined) {
-            means.set(k, m = meanAngleOf(routeOf(g, tag, s, e)));
+        if (r === undefined) {
+            routes.set(k, r = routeSegments(g, s, e));
         }
-        return m;
-    };
+
+        return r;
+    }
 
     type Cand = (typeof pd.candidates)[number];
     const seen = new Set<string>();
@@ -309,18 +321,19 @@ function matchSegGraphs(
     for (const c of pd.candidates) {
         // both-routes-reversed is the SAME end correspondence - dedupe
         // (costs differ only via the posCost start/end asymmetry; the slot
-        // is worth more than that tie-break)
+        // is worth more than that tie-break. Sway is invariant under double
+        // reversal: both φ's shift by π.)
         const fwd = `${c.startA},${c.endA},${c.startB},${c.endB}`;
         const rev = `${c.endA},${c.startA},${c.endB},${c.startB}`;
         const key = fwd < rev ? fwd : rev;
         if (seen.has(key)) { continue; }
         seen.add(key);
-        // absolute-orientation swing of the pairing × rotation visibility
-        // (anisotropy) - a bar sweeps a huge disk, an O is rotation-invariant
-        const sway = weights.sway * aniso * abs(wrapAngle(
-            meanOf(gB, 'B', c.startB, c.endB) -
-            meanOf(gA, 'A', c.startA, c.endA))) / π;
-        ranked.push({ c, sway, rank: c.totalCost + sway, cheap: 0 });
+        ranked.push({
+            c,
+            sway: c.swayCost,
+            rank: c.totalCost + c.swayCost,
+            cheap: 0
+        });
     }
     ranked.sort((x, y) => x.rank - y.rank);
 
@@ -406,14 +419,20 @@ function targetFor(len: number, δ: number): number {
 }
 
 
-const segsLen = (segs: Segment[]): number => sum(segs.map(s => s.len));
+function getSegsLen(segs: Segment[]): number {
+    return sum(segs.map(s => s.len));
+}
 
-const routeLenOf = (r: RouteStep[]): number =>
-    sum(r.map(s => s.seg.len));
+
+function routeLenOf(r: RouteStep[]): number {
+    return sum(r.map(s => s.seg.len));
+}
+
 
 /** trunk-level sample spacing of a graph */
-const sampleSpacing = (g: SegGraph): number =>
-    segsLen(g.segments) / TARGET_SAMPLES;
+function getSampleSpacing(g: SegGraph): number {
+    return getSegsLen(g.segments) / TARGET_SAMPLES;
+}
 
 // Quadratic in the normalized mismatch: small slides along the trunk stay
 // cheap, long-distance moves get prohibitive. Positions are compared as
@@ -421,20 +440,33 @@ const sampleSpacing = (g: SegGraph): number =>
 // skew same-position children when total salience differs, e.g. M vs N,
 // worst exactly at route ends), rescaled by the mean normalized route
 // length so this reduces to the old (dA/uA - dB/uB)² when the two agree.
-const posCostOf = (
+function posCostOf(
         a: SegChild, b: SegChild,
         routeLenA: number, routeLenB: number,
         unitA: number, unitB: number,
-        w: PathCostWeights): number => {
+        w: PathCostWeights): number {
+
     const λ = (routeLenA/unitA + routeLenB/unitB) / 2;
+
     return w.position*(λ*(a.dist/routeLenA - b.dist/routeLenB))**2;
 };
 
-const angleCostOf = (a: SegChild, b: SegChild, w: PathCostWeights): number =>
-    w.angle*abs(wrapAngle(a.angle - b.angle))/π;
 
-const dropCostOf = (c: SegChild, w: PathCostWeights): number =>
-    w.delFloor + w.del*c.material;
+function angleCostOf(
+        a: SegChild,
+        b: SegChild,
+        w: PathCostWeights): number {
+
+    return w.angle*abs(wrapAngle(a.angle - b.angle))/π;
+}
+
+function dropCostOf(
+        c: SegChild,
+        w: PathCostWeights): number {
+
+    return w.delFloor + w.del*c.material;
+}
+
 
 // terminal (seam) children only match terminal children - regular ones
 // only regular (side/seam sequences correspond)
@@ -450,21 +482,6 @@ const seqOf = (ch: SegChild[], side: 1 | -1): SegChild[] => [
     ...ch.filter(c => c.terminal === (side === 1 ? 'end' : 'start'))
         .sort((x, y) => x.sweep! - y.sweep!)
 ];
-
-
-/** Arc-length-weighted mean chord angle - the route's absolute orientation. */
-function meanAngleOf(route: RouteStep[]): number {
-    const bz = composeRoute(route).skelPss;
-    const ψs = unwrappedChordAngles(bz);
-    let s = 0;
-    let total = 0;
-    for (let i = 0; i < bz.length; i++) {
-        const l = totalLength$(bz[i]);
-        s += ψs[i]*l;
-        total += l;
-    }
-    return total === 0 ? 0 : s/total;
-}
 
 
 /** Route steps → composed skeleton geometry (as composePieces). */
@@ -500,6 +517,7 @@ function subDtwOf(
         unitA: number, unitB: number,
         δA: number, δB: number,
         weights: PathCostWeights,
+        sway: number,
         a: SegChild, b: SegChild): SubDtw {
 
     const subA: SegGraph = {
@@ -507,10 +525,10 @@ function subDtwOf(
     const subB: SegGraph = {
         vertices: gB.vertices, segments: b.segs, attachOf: gB.attachOf };
     const smA = sampleSegGraph(subA, unitA,
-        targetFor(segsLen(a.segs), δA), a.attachV);
+        targetFor(getSegsLen(a.segs), δA), a.attachV);
     const smB = sampleSegGraph(subB, unitB,
-        targetFor(segsLen(b.segs), δB), b.attachV);
-    return { dtw: productDtw(smA, smB, weights), subA, subB };
+        targetFor(getSegsLen(b.segs), δB), b.attachV);
+    return { dtw: productDtw(smA, smB, weights, sway), subA, subB };
 }
 
 
@@ -520,7 +538,7 @@ interface ChildPairPrice {
     readonly gated: boolean;
     readonly positionCost: number;
     readonly angleCost: number;
-    /** pinned-start sub-DTW total (coverage-priced) */
+    /** pinned-start sub-DTW total incl. measured warp sway */
     readonly dtwCost: number;
     /** position + angle + dtw (the DP's relabel price; Infinity when gated) */
     readonly matchCost: number;
@@ -543,19 +561,21 @@ function priceChildPair(
         unitA: number, unitB: number,
         routeLenA: number, routeLenB: number,
         weights: PathCostWeights,
+        sway: number,
         a: SegChild, b: SegChild): ChildPairPrice {
 
     const { dtw, subA, subB } = subDtwOf(gA, gB, unitA, unitB,
-        sampleSpacing(gA), sampleSpacing(gB), weights, a, b);
+        getSampleSpacing(gA), getSampleSpacing(gB), weights, sway, a, b);
     const gated = terminalGated(a, b);
     const positionCost = posCostOf(
         a, b, routeLenA, routeLenB, unitA, unitB, weights);
     const angleCost = angleCostOf(a, b, weights);
     return {
         gated, positionCost, angleCost,
-        dtwCost: dtw.totalCost,
+        dtwCost: dtw.totalCost + dtw.swayCost,
         matchCost: gated
-            ? Infinity : positionCost + angleCost + dtw.totalCost,
+            ? Infinity
+            : positionCost + angleCost + dtw.totalCost + dtw.swayCost,
         deleteCost: dropCostOf(a, weights),
         insertCost: dropCostOf(b, weights),
         dtw, subA, subB
