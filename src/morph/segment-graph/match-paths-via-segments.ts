@@ -78,13 +78,8 @@ function toMatchedPath(
                     op.sub, false, gA, gB, unit1, unit2, weights)
             });
         } else if (op.type === 'delete') {
-            // continuation leftovers are not edge-rooted: skip (implied by
-            // the pieces' uncovered slices); edge-rooted drops keep an op
-            if (op.a.edgeRooted) {
-                children.push({
-                    type: 'delete', a: pooledOf(op.a, unit1, gA) });
-            }
-        } else if (op.b.edgeRooted) {
+            children.push({ type: 'delete', a: pooledOf(op.a, unit1, gA) });
+        } else {
             children.push({ type: 'insert', b: pooledOf(op.b, unit2, gB) });
         }
     }
@@ -175,13 +170,11 @@ function pooledOf(
         unit: number,
         g: SegGraph): PooledChild {
 
+    // best-effort real tree edge (debug tools read edge.branch identity/
+    // pss); otherwise a synthesized edge onto the entry segment's branch
+    const info = g.attachOf.get(c.entry.branch);
     return {
-        // the real tree edge for edge-rooted children; continuation
-        // children get a synthesized edge onto their source branch so
-        // debug tools can read edge.branch (identity, pss)
-        edge: (c.edgeRooted
-            ? g.attachOf.get(c.entry.branch)?.edge
-            : undefined) ?? {
+        edge: (info?.v === c.attachV ? info.edge : undefined) ?? {
             branch: c.entry.branch,
             distanceFromLeaf: c.dist,
             roundSalienceFromLeaf: c.material * unit*unit,

@@ -25,7 +25,7 @@ interface ChildLocation {
     /** the parent pair the child is pooled on */
     readonly pair: SegMatchedPair;
     /** 'inside subtree': the branch is buried in `child`'s hanging subtree */
-    readonly role: 'edge-rooted' | 'continuation' | 'inside subtree';
+    readonly role: 'direct' | 'inside subtree';
     /** the winning match's actual decision for this child */
     readonly outcome: { type: SegOp['type']; partner?: SegChild };
 }
@@ -130,9 +130,8 @@ function seqIdOf(c: SegChild): 1 | -1 {
 
 /**
  * Finds the branch among the winning match's pooled children (all children
- * appear in `ops` as match/delete/insert). Direct hits (the child IS the
- * branch's subtree, or its continuation leftover) win over merely containing
- * subtrees; edge-rooted wins over continuation.
+ * appear in `ops` as match/delete/insert). Direct hits (the child hangs
+ * through a segment of the branch) win over merely containing subtrees.
  */
 function locate(
         root: SegMatchedPair,
@@ -149,9 +148,7 @@ function locate(
                 : (op.type !== 'delete' ? op.b : undefined);
             if (c !== undefined) {
                 const role: ChildLocation['role'] =
-                    c.edgeRooted && c.entry.branch === br ? 'edge-rooted'
-                    : !c.edgeRooted && c.entry.branch === br
-                    ? 'continuation'
+                    c.entry.branch === br ? 'direct'
                     : 'inside subtree';
                 const outcome: ChildLocation['outcome'] =
                     op.type === 'match'
@@ -160,9 +157,7 @@ function locate(
                         : { type: op.type };
                 const loc: ChildLocation = { child: c, pair, role, outcome };
 
-                if (role === 'edge-rooted') {
-                    if (direct?.role !== 'edge-rooted') { direct = loc; }
-                } else if (role === 'continuation') {
+                if (role === 'direct') {
                     direct ??= loc;
                 } else if (containing === undefined &&
                         c.segs.some(s => s.branch === br)) {

@@ -5,15 +5,13 @@ import type { MorphEntry, MutableMorphEntry } from '../morph-entry.js';
 import type { AnchorPair } from '../align-branches.js';
 import type { MatchedPath } from '../match-paths/matched-path.js';
 import type { PathCostWeights } from '../match-paths/path-cost-weights.js';
-import type { EntryLoc, Trim } from '../place-topology.js';
 import type { PoseRamp, PoseComponents } from '../pose-ramp.js';
-import type { Segment, RouteStep } from '../segment-graph/segment.js';
+import type { Segment } from '../segment-graph/segment.js';
 import type { SegGraph } from '../segment-graph/seg-graph.js';
 import { getShapeArea } from 'flo-boolean';
 import { matchPathsViaSegments } from '../segment-graph/match-paths-via-segments.js';
 import { segGraphOf } from '../segment-graph/segment-graph.js';
-import { composeSegs, composeRouteGeom, runsOf } from '../segment-graph/compose-segs.js';
-import type { Run } from '../segment-graph/compose-segs.js';
+import { composeRouteGeom } from '../segment-graph/compose-segs.js';
 import { procrustes } from '../procrustes/procrustes-analysis.js';
 import { resolveMorphAt } from '../resolve-morph-at/resolve-morph-at.js';
 import { alignBranches, resampleAt } from '../align-branches.js';
@@ -22,7 +20,7 @@ import { getLastP } from '../fs/get-last-p.js';
 import { clamp } from '../../utils/clamp.js';
 import { matchColors } from '../../page/events/match-colors.js';
 import { nearestIdx } from '../nearest-idx.js';
-import { placeTopology, pushCollapsedEntry } from '../place-topology.js';
+import { placeTopology } from '../place-topology.js';
 import { getPolyBezierLength } from '../fs/get-poly-bezier-length.js';
 
 const { sqrt, sin, cos, round, PI: π } = Math;
@@ -94,52 +92,31 @@ function buildMorphEntries(
     const unit1 = sqrt(tree1.roundSalience);
     const unit2 = sqrt(tree2.roundSalience);
 
-    // every branch's graph segments, tip → junction (per tree)
-    const segsOf1 = branchSegsOf(gA);
-    const segsOf2 = branchSegsOf(gB);
-
     const entries: MutableMorphEntry[] = [];
-
-    /** entry location(s) of every fat branch (a branch may be covered by
-     *  several entries - trunk middle + matched terminal tip) */
-    const entryLoc = new Map<FatBranch, EntryLoc[]>();
 
     /** per entry: its resampled segment boundary points, per side */
     const bnds: { a?: number[][]; b?: number[][] }[] = [];
 
-    /** branches fully covered by a matched path (per tree) */
-    const onPath1 = new Set<FatBranch>();
-    const onPath2 = new Set<FatBranch>();
+    /** covered segment → owning entry index (per side; placeTopology adds
+     *  placed segments as glue hosts for chained uncovered neighbors) */
+    const owner1 = new Map<Segment, number>();
+    const owner2 = new Map<Segment, number>();
 
-    /** stub hosts: their leaf-side remainder retracts (per tree) */
-    const trims1 = new Map<FatBranch, Trim>();
-    const trims2 = new Map<FatBranch, Trim>();
-
-    // Every segment covered by SOME matched route (per tree): bypassed
-    // slices that another pair covers must NOT also retract as stubs/trims.
+    // Every segment covered by SOME matched route (per tree) - the rest
+    // retracts/grows as per-segment collapsed entries.
     const covered1 = coveredSegsOf(pm.trunk, 'a');
     const covered2 = coveredSegsOf(pm.trunk, 'b');
 
     let pairIdx = 0;
-    /**
-     * bypassed trunk-stub entries per HOST BRANCH (glue candidates for
-     * children hanging off the bypassed stretch), per side
-     */
-    const stubEntries1 = new Map<FatBranch, number[]>();
-    const stubEntries2 = new Map<FatBranch, number[]>();
 
-    buildPair(pm.trunk, true);
+    buildPair(pm.trunk);
 
-    // Whatever no matched path covers collapses: whole unmatched subtrees
-    // in full, stub hosts trimmed to their leaf-side remainders.
-    placeTopology(gA.parentOf, segsOf1,
-        topoSetOf(segsOf1, tree1, onPath1, trims1), 'a',
-        'red thin35 nofill', capSign, trims1, entryLoc, bnds, entries,
-        stubEntries1, marks);
-    placeTopology(gB.parentOf, segsOf2,
-        topoSetOf(segsOf2, tree2, onPath2, trims2), 'b',
-        'green thin35 nofill', capSign, trims2, entryLoc, bnds, entries,
-        stubEntries2, marks);
+    // Whatever no matched route covers collapses onto its coverage-side
+    // vertex, closest-to-coverage first.
+    placeTopology(gA, covered1, owner1, 'a',
+        'red thin35 nofill', capSign, bnds, entries, marks);
+    placeTopology(gB, covered2, owner2, 'b',
+        'green thin35 nofill', capSign, bnds, entries, marks);
 
     if (poseOut !== undefined) {
         poseOut.ramp = applyProcrustes(
@@ -153,9 +130,7 @@ function buildMorphEntries(
      * Builds the entry for one matched path pair, then recursively its
      * matched children's entries (glued onto this one). Returns the index.
      */
-    function buildPair(
-            mp: MatchedPath,
-            isTrunk: boolean): number {
+    function buildPair(mp: MatchedPath): number {
 
         const i = pairIdx++;
         const idx = entries.length;
@@ -163,10 +138,8 @@ function buildMorphEntries(
         const gA = composeRouteGeom(mp.routeA);
         const gB = composeRouteGeom(mp.routeB);
 
-        registerRoute(entryLoc, mp.routeA, 'a', idx, tree1, onPath1,
-            trims1, covered1, segsOf1, isTrunk);
-        registerRoute(entryLoc, mp.routeB, 'b', idx, tree2, onPath2,
-            trims2, covered2, segsOf2, isTrunk);
+        for (const st of mp.routeA) { owner1.set(st.seg, idx); }
+        for (const st of mp.routeB) { owner2.set(st.seg, idx); }
 
         // Feature anchors: ALL matched child forks along the paths (incl.
         // absorbed stretches - the matcher pooled them).
@@ -212,19 +185,11 @@ function buildMorphEntries(
             classes: `${matchColors[i % matchColors.length]} thin35 nofill`,
         });
 
-        // Bypassed trunk tip stretches retract into the trunk composite.
-        if (isTrunk) {
-            pushTrunkStubs(capSign, entries, bnds, marks, mp.routeA, 'a', idx, bndA,
-                'red thin35 nofill', stubEntries1, covered1, segsOf1);
-            pushTrunkStubs(capSign, entries, bnds, marks, mp.routeB, 'b', idx, bndB,
-                'green thin35 nofill', stubEntries2, covered2, segsOf2);
-        }
-
         // Children: build each matched sub-pair and glue it to this entry -
         // at the aligned fork anchor when kept, else at the per-frame
         // nearest boundary.
         matchOps.forEach((op, n) => {
-            const childIdx = buildPair(op.sub, false);
+            const childIdx = buildPair(op.sub);
 
             const k = al.anchorIdx[n];
             if (k >= 0) {
@@ -257,65 +222,6 @@ function buildMorphEntries(
 }
 
 
-/** Registers a route's branches: entry location for all, fully-covered
- *  ones as on-path, partially-covered hosts with their trim (shrunk past
- *  any segments another matched pair covers). */
-function registerRoute(
-        entryLoc: Map<FatBranch, EntryLoc[]>,
-        route: RouteStep[],
-        side: 'a' | 'b',
-        idx: number,
-        root: FatBranch,
-        onPath: Set<FatBranch>,
-        trims: Map<FatBranch, Trim>,
-        covered: Set<Segment>,
-        segsOf: Map<FatBranch, Segment[]>,
-        isTrunk: boolean): void {
-
-    const runs = runsOf(route);
-    const isFull = (r: Run): boolean =>
-        r.segs.length === segsOf.get(r.branch)!.length;
-
-    // The absorber must stay mapped to THIS entry (full runs are
-    // never re-mapped by placeTopology). Fork-terminated routes may have
-    // no full run - fall back to the longest one.
-    const absorber = (
-        runs.find(isFull) ??
-            runs.reduce((a, b) => edgeSpan(b) > edgeSpan(a) ? b : a)
-    ).branch;
-
-    for (const r of runs) {
-        let locs = entryLoc.get(r.branch);
-        if (locs === undefined) { entryLoc.set(r.branch, locs = []); }
-        locs.push({ idx, side });
-        // ALL trunk runs' remainders are handled by pushTrunkStubs (the
-        // trunk may cross a branch between two interior forks, leaving
-        // remainders on BOTH sides - trims are one-sided)
-        if (isTrunk) {
-            onPath.add(r.branch);
-            continue;
-        }
-        // shrink the leaf-side remainder past covered (matched) segments
-        const bSegs = segsOf.get(r.branch)!;
-        let j = bSegs.indexOf(r.segs[0]);
-        while (j > 0 && covered.has(bSegs[j - 1])) { j--; }
-        if (isFull(r) || r.branch === root || j === 0) {
-            // Full, the trunk (stubs handled separately), or an empty
-            // stub - nothing left to retract via placeTopology.
-            onPath.add(r.branch);
-        } else {
-            trims.set(r.branch, { keep: bSegs.slice(0, j), absorber });
-        }
-    }
-}
-
-
-/** A run's covered skeleton-edge count. */
-function edgeSpan(r: Run): number {
-    return r.segs[r.segs.length - 1].toEdge - r.segs[0].fromEdge;
-}
-
-
 /** Every branch's graph segments, tip → junction order. */
 function branchSegsOf(g: SegGraph): Map<FatBranch, Segment[]> {
     const out = new Map<FatBranch, Segment[]>();
@@ -344,66 +250,6 @@ function coveredSegsOf(
     };
     walk(trunk);
     return out;
-}
-
-
-/** Collapse entries for the trunk route's bypassed stretches (each
- *  run's uncovered remainders - the trunk may cross branches between
- *  interior forks): the tip-side stub in its own orientation, the
- *  junction-side stub reversed - both ending at their fork knot, glued
- *  onto the trunk pair's entry. Segments covered by a matched pair
- *  (terminal children) are skipped. */
-function pushTrunkStubs(
-        capSign: number,
-        entries: MutableMorphEntry[],
-        bnds: { a?: number[][]; b?: number[][] }[],
-        marks: FeatureMark[],
-        route: RouteStep[],
-        side: 'a' | 'b',
-        pairIdx_: number,
-        bnd: number[][],
-        classes: string,
-        stubEntries: Map<FatBranch, number[]>,
-        covered: Set<Segment>,
-        segsOf: Map<FatBranch, Segment[]>): void {
-
-    for (const r of runsOf(route)) {
-        const bSegs = segsOf.get(r.branch)!;
-        const stubs: { segs: Segment[]; reversed: boolean }[] = [];
-
-        // tip-side remainder: keep only the uncovered prefix
-        let f = bSegs.indexOf(r.segs[0]);
-        while (f > 0 && covered.has(bSegs[f - 1])) { f--; }
-        if (f > 0) {
-            stubs.push({ segs: bSegs.slice(0, f), reversed: false });
-        }
-        // junction-side remainder: uncovered suffix
-        let t = bSegs.indexOf(r.segs[r.segs.length - 1]) + 1;
-        while (t < bSegs.length && covered.has(bSegs[t])) { t++; }
-        if (t < bSegs.length) {
-            stubs.push({ segs: bSegs.slice(t), reversed: true });
-        }
-
-        for (const s of stubs) {
-            const g = composeSegs(s.segs, s.reversed);
-            const junction = getLastP(g.bz);
-            const k = nearestIdx(bnd, junction);
-            let list = stubEntries.get(r.branch);
-            if (list === undefined) {
-                stubEntries.set(r.branch, list = []);
-            }
-            list.push(pushCollapsedEntry(
-                g.bz, g.rd, g.edges, side, classes, capSign,
-                { e1: pairIdx_, k1: k, e2: pairIdx_, k2: k },
-                bnds, entries));
-            marks?.push({
-                [side === 'a' ? 'pA' : 'pB']: bnd[k],
-                classes: `${side === 'a' ? 'red' : 'green'} nostroke`,
-                dot: true,
-                at: { e: pairIdx_, k1: k, k2: k }
-            });
-        }
-    }
 }
 
 
@@ -540,28 +386,6 @@ function wrapModPi(x: number): number {
     if (r > π / 2) { r -= π; }
     if (r < -π / 2) { r += π; }
     return r;
-}
-
-
-/** All graph branches not fully covered by a matched path (stub hosts
- *  keep their trim: only the leaf-side remainder collapses). */
-function topoSetOf(
-        segsOf: Map<FatBranch, Segment[]>,
-        root: FatBranch,
-        onPath: Set<FatBranch>,
-        trims: Map<FatBranch, Trim>): Set<FatBranch> {
-
-    const out = new Set<FatBranch>();
-    for (const br of segsOf.keys()) {
-        if (!onPath.has(br)) { out.add(br); }
-    }
-
-    // A trim without a topo placement would be ignored; a topo stub host
-    // without its trim would collapse in full - keep them consistent.
-    for (const host of trims.keys()) { out.add(host); }
-    out.delete(root);
-
-    return out;
 }
 
 

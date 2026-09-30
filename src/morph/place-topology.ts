@@ -1,113 +1,102 @@
-import type { FatBranch } from './fat-branch/fat-branch.js';
 import type { Glue, MutableMorphEntry } from './morph-entry.js';
 import type { Segment } from './segment-graph/segment.js';
+import type { SegGraph } from './segment-graph/seg-graph.js';
 import { composeSegs } from './segment-graph/compose-segs.js';
 import { buildSleeveSides, skeletonKnots } from './anchored-sleeves.js';
 import { getLastP } from './fs/get-last-p.js';
 import { nearestIdx } from './nearest-idx.js';
 
-
-/**
- * Which entry a fat branch (slice) lives in, and on which side ('a' =
- * shape 1). A branch can be covered by SEVERAL entries (e.g. a
- * fork-terminated trunk covers its middle, a matched terminal pair its
- * tip) - consumers keep one list per branch and pick by boundary distance.
- */
-type EntryLoc = {
-    idx: number;
-    side: 'a' | 'b'
-}
+const { min, hypot } = Math;
 
 
 /**
- * A skipped branch's absorbed remainder: only `keep` (its tip-side
- * segments) still retracts; the rest lives in the matched `absorber`'s
- * composite entry.
- */
-type Trim = {
-    keep: Segment[]; absorber: FatBranch
-}
-
-
-/**
- * Places an entry for each unmatched branch, ancestors first: it collapses
- * onto its own junction (skeleton, radii and boundary sleeves all
+ * Places a collapsed entry for every segment no matched route covers,
+ * closest-to-coverage first: the segment collapses onto its junction (the
+ * vertex on its coverage side - skeleton, radii and boundary sleeves all
  * degenerate to that point in the other frame) while its glue keeps the
- * junction riding the parent's drawn skeleton throughout the morph. Chained
- * unmatched branches glue to the (already placed) unmatched parent's entry
- * the same way. A branch whose junction-side stretch was absorbed by a
- * composited matched descendant is TRIMMED to its unmatched remainder and
- * retracts into the absorption fork on the absorber's entry instead.
- * `side` is the tree's own frame ('a' = shape 1 for deleted, 'b' = shape 2
- * for inserted).
+ * junction riding the owning entry's drawn boundary throughout the morph.
+ * Chained uncovered segments glue to the (already placed) neighbor's entry
+ * the same way. `side` is the graph's own frame ('a' = shape 1 for
+ * deleted, 'b' = shape 2 for inserted).
  */
 function placeTopology(
-        /** child branch → parent (the segment graph's tree relations) */
-        parentOf: Map<FatBranch, FatBranch>,
-        /** every branch's graph segments, tip → junction */
-        segsOf: Map<FatBranch, Segment[]>,
-        topoSet: Set<FatBranch>,
+        g: SegGraph,
+        /** segments covered by some matched route (this side) */
+        covered: Set<Segment>,
+        /** covered segment → its entry index; gains placed segments */
+        owner: Map<Segment, number>,
         side: 'a' | 'b',
         classes: string,
         capSign: number,
-        trims: Map<FatBranch, Trim>,
-        entryLoc: Map<FatBranch, EntryLoc[]>,
         bnds: { a?: number[][]; b?: number[][] }[],
         entries: MutableMorphEntry[],
-        /** bypassed trunk-stub entries per host branch: glue candidates for
-         *  children hanging off the bypassed stretch */
-        stubEntries: Map<FatBranch, number[]> = new Map(),
         /** attachment-point dot marks (own frame) */
         marks?: { pA?: number[]; pB?: number[]; classes: string;
             dot?: boolean;
             at?: { e: number; k1: number; k2: number } }[]): void {
 
-    // Ancestors before descendants: chained unmatched children glue to
-    // their already-placed parent's entry.
-    const depthOf = (br: FatBranch): number => {
-        let d = 0;
-        for (let p = parentOf.get(br); p !== undefined;
-            p = parentOf.get(p)) { d++; }
-        return d;
-    };
-    for (const child of [...topoSet].sort(
-            (x, y) => depthOf(x) - depthOf(y))) {
-        const parent = parentOf.get(child);
-        if (parent !== undefined) { place(parent, child); }
+    const adj = new Map<number, Segment[]>();
+    for (const s of g.segments) {
+        for (const v of [s.v0, s.v1]) {
+            let list = adj.get(v);
+            if (list === undefined) { adj.set(v, list = []); }
+            list.push(s);
+        }
     }
 
-    function place(parent: FatBranch, child: FatBranch): void {
-        // Absorbed junction-side stretch: keep only the tip-side remainder
-        // and retract it into the absorption fork on the absorber's entry.
-        let glueTo = parent;
-        let segs = segsOf.get(child) ?? [];
-        const trim = trims.get(child);
-        if (trim !== undefined) {
-            segs = trim.keep;
-            glueTo = trim.absorber;
+    // BFS hop distance from the covered region (matched routes form a
+    // connected subtree, so every vertex is reached)
+    const dist = new Map<number, number>();
+    const queue: number[] = [];
+    for (const s of covered) {
+        for (const v of [s.v0, s.v1]) {
+            if (!dist.has(v)) { dist.set(v, 0); queue.push(v); }
         }
-        if (segs.length === 0) { return; }
+    }
+    for (let qi = 0; qi < queue.length; qi++) {
+        const v = queue[qi];
+        const d = dist.get(v)!;
+        for (const s of adj.get(v) ?? []) {
+            if (covered.has(s)) { continue; }
+            const w = s.v0 === v ? s.v1 : s.v0;
+            if (!dist.has(w)) { dist.set(w, d + 1); queue.push(w); }
+        }
+    }
 
-        const { bz, rd: radii, edges } = composeSegs(segs);
+    const dOf = (s: Segment): number =>
+        min(dist.get(s.v0) ?? Infinity, dist.get(s.v1) ?? Infinity);
 
-        const junction = getLastP(bz);  // fork center / absorption fork
+    // closer-to-coverage first: a segment's coverage-side neighbors are
+    // already placed when it is (chained glue)
+    const pending = g.segments
+        .filter(s => !covered.has(s) && dOf(s) < Infinity)
+        .sort((x, y) => dOf(x) - dOf(y));
 
-        // A chained child's fork may lie on its parent's ABSORBED stretch -
-        // then the absorber's composite owns that boundary, not the trimmed
-        // remainder. Pick whichever candidate's boundary the junction is
-        // actually on (the true one matches exactly). Children of the ROOT
-        // may also sit on a bypassed trunk stub.
+    for (const seg of pending) { place(seg); }
+
+    function place(seg: Segment): void {
+        const d0 = dist.get(seg.v0) ?? Infinity;
+        const d1 = dist.get(seg.v1) ?? Infinity;
+        // junction = the coverage-side vertex (collapse target)
+        const jV = d0 <= d1 ? seg.v0 : seg.v1;
+
+        // junction LAST (pushCollapsedEntry collapses onto the last point)
+        const { bz, rd: radii, edges } = composeSegs([seg], seg.v0 === jV);
+
+        const junction = getLastP(bz);
+
+        // glue candidates: entries owning a junction-incident segment -
+        // matched entries first, then earlier-placed neighbors (ties on
+        // boundary distance prefer matched)
         const candidateEs: number[] = [];
-        const candBranches: FatBranch[] = [glueTo];
-        const pTrim = trims.get(parent);
-        if (glueTo === parent && pTrim !== undefined) {
-            candBranches.push(pTrim.absorber);
-        }
-        for (const cand of candBranches) {
-            for (const loc of entryLoc.get(cand) ?? []) {
-                candidateEs.push(loc.idx);
+        for (const coveredFirst of [true, false]) {
+            for (const t of adj.get(jV) ?? []) {
+                const e = owner.get(t);
+                if (t !== seg && e !== undefined &&
+                    covered.has(t) === coveredFirst) {
+                    candidateEs.push(e);
+                }
             }
-            candidateEs.push(...(stubEntries.get(cand) ?? []));
         }
 
         let bestAt: { e: number; k: number } | undefined;
@@ -116,7 +105,7 @@ function placeTopology(
             const bn = bnds[e][side];
             if (bn === undefined) { continue; }
             const k = nearestIdx(bn, junction);
-            const d = Math.hypot(
+            const d = hypot(
                 bn[k][0] - junction[0], bn[k][1] - junction[1]);
             if (d < bestD) { bestD = d; bestAt = { e, k }; }
         }
@@ -135,12 +124,9 @@ function placeTopology(
             at: { e: bestAt.e, k1: bestAt.k, k2: bestAt.k }
         });
 
-        entryLoc.set(child, [{
-            idx: pushCollapsedEntry(
-                bz, radii, edges, side, classes, capSign, glue,
-                bnds, entries),
-            side
-        }]);
+        owner.set(seg, pushCollapsedEntry(
+            bz, radii, edges, side, classes, capSign, glue,
+            bnds, entries));
     }
 }
 
@@ -216,5 +202,4 @@ function collapseTo(beziers: number[][][], pt: number[]): number[][][] {
 }
 
 
-export type { EntryLoc, Trim }
 export { placeTopology, pushCollapsedEntry }

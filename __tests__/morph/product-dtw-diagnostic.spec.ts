@@ -14,10 +14,9 @@ import { productDtw } from '../../src/morph/segment-graph/product-dtw.js';
 import { matchSegGraphs } from '../../src/morph/segment-graph/match-seg-graphs.js';
 import { buildMorphEntries } from '../../src/morph/build-morph-entries/build-morph-entries.js';
 import { resolveMorphAt } from '../../src/morph/resolve-morph-at/resolve-morph-at.js';
-import { boolean, getShapeArea } from 'flo-boolean';
 import { parseSvgFont } from '../../src/load-svg/load-svg-font.js';
 
-const { sqrt } = Math;
+const { sqrt, abs, max, min, hypot } = Math;
 
 const options: MatOptions = {
     applySat: false,
@@ -48,20 +47,105 @@ function loadGlyph(glyphName: string): {
     };
 }
 
-function shapeArea(loops: number[][][][]): number {
-    return Math.abs(loops.reduce((s, l) => s + getShapeArea(l), 0));
+function evalBezier(ps: number[][], t: number): number[] {
+    let q = ps;
+    while (q.length > 1) {
+        const next: number[][] = [];
+        for (let i = 0; i + 1 < q.length; i++) {
+            next.push([
+                q[i][0]*(1 - t) + q[i + 1][0]*t,
+                q[i][1]*(1 - t) + q[i + 1][1]*t
+            ]);
+        }
+        q = next;
+    }
+    return q[0];
 }
 
-function union(outlines: number[][][][]): number[][][][] {
-    const debugSave = (globalThis as any)._debug_;
-    (globalThis as any)._debug_ = undefined;
-    // drop degenerate (near-zero-area) loops - they break flo-boolean
-    const solid = outlines.filter(l => Math.abs(getShapeArea(l)) > 1);
-    try {
-        return boolean('OR', solid);
-    } finally {
-        (globalThis as any)._debug_ = debugSave;
+function polygonize(loop: number[][][], perCurve = 8): number[][] {
+    const out: number[][] = [];
+    for (const ps of loop) {
+        for (let i = 0; i < perCurve; i++) {
+            out.push(evalBezier(ps, i / perCurve));
+        }
     }
+    return out;
+}
+
+/** Even-odd containment over all loops (counters subtract). */
+function insideLoops(p: number[], polys: number[][][]): boolean {
+    let inside = false;
+    for (const poly of polys) {
+        for (let i = 0, j = poly.length - 1; i < poly.length; j = i++) {
+            const [xi, yi] = poly[i];
+            const [xj, yj] = poly[j];
+            if ((yi > p[1]) !== (yj > p[1]) &&
+                p[0] < (xj - xi)*(p[1] - yi)/(yj - yi) + xi) {
+                inside = !inside;
+            }
+        }
+    }
+    return inside;
+}
+
+function distToPolys(p: number[], polys: number[][][]): number {
+    let d = Infinity;
+    for (const poly of polys) {
+        for (let i = 0, j = poly.length - 1; i < poly.length; j = i++) {
+            const a = poly[j];
+            const b = poly[i];
+            const dx = b[0] - a[0];
+            const dy = b[1] - a[1];
+            const L2 = dx*dx + dy*dy;
+            const t = L2 === 0 ? 0 : max(0, min(1,
+                ((p[0] - a[0])*dx + (p[1] - a[1])*dy)/L2));
+            d = min(d, hypot(p[0] - (a[0] + t*dx), p[1] - (a[1] + t*dy)));
+        }
+    }
+    return d;
+}
+
+/** Sampled containment of the entry outlines vs the true glyph: max
+ *  outside distance of outline samples (spill) + uncovered safely-interior
+ *  grid points (holes). */
+function containment(
+        outlines: number[][][][],
+        glyphLoops: number[][][][]): {
+        maxOutside: number; holes: number; tested: number } {
+
+    const glyphPolys = glyphLoops.map(l => polygonize(l, 16));
+    const outlinePolys = outlines.map(l => polygonize(l));
+
+    let maxOutside = 0;
+    for (const poly of outlinePolys) {
+        for (const p of poly) {
+            if (!insideLoops(p, glyphPolys)) {
+                maxOutside = max(maxOutside, distToPolys(p, glyphPolys));
+            }
+        }
+    }
+
+    const all = glyphPolys.flat();
+    const xs = all.map(p => p[0]);
+    const ys = all.map(p => p[1]);
+    const [x0, x1] = [min(...xs), max(...xs)];
+    const [y0, y1] = [min(...ys), max(...ys)];
+    let holes = 0;
+    let tested = 0;
+    const N = 40;
+    for (let i = 0; i <= N; i++) {
+        for (let j = 0; j <= N; j++) {
+            const p = [x0 + (x1 - x0)*i/N, y0 + (y1 - y0)*j/N];
+            if (!insideLoops(p, glyphPolys) ||
+                distToPolys(p, glyphPolys) < 3) { continue; }
+            tested++;
+            if (!outlinePolys.some(poly => insideLoops(p, [poly]))) {
+                holes++;
+            }
+        }
+    }
+
+    return { maxOutside, holes, tested };
 }
 
 function comparePair(nameA: string, nameB: string) {
@@ -156,15 +240,21 @@ describe('product-graph DTW vs current matcher (score-only)', () => {
             const { tree: tB, loops: loopsB } = loadGlyph(nB);
 
             const entries = buildMorphEntries(tA, tB);
-            const trueA = shapeArea(loopsA);
-            const trueB = shapeArea(loopsB);
-            const a0 = shapeArea(union(resolveMorphAt(entries, 0).outlines));
-            const a1 = shapeArea(union(resolveMorphAt(entries, 1).outlines));
-            console.log(`${nA}→${nB}: t=0 ${(100*a0/trueA - 100).toFixed(1)}% ` +
-                `t=1 ${(100*a1/trueB - 100).toFixed(1)}%`);
+            // Union SIGNED area double-counts coincident per-segment seams
+            // at the endpoints (documented flo-boolean degeneracy) - use
+            // sampled containment instead: no spill, no interior holes.
+            const c0 = containment(
+                resolveMorphAt(entries, 0).outlines, loopsA);
+            const c1 = containment(
+                resolveMorphAt(entries, 1).outlines, loopsB);
+            console.log(`${nA}→${nB}: t=0 spill ${c0.maxOutside.toFixed(2)} ` +
+                `holes ${c0.holes}/${c0.tested} | t=1 spill ${
+                c1.maxOutside.toFixed(2)} holes ${c1.holes}/${c1.tested}`);
 
-            expect(Math.abs(a0/trueA - 1)).toBeLessThan(0.10);
-            expect(Math.abs(a1/trueB - 1)).toBeLessThan(0.10);
+            expect(c0.maxOutside).toBeLessThan(0.5);
+            expect(c0.holes).toBe(0);
+            expect(c1.maxOutside).toBeLessThan(0.5);
+            expect(c1.holes).toBe(0);
         }
     }, 240_000);
     test('every branch is drawn at t=0 even when drops are free ' +

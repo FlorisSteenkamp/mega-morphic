@@ -49,13 +49,6 @@ interface SegChild {
     readonly segs: Segment[];
     /** ≈ salience fraction of the subtree (Σ 2r̂ dŝ) */
     readonly material: number;
-    /**
-     * true when the subtree is a whole fat-branch subtree attaching at
-     * `attachV`; false for a CONTINUATION leftover (the route's own branch
-     * past a fork) - matchable like any child (the builder suppresses
-     * stubs for covered slices)
-     */
-    readonly edgeRooted: boolean;
     /** set for children at the route's end/start vertex: ordered by the
      *  fork sweep (seam order) instead of dist/side */
     readonly terminal?: 'start' | 'end';
@@ -217,7 +210,7 @@ function matchSegGraphs(
         let ch = childCache.get(k);
         if (ch === undefined) {
             const g = tag === 'A' ? gA : gB;
-            childCache.set(k, ch = childrenOf(g, g.segments,
+            childCache.set(k, ch = childrenOf(g.segments,
                 routeOf_(g, tag, s, e), tag === 'A' ? unitA : unitB));
         }
         return ch;
@@ -366,8 +359,8 @@ function buildPair(
             rB: RouteStep[],
             shapeCost: number): SegMatchedPair {
 
-        const chA = childrenOf(gA, scopeA, rA, unitA);
-        const chB = childrenOf(gB, scopeB, rB, unitB);
+        const chA = childrenOf(scopeA, rA, unitA);
+        const chB = childrenOf(scopeB, rB, unitB);
         const lenRA = routeLenOf(rA);
         const lenRB = routeLenOf(rB);
 
@@ -397,8 +390,8 @@ function buildPair(
                         routeSegments(subB, b.attachV, c.endB));
                     return { c, rA, rB,
                         rank: c.totalCost + c.swayCost + cheapChildCost(
-                            childrenOf(gA, a.segs, rA, unitA),
-                            childrenOf(gB, b.segs, rB, unitB),
+                            childrenOf(a.segs, rA, unitA),
+                            childrenOf(b.segs, rB, unitB),
                             routeLenOf(rA), routeLenOf(rB)) };
                 });
             leaders.sort((x, y) => x.rank - y.rank);
@@ -659,7 +652,6 @@ function priceChildPair(
  * route, side and emanation angle (chord-based directions).
  */
 function childrenOf(
-        g: SegGraph,
         scope: Segment[],
         route: RouteStep[],
         unit: number): SegChild[] {
@@ -719,13 +711,6 @@ function childrenOf(
             const dot = rd[0]*cd[0] + rd[1]*cd[1];
             const θ = atan2(cross, dot);
 
-            // edge-rooted iff the entry segment's branch attaches HERE -
-            // otherwise the subtree is a continuation leftover
-            const info = g.attachOf.get(entry.branch);
-            const edgeRooted =
-                info !== undefined && info.v === v &&
-                info.edge !== undefined;
-
             // Seam terminals: children AT a route end, ordered by the fork
             // sweep (the sleeve boundary walks the end cap from the out
             // side: descending θ; the start cap toward the out side:
@@ -748,7 +733,6 @@ function childrenOf(
                 entry,
                 segs,
                 material: sum(segs.map(s => s.material)) / (unit*unit),
-                edgeRooted,
                 ...(terminal !== undefined ? { terminal, sweep } : {})
             });
         }
