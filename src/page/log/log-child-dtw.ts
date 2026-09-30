@@ -4,9 +4,11 @@ import type { FatBranch } from '../../morph/fat-branch/fat-branch.js';
 import type { PathCostWeights } from '../../morph/match-paths/path-cost-weights.js';
 import type { MatchedPath } from '../../morph/match-paths/matched-path.js';
 import type { PathChildOp } from '../../morph/match-paths/path-child-op.js';
-import type { PathPiece } from '../../morph/match-paths/path-piece.js';
+import type { Segment, RouteStep } from '../../morph/segment-graph/segment.js';
 import type { ChildLocation } from '../../morph/segment-graph/eval-child-pair.js';
 import { evalChildPair } from '../../morph/segment-graph/eval-child-pair.js';
+import { runsOf } from '../../morph/segment-graph/compose-segs.js';
+import { branchSegsOf } from '../../morph/build-morph-entries/build-morph-entries.js';
 import { getSkeletonBeziers } from '../../morph/fat-branch/get-fat-branch-tree.js';
 import { totalLength$ } from '../../morph/fs/total-length.js';
 import { drawBeziersAsSinglePath } from '../../draw/draw-beziers-as-single-path.js';
@@ -57,17 +59,17 @@ function logChildDtw(
             ? []
             : pairsOf(pm.trunk, trees.tree1, trees.tree2);
 
-        // matched route pieces first (they are what the match view paints;
-        // on a covered-edge tie the matched interpretation wins), then
-        // unmatched branches via their skeletons - one uniform metric
+        // matched route segments first (they are what the match view
+        // paints; on a covered-edge tie the matched interpretation wins),
+        // then unmatched branches via their skeletons - one uniform metric
         let nearest: FatBranch = tree;
         let hitPair: PairSel | undefined;
         let bestD = Infinity;
         for (const pair of pairs) {
-            const pieces = shapeIdx === 1
-                ? pair.mp.piecesA : pair.mp.piecesB;
-            for (const piece of pieces) {
-                const d = distToPss(p, pieceSkeleton(piece));
+            const route = shapeIdx === 1
+                ? pair.mp.routeA : pair.mp.routeB;
+            for (const st of route) {
+                const d = distToPss(p, st.seg.pss);
                 if (d < bestD) {
                     bestD = d;
                     hitPair = pair;
@@ -84,10 +86,10 @@ function logChildDtw(
 
         const color = shapeIdx === 1 ? 'red' : 'green';
         if (hitPair !== undefined) {
-            // the pair's whole matched route (covered slices only)
-            const pieces = shapeIdx === 1
-                ? hitPair.mp.piecesA : hitPair.mp.piecesB;
-            highlight(g, pieces.flatMap(pieceSkeleton),
+            // the pair's whole matched route (covered segments only)
+            const route = shapeIdx === 1
+                ? hitPair.mp.routeA : hitPair.mp.routeB;
+            highlight(g, route.flatMap(st => st.seg.pss),
                 `thin35 ${color} nofill`, showDelay);
         } else if (nearest === tree) {
             // the trunk's pss span ~the whole glyph - show its skeleton
@@ -151,8 +153,8 @@ function logTrunkPair(showDelay?: number): void {
             shapeCost: mp.cost.shapeCost,
             childCost: mp.cost.childCost
         },
-        piecesA: describeCoverage(mp.piecesA),
-        piecesB: describeCoverage(mp.piecesB),
+        routeA: describeCoverage(mp.routeA, branchSegsOf(pm.gA)),
+        routeB: describeCoverage(mp.routeB, branchSegsOf(pm.gB)),
         tailA: mp.tailA,
         tailB: mp.tailB,
         // long gap runs collapse material to a point on the other side
@@ -225,16 +227,22 @@ function totalLenOf(pss: number[][][]): number {
 }
 
 
-/** Piece slices in travel order, annotating UNCOVERED (retracting) slices. */
-function describeCoverage(pieces: PathPiece[]): string[] {
-    return pieces.map(p => {
-        const len = getSkeletonBeziers(p.branch).length;
+/** Route runs in travel order, annotating UNCOVERED (retracting) slices. */
+function describeCoverage(
+        route: RouteStep[],
+        segsOf: Map<FatBranch, Segment[]>): string[] {
+
+    return runsOf(route).map(r => {
+        const bSegs = segsOf.get(r.branch)!;
+        const len = bSegs[bSegs.length - 1].toEdge;
+        const from = r.segs[0].fromEdge;
+        const to = r.segs[r.segs.length - 1].toEdge;
         const stubs =
-            (p.fromEdge > 0
-                ? ` | uncovered [0..${p.fromEdge}) RETRACTS` : '') +
-            (p.toEdge < len
-                ? ` | uncovered [${p.toEdge}..${len}) RETRACTS` : '');
-        return `[${p.fromEdge}..${p.toEdge})${p.reversed ? 'ʳ' : ''}` +
+            (from > 0
+                ? ` | uncovered [0..${from}) RETRACTS` : '') +
+            (to < len
+                ? ` | uncovered [${to}..${len}) RETRACTS` : '');
+        return `[${from}..${to})${r.reversed ? 'ʳ' : ''}` +
             ` of ${len}${stubs}`;
     });
 }
@@ -317,13 +325,6 @@ function summarize(ops: PathChildOp[]): Record<PathChildOp['type'], number> {
     const out = { match: 0, delete: 0, insert: 0 };
     for (const op of ops) { out[op.type]++; }
     return out;
-}
-
-
-/** The covered skeleton slice of a matched path piece. */
-function pieceSkeleton(piece: PathPiece): number[][][] {
-    return getSkeletonBeziers(piece.branch)
-        .slice(piece.fromEdge, piece.toEdge);
 }
 
 

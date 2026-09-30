@@ -26,11 +26,10 @@ import { mouseUp } from './mouse/mouse-up.js';
 import { panMouseDown } from './mouse/pan.js';
 import { drawElements } from './fs-consts-types/draw-elems.js';
 import { getGlyphNames, loadPath } from './fs-consts-types/load-path.js';
-import { showMatch } from './events/on-match-clicked.js';
+import { drawMatch } from './events/draw-match.js';
 import { showBranchNums } from './events/show-branch-nums.js';
 import { NeedleWindow } from './components/needle-window.js';
 import { onMorphClicked } from './events/on-morph-clicked.js';
-import { onFattestClicked } from './events/on-fattest-clicked.js';
 import { drawMorph } from '../morph/draw-morph/draw-morph.js';
 import { beziersToSvgPathStr } from 'flo-boolean';
 
@@ -286,12 +285,12 @@ function Page(props: Props) {
 
     function onShowMatchChanged(show: boolean) {
         upd(pageState, { showMatch: show });
-        showMatch(refPageData, show, pageState.showMatchBoundary);
+        drawMatch(refPageData, show, pageState.showMatchBoundary);
     }
 
     function onShowMatchBoundaryChanged(show: boolean) {
         upd(pageState, { showMatchBoundary: show });
-        showMatch(refPageData, pageState.showMatch, show);
+        drawMatch(refPageData, pageState.showMatch, show);
     }
 
     function onShowBranchNumsChanged(show: boolean) {
@@ -450,24 +449,6 @@ function Page(props: Props) {
                         valueLabelDisplay="auto"
                         onChange={showDelayChanged}
                     />
-                </div>
-                <div style={{ display: 'flex' }}>
-                    {/* <button
-                        onClick={() => onFattestClicked(refPageData)}
-                        style={{
-                            padding: '9px 20px',
-                            fontSize: '14px',
-                            fontWeight: 500,
-                            lineHeight: '1',
-                            color: '#fff',
-                            backgroundColor: '#1976d2',
-                            border: 'none',
-                            borderRadius: '4px',
-                            cursor: 'pointer',
-                        }}
-                    >
-                        fattest
-                    </button> */}
                 </div>
                 <div style={{ display: 'flex' }}>
                     <button

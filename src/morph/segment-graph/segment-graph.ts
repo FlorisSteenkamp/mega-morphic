@@ -1,47 +1,14 @@
 import type { FatBranch, FatBranchEdge } from '../fat-branch/fat-branch.js';
+import type { SegVertex } from './seg-vertex.js';
+import type { Segment } from './segment.js';
+import type { SegGraph } from './seg-graph.js';
 import { getSkeletonBeziers } from '../fat-branch/get-fat-branch-tree.js';
 import { getSkeletonRadii } from '../fat-branch/get-skeleton-radii.js';
+import { getEdgeSleeves } from '../anchored-sleeves.js';
 import { totalLength$ } from '../fs/total-length.js';
+import { mean } from '../../utils/mean.js';
 
 const { abs } = Math;
-
-
-/** A fork/leaf vertex of the segment graph. */
-interface SegVertex {
-    readonly id: number;
-    /** vertex position (skeleton point) */
-    readonly p: number[];
-    /** degree-1 vertex (path endpoints live here) - set after construction */
-    leaf: boolean;
-}
-
-/** A fork-to-fork/leaf skeleton stretch - no forks in its interior. */
-interface Segment {
-    readonly v0: number;
-    readonly v1: number;
-    /** skeleton beziers, v0 → v1 */
-    readonly pss: number[][][];
-    /** maximal-disk radius per bezier knot (`pss.length + 1` values) */
-    readonly radii: number[];
-    readonly len: number;
-    /** provenance: the fat branch this segment was cut from */
-    readonly branch: FatBranch;
-    /** edge-index slice [fromEdge, toEdge) of the branch's skeleton */
-    readonly fromEdge: number;
-    readonly toEdge: number;
-}
-
-/**
- * The glyph skeleton cut at every fork: vertices = forks + leaf tips,
- * segments = the stretches between. Unlike the fat-branch tree, NO segment
- * crosses a fork, so any leaf-to-leaf path decomposes into whole segments.
- */
-interface SegGraph {
-    readonly vertices: SegVertex[];
-    readonly segments: Segment[];
-    /** per fat branch: its attach vertex + tree edge (undefined for trunk) */
-    readonly attachOf: Map<FatBranch, { v: number; edge?: FatBranchEdge }>;
-}
 
 
 /**
@@ -54,9 +21,10 @@ function segGraphOf(tree: FatBranch): SegGraph {
     const segments: Segment[] = [];
     const attachOf =
         new Map<FatBranch, { v: number; edge?: FatBranchEdge }>();
+    const parentOf = new Map<FatBranch, FatBranch>();
 
     const newVertex = (p: number[]): number => {
-        vertices.push({ id: vertices.length, p, leaf: false });
+        vertices.push({ id: vertices.length, p });
         return vertices.length - 1;
     };
 
@@ -65,6 +33,7 @@ function segGraphOf(tree: FatBranch): SegGraph {
         const pss = getSkeletonBeziers(branch);
         const radii = getSkeletonRadii(branch);
         if (pss.length === 0) { return; }
+        const sleeves = getEdgeSleeves(branch);
 
         // cumulative arc length at each knot
         const cum = [0];
@@ -107,12 +76,16 @@ function segGraphOf(tree: FatBranch): SegGraph {
         for (let i = 0; i + 1 < boundKnots.length; i++) {
             const k0 = boundKnots[i];
             const k1 = boundKnots[i + 1];
+            const rd = radii.slice(k0, k1 + 1);
+            const len = cum[k1] - cum[k0];
             segments.push({
                 v0: boundVs[i],
                 v1: boundVs[i + 1],
                 pss: pss.slice(k0, k1),
-                radii: radii.slice(k0, k1 + 1),
-                len: cum[k1] - cum[k0],
+                radii: rd,
+                len,
+                material: 2*mean(rd)*len,
+                sleeves: sleeves.slice(k0, k1),
                 branch,
                 fromEdge: k0,
                 toEdge: k1
@@ -126,6 +99,7 @@ function segGraphOf(tree: FatBranch): SegGraph {
                 : boundVs[cuts.indexOf(k) + 1];
             for (const e of children) {
                 attachOf.set(e.branch, { v, edge: e });
+                parentOf.set(e.branch, branch);
                 addBranch(e.branch, v);
             }
         }
@@ -139,55 +113,9 @@ function segGraphOf(tree: FatBranch): SegGraph {
         degree[s.v0]++;
         degree[s.v1]++;
     }
-    for (const v of vertices) { v.leaf = degree[v.id] === 1; }
 
-    return { vertices, segments, attachOf };
+    return { root: tree, vertices, segments, attachOf, parentOf };
 }
 
 
-/**
- * The unique route between two vertices (the graph is a tree), as segments
- * in travel order.
- */
-function routeSegments(
-        g: SegGraph,
-        v0: number,
-        v1: number): { seg: Segment; reversed: boolean }[] {
-
-    const adj: { seg: Segment; to: number }[][] =
-        g.vertices.map(() => []);
-    for (const seg of g.segments) {
-        adj[seg.v0].push({ seg, to: seg.v1 });
-        adj[seg.v1].push({ seg, to: seg.v0 });
-    }
-
-    const prev = new Array<{ seg: Segment; from: number } | undefined>(
-        g.vertices.length);
-    const seen = new Set([v0]);
-    const queue = [v0];
-    while (queue.length > 0) {
-        const u = queue.shift()!;
-        if (u === v1) { break; }
-        for (const { seg, to } of adj[u]) {
-            if (!seen.has(to)) {
-                seen.add(to);
-                prev[to] = { seg, from: u };
-                queue.push(to);
-            }
-        }
-    }
-
-    const out: { seg: Segment; reversed: boolean }[] = [];
-    let u = v1;
-    while (u !== v0) {
-        const p = prev[u];
-        if (p === undefined) { return []; }  // disconnected (shouldn't happen)
-        out.push({ seg: p.seg, reversed: p.seg.v1 !== u });
-        u = p.from;
-    }
-    return out.reverse();
-}
-
-
-export { segGraphOf, routeSegments }
-export type { SegGraph, Segment, SegVertex }
+export { segGraphOf }

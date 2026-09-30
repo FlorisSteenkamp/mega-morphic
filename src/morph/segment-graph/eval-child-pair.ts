@@ -5,7 +5,8 @@ import type { SegMatchedPair, SegOp, SegChild, ChildPairPrice, RouteStep }
     from './match-seg-graphs.js';
 import { matchSegGraphs, priceChildPair, reverseRoute }
     from './match-seg-graphs.js';
-import { segGraphOf, routeSegments } from './segment-graph.js';
+import { segGraphOf } from './segment-graph.js';
+import { routeSegments } from './route-segments.js';
 import { alignOfRoutes } from './match-paths-via-segments.js';
 import { procrustes } from '../procrustes/procrustes-analysis.js';
 
@@ -148,8 +149,8 @@ function locate(
                 : (op.type !== 'delete' ? op.b : undefined);
             if (c !== undefined) {
                 const role: ChildLocation['role'] =
-                    c.edge?.branch === br ? 'edge-rooted'
-                    : c.edge === undefined && c.entry.branch === br
+                    c.edgeRooted && c.entry.branch === br ? 'edge-rooted'
+                    : !c.edgeRooted && c.entry.branch === br
                     ? 'continuation'
                     : 'inside subtree';
                 const outcome: ChildLocation['outcome'] =

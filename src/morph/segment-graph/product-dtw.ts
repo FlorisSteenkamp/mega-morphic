@@ -1,9 +1,19 @@
-import type { SampledSegGraph } from './sample-seg-graph.js';
+import type { SampledSegGraph } from './sampled-seg-graph.js';
 import type { PathCostWeights } from '../match-paths/path-cost-weights.js';
 import { wrapAngle } from '../intrinsic-skeleton/wrap-angle.js';
 
 const { abs, min, PI: π } = Math;
 
+type ProductDtwResult_Candidate = {
+    readonly startA: number;
+    readonly startB: number;
+    readonly endA: number;
+    readonly endB: number;
+    readonly totalCost: number;
+    readonly shapeCost: number;
+    /** measured local sway along this candidate's warp */
+    readonly swayCost: number;
+}
 
 interface ProductDtwResult {
     /** raw profile-alignment cost of the winning route pair (no tails) */
@@ -22,16 +32,7 @@ interface ProductDtwResult {
     /** product state count (diagnostics) */
     readonly states: number;
     /** ranked route candidates (ascending totalCost, best first) */
-    readonly candidates: {
-        readonly startA: number;
-        readonly startB: number;
-        readonly endA: number;
-        readonly endB: number;
-        readonly totalCost: number;
-        readonly shapeCost: number;
-        /** measured local sway along this candidate's warp */
-        readonly swayCost: number;
-    }[];
+    readonly candidates: ProductDtwResult_Candidate[];
 }
 
 
@@ -40,7 +41,9 @@ interface ProductDtwResult {
  * covers every leaf-to-leaf path pair of both glyphs simultaneously (paths
  * sharing a prefix share DP states), using the same step-cost structure as
  * `alignProfiles` (radius + radius-weighted turning, integrated over
- * normalized arc). Off-route material is priced like the matcher's drops:
+ * normalized arc).
+ * 
+ * Off-route material is priced like the matcher's drops:
  * each DIAGONALLY consumed sample earns back `del` × its local material
  * (≈ salience fraction), so routes compete on alignment quality MINUS
  * corresponded material - without this, two tiny near-identical pathlets win
@@ -77,37 +80,45 @@ function productDtw(
     const diagStep = (A.step + B.step) / 2;
 
     // local material of one sample (≈ its salience fraction: 2r̂ dŝ)
-    const matA = mat(A);
-
-    const matB = (a: number): number => 2*B.r[a]*B.step;
-
-    const cost = (a: number, b: number): number => {
-        const rA = A.r[a];
-        const rB = B.r[b];
-        return diagStep * (radius*abs(rA - rB)
-            + turning*((rA + rB)/2)*abs(abs(A.t[a]) - abs(B.t[b])) / (2*π));
-    };
+    const calcMaterialA = getMaterial(A);
+    const calcMaterialB = getMaterial(B);
+    const calcCost_ = calcCost(A, B, diagStep, radius, turning);
 
     // raw sway contribution of one corresponded sample: material × local
     // orientation diff; mean taken at extraction
     function swayOf(a: number, b: number): number {
         return (
-            (matA(a) + matB(b))/2) * abs(wrapAngle(A.φ[a] - B.φ[b])
+            (calcMaterialA(a) + calcMaterialB(b))/2) * abs(wrapAngle(A.φ[a] - B.φ[b])
         ) / π;
     }
 
+    // Gotoh DP tables, one cell per product state (a,b):
+    // M  = best cost with a and b MATCHED (arrived by a diagonal step)
+    // Ix = best cost while in a gap in A (A advances alone, b waits)
+    // Iy = best cost while in a gap in B (B advances alone, a waits)
     const M = new Float64Array(N).fill(Infinity);
     const Ix = new Float64Array(N).fill(Infinity);
     const Iy = new Float64Array(N).fill(Infinity);
-    // start leaf pair per state, packed (leafA << 16) | leafB
+
+    // Companion tables ride along the DP (one per M/Ix/Iy so each carries
+    // the value of ITS OWN best path; on open/extend/diagonal they copy
+    // from the same predecessor table the cost came from):
+
+    // S* = which start-leaf PAIR the state's best path began at, packed
+    // (leafA << 16) | leafB - the DP explores all start pairs at once, so
+    // the winning route ends are only known if the start rides along
     const SM = new Int32Array(N).fill(-1);
     const SIx = new Int32Array(N).fill(-1);
     const SIy = new Int32Array(N).fill(-1);
-    // covered material along the state's best path (for score decomposition)
+
+    // C* = material corresponded (diagonally consumed) so far - used to
+    // decompose the final value back into shapeCost/totalCost
     const CM = new Float64Array(N);
     const CIx = new Float64Array(N);
     const CIy = new Float64Array(N);
-    // measured sway along the state's best path (objective-neutral)
+
+    // W* = accumulated raw sway (material × |Δφ|) so far - measured only,
+    // never part of the minimized value
     const WM = new Float64Array(N);
     const WIx = new Float64Array(N);
     const WIy = new Float64Array(N);
@@ -115,10 +126,11 @@ function productDtw(
     for (const a0 of A.starts) {
         for (const b0 of B.starts) {
             const i = a0*nB + b0;
-            const cov = matA(a0) + matB(b0);
-            const c = cost(a0, b0) - del*cov;
-            if (c < M[i]) {
-                M[i] = c;
+            const cov = calcMaterialA(a0) + calcMaterialB(b0);
+            const cost = calcCost_(a0, b0) - del*cov;
+
+            if (cost < M[i]) {
+                M[i] = cost;
                 CM[i] = cov;
                 WM[i] = swayOf(a0, b0);
                 SM[i] = (A.leafOf.get(a0)! << 16) | B.leafOf.get(b0)!;
@@ -133,8 +145,12 @@ function productDtw(
     const maxSum = nA + nB - 2;
 
     for (let s = 0; s <= maxSum; s++) {
-        const rA0 = s - nB + 1 > 0 ? s - nB + 1 : 0;
-        const rA1 = s < nA - 1 ? s : nA - 1;
+        const rA0 = s - nB + 1 > 0
+            ? s - nB + 1 : 0;
+
+        const rA1 = s < nA - 1
+            ? s : nA - 1;
+
         for (let rA = rA0; rA <= rA1; rA++) {
             const a = rankToA[rA];
             const b = rankToB[s - rA];
@@ -167,8 +183,8 @@ function productDtw(
                 // diagonal
                 for (const bN of B.succ[b]) {
                     const di = aN*nB + bN;
-                    const cov = matA(aN) + matB(bN);
-                    const v = best + cost(aN, bN) - del*cov;
+                    const cov = calcMaterialA(aN) + calcMaterialB(bN);
+                    const v = best + calcCost_(aN, bN) - del*cov;
                     if (v < M[di]) {
                         M[di] = v;
                         SM[di] = bestS;
@@ -197,9 +213,17 @@ function productDtw(
     let bStart = -1;
     let bEndA = -1;
     let bEndB = -1;
-    const candidates: { startA: number; startB: number; endA: number;
-        endB: number; totalCost: number; shapeCost: number;
-        swayCost: number }[] = [];
+    
+    const candidates: {
+        startA: number;
+        startB: number;
+        endA: number;
+        endB: number;
+        totalCost: number;
+        shapeCost: number;
+        swayCost: number
+    }[] = [];
+
     for (const aE of A.ends) {
         for (const bE of B.ends) {
             const i = aE*nB + bE;
@@ -222,6 +246,7 @@ function productDtw(
                 shapeCost: v + del*cov,
                 swayCost
             });
+
             if (v < bVal) {
                 bVal = v;
                 bCov = cov;
@@ -254,7 +279,7 @@ function productDtw(
 }
 
 
-function mat(
+function getMaterial(
         ssg: SampledSegGraph) {
 
     return function (a: number): number {
@@ -263,5 +288,26 @@ function mat(
 }
 
 
+function calcCost(
+        ssgA: SampledSegGraph,
+        ssgB: SampledSegGraph,
+        diagStep: number,
+        radius: number,
+        turning: number) {
+
+    return function(a: number, b: number): number {
+        const rA = ssgA.r[a];
+        const rB = ssgB.r[b];
+
+        return (
+            diagStep * (
+                radius*abs(rA - rB) +
+                turning*((rA + rB)/2)*abs(abs(ssgA.t[a]) - abs(ssgB.t[b])) / (2*π)
+            )
+        );
+    }
+}
+
+
 export { productDtw }
-export type { ProductDtwResult }
+export type { ProductDtwResult, ProductDtwResult_Candidate }

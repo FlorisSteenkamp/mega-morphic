@@ -6,7 +6,7 @@ import { drawMorph } from '../../morph/draw-morph/draw-morph.js';
 import { getFatBranchTree, getSkeletonBeziers } from '../../morph/fat-branch/get-fat-branch-tree.js';
 import { XMLNS } from '../../draw/xmlns.js';
 import { getFattestCpNode } from '../../morph/fat-branch/get-fattest-cp-node.js';
-import { showMatch } from './on-match-clicked.js';
+import { drawMatch } from './draw-match.js';
 import { showBranchNums } from './show-branch-nums.js';
 
 
@@ -62,7 +62,7 @@ function onMorphClicked(
 
     // Refresh the overlay for the newly built match.
     if (pageState.showMatch) {
-        showMatch(refPageData, true, pageState.showMatchBoundary);
+        drawMatch(refPageData, true, pageState.showMatchBoundary);
     }
     if (pageState.showBranchNums) { showBranchNums(refPageData, true); }
 }

@@ -1,10 +1,10 @@
 import type { FatBranch } from './fat-branch/fat-branch.js';
 import type { Glue, MutableMorphEntry } from './morph-entry.js';
-import { getSkeletonBeziers } from './fat-branch/get-fat-branch-tree.js';
-import { buildSleeveSides, getEdgeSleeves, skeletonKnots } from './anchored-sleeves.js';
+import type { Segment } from './segment-graph/segment.js';
+import { composeSegs } from './segment-graph/compose-segs.js';
+import { buildSleeveSides, skeletonKnots } from './anchored-sleeves.js';
 import { getLastP } from './fs/get-last-p.js';
 import { nearestIdx } from './nearest-idx.js';
-import { getSkeletonRadii } from './fat-branch/get-skeleton-radii.js';
 
 
 /**
@@ -20,18 +20,19 @@ type EntryLoc = {
 
 
 /**
- * A skipped branch's absorbed stretch: edges from `fromEdge` on now live
- * in the matched `absorber`'s composite entry.
+ * A skipped branch's absorbed remainder: only `keep` (its tip-side
+ * segments) still retracts; the rest lives in the matched `absorber`'s
+ * composite entry.
  */
 type Trim = {
-    fromEdge: number; absorber: FatBranch
+    keep: Segment[]; absorber: FatBranch
 }
 
 
 /**
- * Walk a tree parents-first, adding an entry for each unmatched branch:
- * it collapses onto its own junction (skeleton, radii and boundary sleeves
- * all degenerate to that point in the other frame) while its glue keeps the
+ * Places an entry for each unmatched branch, ancestors first: it collapses
+ * onto its own junction (skeleton, radii and boundary sleeves all
+ * degenerate to that point in the other frame) while its glue keeps the
  * junction riding the parent's drawn skeleton throughout the morph. Chained
  * unmatched branches glue to the (already placed) unmatched parent's entry
  * the same way. A branch whose junction-side stretch was absorbed by a
@@ -41,7 +42,10 @@ type Trim = {
  * for inserted).
  */
 function placeTopology(
-        root: FatBranch,
+        /** child branch → parent (the segment graph's tree relations) */
+        parentOf: Map<FatBranch, FatBranch>,
+        /** every branch's graph segments, tip → junction */
+        segsOf: Map<FatBranch, Segment[]>,
         topoSet: Set<FatBranch>,
         side: 'a' | 'b',
         classes: string,
@@ -58,34 +62,33 @@ function placeTopology(
             dot?: boolean;
             at?: { e: number; k1: number; k2: number } }[]): void {
 
-    walk(root);
-
-    function walk(parent: FatBranch): void {
-        for (const edge of parent.children) {
-            const child = edge.branch;
-
-            if (topoSet.has(child)) { place(parent, child); }
-
-            walk(child);
-        }
+    // Ancestors before descendants: chained unmatched children glue to
+    // their already-placed parent's entry.
+    const depthOf = (br: FatBranch): number => {
+        let d = 0;
+        for (let p = parentOf.get(br); p !== undefined;
+            p = parentOf.get(p)) { d++; }
+        return d;
+    };
+    for (const child of [...topoSet].sort(
+            (x, y) => depthOf(x) - depthOf(y))) {
+        const parent = parentOf.get(child);
+        if (parent !== undefined) { place(parent, child); }
     }
 
     function place(parent: FatBranch, child: FatBranch): void {
-        let bz = getSkeletonBeziers(child);
-        let radii = getSkeletonRadii(child);
-        let edges = getEdgeSleeves(child);
-
         // Absorbed junction-side stretch: keep only the tip-side remainder
         // and retract it into the absorption fork on the absorber's entry.
         let glueTo = parent;
+        let segs = segsOf.get(child) ?? [];
         const trim = trims.get(child);
-        if (trim !== undefined && trim.fromEdge >= 1) {
-            bz = bz.slice(0, trim.fromEdge);
-            radii = radii.slice(0, trim.fromEdge + 1);
-            edges = edges.slice(0, trim.fromEdge);
+        if (trim !== undefined) {
+            segs = trim.keep;
             glueTo = trim.absorber;
         }
-        if (bz.length === 0) { return; }
+        if (segs.length === 0) { return; }
+
+        const { bz, rd: radii, edges } = composeSegs(segs);
 
         const junction = getLastP(bz);  // fork center / absorption fork
 

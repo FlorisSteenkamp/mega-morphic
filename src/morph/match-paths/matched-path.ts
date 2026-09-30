@@ -1,8 +1,8 @@
 import type { PathChildOp } from './path-child-op.js';
-import type { PathPiece } from './path-piece.js';
 import type { AlignStep } from './tail-align.js';
 import type { PooledChild } from './pooled-child.js';
 import type { SeqOp } from './align-seq.js';
+import type { RouteStep } from '../segment-graph/segment.js';
 
 
 /** Debug-only: one side's pooled-children DP (Needleman-Wunsch) data. */
@@ -45,10 +45,10 @@ interface MatchCost {
 
 /** A matched pair of paths with its recursive sub-match. */
 interface MatchedPath {
-    /** composition recipe of the path in tree 1 (start → end) */
-    readonly piecesA: PathPiece[];
-    /** composition recipe of the path in tree 2 (start → end) */
-    readonly piecesB: PathPiece[];
+    /** the path's route in tree 1's segment graph (start → end) */
+    readonly routeA: RouteStep[];
+    /** the path's route in tree 2's segment graph (start → end) */
+    readonly routeB: RouteStep[];
 
     readonly cost: MatchCost;
     /** unmatched start-side fraction of the composed path (retracts) */
