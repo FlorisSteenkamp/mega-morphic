@@ -1,11 +1,8 @@
-import type { FatBranch } from './fat-branch/fat-branch.js';
-import { getBoundaryBeziersToNext } from 'flo-mat';
 import { fromTo, getTAtLength, toCubic, evalDeCasteljau } from 'flo-bezier3';
 import { distributeBezierListsEvenly } from './distribute-beziers-evenly.js';
 import { clamp } from '../utils/clamp.js';
 import { getPolyBezierLength } from './fs/get-poly-bezier-length.js';
 import { totalLength$ } from './fs/total-length.js';
-import { getSkeletonEdgeCpPairs } from './fat-branch/get-skeleton-edge-cp-pairs.js';
 import { sum } from '../utils/sum.js';
 
 const { atan2, hypot, PI: π } = Math;
@@ -49,21 +46,6 @@ interface SleeveFrame {
     readonly bz: number[][][];
     /** maximal-disk radius per resampled segment boundary */
     readonly radii: number[];
-}
-
-
-/**
- * The boundary pieces alongside each original skeleton edge of the fat
- * branch (tip → other end), per side, each in outline direction (`out`
- * pieces run with the skeleton, `back` pieces against it).
- */
-function getEdgeSleeves(
-        fb: FatBranch): { out: number[][][]; back: number[][][] }[] {
-
-    return getSkeletonEdgeCpPairs(fb).map(pair => ({
-        out: getBoundaryBeziersToNext(pair.out),
-        back: getBoundaryBeziersToNext(pair.back)
-    }));
 }
 
 
@@ -434,7 +416,6 @@ function dirAtEnd(ps: number[][]): number[] {
 export type { SleeveSide, SleeveFrame }
 export {
     buildSleeveSides,
-    getEdgeSleeves,
     skeletonKnots,
     boundaryTangents,
     boundaryPoint

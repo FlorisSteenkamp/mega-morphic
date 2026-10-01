@@ -6,13 +6,10 @@ import { describe, test, expect } from '@jest/globals';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { findMats, getPathsFromStr, MatOptions } from 'flo-mat';
-import type { FatBranch } from '../../src/morph/fat-branch/fat-branch.js';
-import type { SegGraph } from '../../src/morph/segment-graph/segment-graph.js';
+import type { SegGraph } from '../../src/morph/segment-graph/seg-graph.js';
 import type { SegOp } from '../../src/morph/segment-graph/match-seg-graphs.js';
-import { getFatBranchTree } from '../../src/morph/fat-branch/get-fat-branch-tree.js';
-import { getFattestCpNode } from '../../src/morph/fat-branch/get-fattest-cp-node.js';
 import { defaultPathWeights } from '../../src/morph/match-paths/path-cost-weights.js';
-import { segGraphOf } from '../../src/morph/segment-graph/segment-graph.js';
+import { segGraphFromMat } from '../../src/morph/segment-graph/seg-graph-from-mat.js';
 import { sampleSegGraph } from '../../src/morph/segment-graph/sample-seg-graph.js';
 import { productDtw } from '../../src/morph/segment-graph/product-dtw.js';
 import { matchSegGraphs } from '../../src/morph/segment-graph/match-seg-graphs.js';
@@ -41,7 +38,7 @@ function flipBoth(loops: number[][][][]): number[][][][] {
         ps.map(([x, y]) => [2*cx - x, 2*cy - y])));
 }
 
-function treeOf(loops: number[][][][], applySat: boolean): FatBranch {
+function graphOf(loops: number[][][][], applySat: boolean): SegGraph {
     const options: MatOptions = {
         applySat,
         simplify: false,
@@ -52,7 +49,7 @@ function treeOf(loops: number[][][][], applySat: boolean): FatBranch {
         simplifyTolerance: 2**-5
     };
     const mats = findMats(loops, options);
-    return getFatBranchTree(getFattestCpNode(mats[0].cpNode))!;
+    return segGraphFromMat(mats[0].cpNode);
 }
 
 function vLabel(g: SegGraph, v: number): string {
@@ -65,9 +62,9 @@ function vLabel(g: SegGraph, v: number): string {
 
 function opLine(op: SegOp): string {
     const c = (x: { dist: number; side: number; terminal?: string;
-            material: number; edge?: unknown }) =>
+            material: number }) =>
         `d${x.dist.toFixed(0)} s${x.side}${x.terminal ? ' ' + x.terminal : ''}` +
-        ` m${x.material.toFixed(3)}${x.edge !== undefined ? '' : ' CONT'}`;
+        ` m${x.material.toFixed(3)}`;
     return op.type === 'match'
         ? `    match  A[${c(op.a)}] ↔ B[${c(op.b)}]`
         : op.type === 'delete'
@@ -78,14 +75,12 @@ function opLine(op: SegOp): string {
 function probe(applySat: boolean): { pairs: number; drops: number } {
     const loopsA = flipBoth(loadLoops('hyphen-2'));
     const loopsB = loadLoops('hyphen');
-    const tA = treeOf(loopsA, applySat);
-    const tB = treeOf(loopsB, applySat);
-    const gA = segGraphOf(tA);
-    const gB = segGraphOf(tB);
-    const uA = sqrt(tA.roundSalience);
-    const uB = sqrt(tB.roundSalience);
-    const aniso = (procrustes(tA.pss).anisotropy +
-        procrustes(tB.pss).anisotropy) / 2;
+    const gA = graphOf(loopsA, applySat);
+    const gB = graphOf(loopsB, applySat);
+    const uA = gA.unit;
+    const uB = gB.unit;
+    const aniso = (procrustes(gA.loop).anisotropy +
+        procrustes(gB.loop).anisotropy) / 2;
 
     const pd = productDtw(
         sampleSegGraph(gA, uA, 200), sampleSegGraph(gB, uB, 200),

@@ -1,6 +1,5 @@
 declare var _debug_: Debug; 
 import type { Debug } from '../../debug/debug.js';
-import type { FatBranch } from '../fat-branch/fat-branch.js';
 import type { MorphEntry, MutableMorphEntry } from '../morph-entry.js';
 import type { AnchorPair } from '../align-branches.js';
 import type { MatchedPath } from '../match-paths/matched-path.js';
@@ -10,7 +9,6 @@ import type { Segment } from '../segment-graph/segment.js';
 import type { SegGraph } from '../segment-graph/seg-graph.js';
 import { getShapeArea } from 'flo-boolean';
 import { matchPathsViaSegments } from '../segment-graph/match-paths-via-segments.js';
-import { segGraphOf } from '../segment-graph/segment-graph.js';
 import { composeRouteGeom } from '../segment-graph/compose-segs.js';
 import { procrustes } from '../procrustes/procrustes-analysis.js';
 import { resolveMorphAt } from '../resolve-morph-at/resolve-morph-at.js';
@@ -44,16 +42,15 @@ interface FeatureMark {
 
 
 /**
- * Matches the two fat branch trees PATH-wise (junction-to-leaf chains, DTW
- * alignability as the matching metric) and builds the full set of morph
- * entries: each matched path pair becomes one feature-aligned entry (a
- * chain's composite geometry is native - no post-hoc compositing), matched
- * child forks along the whole path are alignment anchors and glue points,
- * and everything unmatched (whole subtrees, off-path leaf-side stubs)
- * collapses via topology entries glued to the entry owning its fork.
+ * Matches the two segment graphs route-wise (DTW alignability as the
+ * matching metric) and builds the full set of morph entries: each matched
+ * route pair becomes one feature-aligned entry, matched child forks along
+ * the whole route are alignment anchors and glue points, and every
+ * uncovered segment collapses onto its coverage-side vertex, glued to the
+ * entry owning that boundary.
  * 
- * @param tree1
- * @param tree2
+ * @param gA
+ * @param gB
  * @param marks
  * @param weights
  * @param poseOut pass to enable pose alignment: the ENABLED components of shape
@@ -62,15 +59,13 @@ interface FeatureMark {
  * drawing)
  */
 function buildMorphEntries(
-        tree1: FatBranch,
-        tree2: FatBranch,
+        gA: SegGraph,
+        gB: SegGraph,
         marks: FeatureMark[],
         weights?: Partial<PathCostWeights>,
         poseOut?: { components: PoseComponents; ramp?: PoseRamp }):
         MorphEntry[] {
 
-    const gA = segGraphOf(tree1);
-    const gB = segGraphOf(tree2);
     const pm = matchPathsViaSegments(gA, gB, { weights });
 
     // The morph arrays only exist when morph debugging is enabled (other
@@ -78,19 +73,17 @@ function buildMorphEntries(
     if (typeof _debug_ !== 'undefined' &&
         _debug_.elems?.pathMatchResult !== undefined) {
         // Keep only the LATEST result - readers use [0]/at(-1) and stale
-        // entries (whole trees) would otherwise accumulate.
+        // entries (whole graphs) would otherwise accumulate.
         _debug_.elems.pathMatchResult.length = 0;
-        _debug_.elems.matchTrees.length = 0;
         _debug_.elems.pathMatchResult.push(pm);
-        _debug_.elems.matchTrees.push({ tree1, tree2 });
     }
 
-    // The sleeves walk the outline in its global direction - the trunk's
-    // (mostly boundary) loop gives a reliable winding for the cap arcs.
-    const capSign = getShapeArea(tree1.pss) < 0 ? -1 : 1;
+    // The sleeves walk the outline in its global direction - the glyph
+    // loop gives a reliable winding for the cap arcs.
+    const capSign = getShapeArea(gA.loop) < 0 ? -1 : 1;
 
-    const unit1 = sqrt(tree1.roundSalience);
-    const unit2 = sqrt(tree2.roundSalience);
+    const unit1 = gA.unit;
+    const unit2 = gB.unit;
 
     const entries: MutableMorphEntry[] = [];
 
@@ -120,7 +113,7 @@ function buildMorphEntries(
 
     if (poseOut !== undefined) {
         poseOut.ramp = applyProcrustes(
-            tree1, tree2, entries, poseOut.components);
+            gA.loop, gB.loop, entries, poseOut.components);
     }
 
     return entries as MorphEntry[];
@@ -222,18 +215,6 @@ function buildMorphEntries(
 }
 
 
-/** Every branch's graph segments, tip → junction order. */
-function branchSegsOf(g: SegGraph): Map<FatBranch, Segment[]> {
-    const out = new Map<FatBranch, Segment[]>();
-    for (const s of g.segments) {
-        let list = out.get(s.branch);
-        if (list === undefined) { out.set(s.branch, list = []); }
-        list.push(s);
-    }
-    return out;
-}
-
-
 /** Every segment covered by some matched route, one tree's side. */
 function coveredSegsOf(
         trunk: MatchedPath,
@@ -262,13 +243,13 @@ function coveredSegsOf(
  * (svg2 shows the original shape). Returns the ramp restoring the true pose.
  */
 function applyProcrustes(
-        tree1: FatBranch,
-        tree2: FatBranch,
+        loopA: number[][][],
+        loopB: number[][][],
         entries: MutableMorphEntry[],
         comp: PoseComponents): PoseRamp {
 
-    const pose1 = procrustes(tree1.pss);
-    const pose2 = procrustes(tree2.pss);
+    const pose1 = procrustes(loopA);
+    const pose2 = procrustes(loopB);
 
     const s = comp.scale ? pose1.scale / pose2.scale : 1;
     // Principal axes are only defined mod π - take the smaller rotation.
@@ -395,5 +376,5 @@ function boundaries(g: number[][][]) {
 }
 
 
-export { buildMorphEntries, coveredSegsOf, branchSegsOf }
+export { buildMorphEntries, coveredSegsOf }
 export type { FeatureMark }

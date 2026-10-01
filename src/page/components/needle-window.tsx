@@ -3,8 +3,6 @@ import * as React from 'react';
 import type { Debug } from '../../debug/debug.js';
 import type { PooledDp } from '../../morph/match-paths/matched-path.js';
 import type { PooledChild } from '../../morph/match-paths/pooled-child.js';
-import type { FatBranch } from '../../morph/fat-branch/fat-branch.js';
-import { bfsBranchIndices } from '../events/show-branch-nums.js';
 
 
 const windowStyle: React.CSSProperties = {
@@ -84,16 +82,11 @@ function needleContent() {
         return <div style={windowStyle}>debug mode is off</div>;
     }
     const pm = _debug_.elems.pathMatchResult.at(-1);
-    const trees = _debug_.elems.matchTrees.at(-1);
-    if (pm?.trunk.pooledDp === undefined || trees === undefined) {
+    if (pm?.trunk.pooledDp === undefined) {
         return <div style={windowStyle}>
             no match data - click morph first (then re-toggle)
         </div>;
     }
-
-    // Same numbering as the "branch #s" overlay.
-    const idx1 = bfsBranchIndices(trees.tree1);
-    const idx2 = bfsBranchIndices(trees.tree2);
 
     return <div style={windowStyle}>
         <b>Trunk pooled-children DP</b> (cost {pm.trunk.cost.childCost.toFixed(3)},
@@ -102,18 +95,15 @@ function needleContent() {
         <span style={{ background: opColors.delete }}> delete </span>
         <span style={{ background: opColors.insert }}> insert </span>
         {pm.trunk.pooledDp.map(dp => (
-            <DpTable key={dp.side} dp={dp} idx1={idx1} idx2={idx2} />
+            <DpTable key={dp.side} dp={dp} />
         ))}
     </div>;
 }
 
 
-function DpTable(props: {
-        dp: PooledDp;
-        idx1: Map<FatBranch, number>;
-        idx2: Map<FatBranch, number> }) {
+function DpTable(props: { dp: PooledDp }) {
 
-    const { dp, idx1, idx2 } = props;
+    const { dp } = props;
     const { D, as, bs, ops } = dp;
 
     // Traceback cells: walk ops from (0,0), tint the ARRIVED-AT cell.
@@ -139,7 +129,7 @@ function DpTable(props: {
                     <th style={headStyle}>A \ B</th>
                     <th style={headStyle}>∅</th>
                     {bs.map((b, k) => (
-                        <th key={k} style={headStyle}>{childLabel(b, idx2)}</th>
+                        <th key={k} style={headStyle}>{childLabel(b)}</th>
                     ))}
                 </tr>
             </thead>
@@ -147,7 +137,7 @@ function DpTable(props: {
                 {D.map((row, r) => (
                     <tr key={r}>
                         <th style={headStyle}>
-                            {r === 0 ? '∅' : childLabel(as[r - 1], idx1)}
+                            {r === 0 ? '∅' : childLabel(as[r - 1])}
                         </th>
                         {row.map((v, c) => (
                             <td
@@ -170,10 +160,9 @@ function DpTable(props: {
 }
 
 
-/** "#<branch-#s overlay index> @<dist along path>" */
-function childLabel(c: PooledChild, idx: Map<FatBranch, number>): string {
-    const n = idx.get(c.edge.branch);
-    return `#${n ?? '?'} @${c.dist.toFixed(0)}`;
+/** "v<entry-segment vertices> @<dist along route>" */
+function childLabel(c: PooledChild): string {
+    return `v${c.entry.v0}·${c.entry.v1} @${c.dist.toFixed(0)}`;
 }
 
 

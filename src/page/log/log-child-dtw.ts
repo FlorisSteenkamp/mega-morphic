@@ -1,45 +1,45 @@
 declare var _debug_: Debug;
 import type { Debug } from '../../debug/debug.js';
-import type { FatBranch } from '../../morph/fat-branch/fat-branch.js';
 import type { PathCostWeights } from '../../morph/match-paths/path-cost-weights.js';
 import type { MatchedPath } from '../../morph/match-paths/matched-path.js';
 import type { PathChildOp } from '../../morph/match-paths/path-child-op.js';
 import type { Segment, RouteStep } from '../../morph/segment-graph/segment.js';
 import type { ChildLocation } from '../../morph/segment-graph/eval-child-pair.js';
 import { evalChildPair } from '../../morph/segment-graph/eval-child-pair.js';
-import { runsOf } from '../../morph/segment-graph/compose-segs.js';
-import { branchSegsOf } from '../../morph/build-morph-entries/build-morph-entries.js';
-import { getSkeletonBeziers } from '../../morph/fat-branch/get-fat-branch-tree.js';
 import { totalLength$ } from '../../morph/fs/total-length.js';
 import { drawBeziersAsSinglePath } from '../../draw/draw-beziers-as-single-path.js';
 import { drawAlignSteps, distToPss, svgGroup } from './align-viz.js';
 import { matchColors } from '../events/match-colors.js';
 
 
+/** One side's selection: a segment, or the trunk-pair route. */
+type Sel = { seg?: Segment; trunk?: boolean };
+
 /** Two-click selection state (debug tool - module scope suffices). */
-let selA: FatBranch | undefined;
-let selB: FatBranch | undefined;
+let selA: Sel | undefined;
+let selB: Sel | undefined;
 
 
 /** A matched pair as a click target: its per-side selection identity
- *  branches + its DFS-preorder index (= the match view's color index). */
+ *  (the pooled child's entry segment; undefined for the trunk pair) +
+ *  its DFS-preorder index (= the match view's color index). */
 interface PairSel {
     readonly mp: MatchedPath;
-    readonly brA: FatBranch;
-    readonly brB: FatBranch;
+    readonly segA?: Segment;
+    readonly segB?: Segment;
     readonly idx: number;
 }
 
 
 /**
  * Two-click child-pair DTW: a click on svg1/svg2 selects the nearest
- * MATCHED route piece (the material the match view paints - the pair's
+ * MATCHED route segment (the material the match view paints - the pair's
  * whole route is highlighted and its selection identity is the pair's own
- * branch) or, when an unmatched branch's skeleton is nearer, that branch;
+ * entry segment) or, when an uncovered segment is nearer, that segment;
  * once both sides are selected the pair is priced FRESH with the current
  * weights using the SEGMENT matcher's actual economics (`evalChildPair`)
- * and the sub-DTW's alignment is drawn on both svgs. Selecting both trunks
- * shows the WINNING trunk pair instead (actual routes + coverage).
+ * and the sub-DTW's alignment is drawn on both svgs. Selecting both trunk
+ * routes shows the WINNING trunk pair instead (actual routes + coverage).
  */
 function logChildDtw(
         shapeIdx: 1 | 2,
@@ -47,22 +47,19 @@ function logChildDtw(
 
     return function(g: SVGGElement, p: number[], showDelay?: number): void {
         if (typeof _debug_ === 'undefined') { return; }
-        const trees = _debug_.elems.matchTrees[0];
-        if (trees === undefined) {
-            console.log('no match trees yet - click morph first');
+        const pm = _debug_.elems.pathMatchResult[0];
+        if (pm === undefined) {
+            console.log('no match yet - click morph first');
             return;
         }
 
-        const tree = shapeIdx === 1 ? trees.tree1 : trees.tree2;
-        const pm = _debug_.elems.pathMatchResult[0];
-        const pairs = pm === undefined
-            ? []
-            : pairsOf(pm.trunk, trees.tree1, trees.tree2);
+        const graph = shapeIdx === 1 ? pm.gA : pm.gB;
+        const pairs = pairsOf(pm.trunk);
 
         // matched route segments first (they are what the match view
-        // paints; on a covered-edge tie the matched interpretation wins),
-        // then unmatched branches via their skeletons - one uniform metric
-        let nearest: FatBranch = tree;
+        // paints; on a tie the matched interpretation wins), then any
+        // segment - one uniform metric
+        let nearest: Segment | undefined;
         let hitPair: PairSel | undefined;
         let bestD = Infinity;
         for (const pair of pairs) {
@@ -73,16 +70,19 @@ function logChildDtw(
                 if (d < bestD) {
                     bestD = d;
                     hitPair = pair;
-                    nearest = shapeIdx === 1 ? pair.brA : pair.brB;
+                    nearest = shapeIdx === 1 ? pair.segA : pair.segB;
                 }
             }
         }
-        for (const br of [tree, ...descendantsOf(tree)]) {
-            const d = distToPss(p, getSkeletonBeziers(br));
-            if (d < bestD) { bestD = d; hitPair = undefined; nearest = br; }
+        for (const seg of graph.segments) {
+            const d = distToPss(p, seg.pss);
+            if (d < bestD) { bestD = d; hitPair = undefined; nearest = seg; }
         }
 
-        if (shapeIdx === 1) { selA = nearest; } else { selB = nearest; }
+        const sel: Sel = hitPair !== undefined
+            ? { seg: nearest, trunk: hitPair.idx === 0 }
+            : { seg: nearest };
+        if (shapeIdx === 1) { selA = sel; } else { selB = sel; }
 
         const color = shapeIdx === 1 ? 'red' : 'green';
         if (hitPair !== undefined) {
@@ -91,12 +91,8 @@ function logChildDtw(
                 ? hitPair.mp.routeA : hitPair.mp.routeB;
             highlight(g, route.flatMap(st => st.seg.pss),
                 `thin35 ${color} nofill`, showDelay);
-        } else if (nearest === tree) {
-            // the trunk's pss span ~the whole glyph - show its skeleton
-            highlight(g, getSkeletonBeziers(tree),
-                `thin35 ${color} nofill`, showDelay);
-        } else {
-            highlight(g, nearest.pss, `thin20 ${color} fill25`, showDelay);
+        } else if (nearest !== undefined) {
+            highlight(g, nearest.pss, `thin20 ${color} nofill`, showDelay);
         }
 
         const what = hitPair !== undefined
@@ -104,23 +100,26 @@ function logChildDtw(
                 ? 'the TRUNK pair route'
                 : `matched pair #${hitPair.idx} (${
                     matchColors[hitPair.idx % matchColors.length]})`
-            : nearest === tree
-            ? 'the TRUNK'
-            : 'an unmatched branch';
+            : 'an uncovered segment';
 
         if (selA === undefined || selB === undefined) {
             console.log(`selected ${what} on svg${shapeIdx} - ` +
-                `now click a branch on svg${shapeIdx === 1 ? 2 : 1}`);
+                `now click a segment on svg${shapeIdx === 1 ? 2 : 1}`);
             return;
         }
         console.log(`selected ${what} on svg${shapeIdx}`);
 
-        if (selA === trees.tree1 && selB === trees.tree2) {
+        if (selA.trunk === true && selB.trunk === true) {
             logTrunkPair(showDelay);
             return;
         }
+        if (selA.seg === undefined || selB.seg === undefined) {
+            console.log('trunk route selected on one side only - select ' +
+                'two child segments (or both trunk routes)');
+            return;
+        }
 
-        evaluate(trees.tree1, trees.tree2, selA, selB, weights, showDelay);
+        evaluate(selA.seg, selB.seg, weights, showDelay);
     };
 }
 
@@ -153,8 +152,8 @@ function logTrunkPair(showDelay?: number): void {
             shapeCost: mp.cost.shapeCost,
             childCost: mp.cost.childCost
         },
-        routeA: describeCoverage(mp.routeA, branchSegsOf(pm.gA)),
-        routeB: describeCoverage(mp.routeB, branchSegsOf(pm.gB)),
+        routeA: describeRoute(mp.routeA),
+        routeB: describeRoute(mp.routeB),
         tailA: mp.tailA,
         tailB: mp.tailB,
         // long gap runs collapse material to a point on the other side
@@ -227,37 +226,26 @@ function totalLenOf(pss: number[][][]): number {
 }
 
 
-/** Route runs in travel order, annotating UNCOVERED (retracting) slices. */
-function describeCoverage(
-        route: RouteStep[],
-        segsOf: Map<FatBranch, Segment[]>): string[] {
-
-    return runsOf(route).map(r => {
-        const bSegs = segsOf.get(r.branch)!;
-        const len = bSegs[bSegs.length - 1].toEdge;
-        const from = r.segs[0].fromEdge;
-        const to = r.segs[r.segs.length - 1].toEdge;
-        const stubs =
-            (from > 0
-                ? ` | uncovered [0..${from}) RETRACTS` : '') +
-            (to < len
-                ? ` | uncovered [${to}..${len}) RETRACTS` : '');
-        return `[${from}..${to})${r.reversed ? 'ʳ' : ''}` +
-            ` of ${len}${stubs}`;
-    });
+/** Route steps in travel order: vertex hops + segment lengths. */
+function describeRoute(route: RouteStep[]): string[] {
+    return route.map(st =>
+        `${st.reversed
+            ? `v${st.seg.v1}→v${st.seg.v0}`
+            : `v${st.seg.v0}→v${st.seg.v1}`} len ${st.seg.len.toFixed(0)}`);
 }
 
 
 /** Prices the selected pair with the SEGMENT matcher's actual economics. */
 function evaluate(
-        tree1: FatBranch,
-        tree2: FatBranch,
-        brA: FatBranch,
-        brB: FatBranch,
+        segA: Segment,
+        segB: Segment,
         weights: PathCostWeights,
         showDelay?: number): void {
 
-    const r = evalChildPair(tree1, tree2, brA, brB, weights);
+    const pm = _debug_.elems.pathMatchResult[0];
+    if (pm === undefined) { return; }
+
+    const r = evalChildPair(pm.gA, pm.gB, segA, segB, weights);
 
     if (r.align !== undefined) {
         const g1 = svgGroup('svg');
@@ -330,40 +318,21 @@ function summarize(ops: PathChildOp[]): Record<PathChildOp['type'], number> {
 
 /**
  * All matched pairs in the same DFS preorder as `buildMorphEntries` (idx =
- * match-view color index) with their per-side selection identity: the tree
- * roots for the trunk pair, the matched pooled child's own branch
- * otherwise (continuation children carry a synthesized edge whose branch
- * is the entry segment's - `locate` resolves both).
+ * match-view color index) with their per-side selection identity: the
+ * matched pooled child's entry segment (undefined for the trunk pair -
+ * both-trunk selection routes to `logTrunkPair`).
  */
-function pairsOf(
-        trunk: MatchedPath,
-        tree1: FatBranch,
-        tree2: FatBranch): PairSel[] {
-
+function pairsOf(trunk: MatchedPath): PairSel[] {
     const out: PairSel[] = [];
-    const walk = (mp: MatchedPath, brA: FatBranch, brB: FatBranch): void => {
-        out.push({ mp, brA, brB, idx: out.length });
+    const walk = (mp: MatchedPath, segA?: Segment, segB?: Segment): void => {
+        out.push({ mp, segA, segB, idx: out.length });
         for (const op of mp.children) {
             if (op.type === 'match') {
-                walk(op.sub, op.a.edge.branch, op.b.edge.branch);
+                walk(op.sub, op.a.entry, op.b.entry);
             }
         }
     };
-    walk(trunk, tree1, tree2);
-    return out;
-}
-
-
-/** All descendant branches of the tree (trunk itself excluded). */
-function descendantsOf(root: FatBranch): FatBranch[] {
-    const out: FatBranch[] = [];
-    const walk = (br: FatBranch): void => {
-        for (const e of br.children) {
-            out.push(e.branch);
-            walk(e.branch);
-        }
-    };
-    walk(root);
+    walk(trunk);
     return out;
 }
 

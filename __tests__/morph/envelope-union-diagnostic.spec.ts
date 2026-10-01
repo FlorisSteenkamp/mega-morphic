@@ -5,10 +5,10 @@ import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { findMats, getPathsFromStr, MatOptions } from 'flo-mat';
 import { boolean, getShapeArea, enableDebugForBooleanOp } from 'flo-boolean';
-import type { FatBranch } from '../../src/morph/fat-branch/fat-branch.js';
+import type { SegGraph } from '../../src/morph/segment-graph/seg-graph.js';
 import { buildMorphEntries } from '../../src/morph/build-morph-entries/build-morph-entries.js';
 import { resolveMorphAt } from '../../src/morph/resolve-morph-at/resolve-morph-at.js';
-import { getFatBranchTree } from '../../src/morph/fat-branch/get-fat-branch-tree.js';
+import { segGraphFromMat } from '../../src/morph/segment-graph/seg-graph-from-mat.js';
 import { parseSvgFont } from '../../src/load-svg/load-svg-font.js';
 
 
@@ -28,7 +28,7 @@ function loadGlyph(glyphName: string) {
     const d = font.find(g => g.name === glyphName)!.d;
     const loops = getPathsFromStr(d);
     const mats = findMats(loops, options);
-    return { tree: getFatBranchTree(mats[0].cpNode)!, loops };
+    return { g: segGraphFromMat(mats[0].cpNode), loops };
 }
 
 const matchColors = [
@@ -52,18 +52,18 @@ function union(outlines: number[][][][]): number[][][][] {
 
 
 describe('envelope union on real glyphs (exact app pipeline)', () => {
-    let tree1: FatBranch;
-    let tree2: FatBranch;
+    let g1: SegGraph;
+    let g2: SegGraph;
     let loops1: number[][][][];
     let loops2: number[][][][];
 
     beforeAll(() => {
-        ({ tree: tree1, loops: loops1 } = loadGlyph('parenleft'));
-        ({ tree: tree2, loops: loops2 } = loadGlyph('parenright'));
+        ({ g: g1, loops: loops1 } = loadGlyph('parenleft'));
+        ({ g: g2, loops: loops2 } = loadGlyph('parenright'));
     });
 
     test('resolveMorphAt yields a nonempty union at several t', () => {
-        const entries = buildMorphEntries(tree1, tree2);
+        const entries = buildMorphEntries(g1, g2, []);
         console.log(`${entries.length} entries`);
 
         for (const t of [0, 0.25, 0.5, 0.75, 1]) {
@@ -82,7 +82,7 @@ describe('envelope union on real glyphs (exact app pipeline)', () => {
     }, 120_000);
 
     test('reconstructed outline matches the true glyph areas at t=0/1', () => {
-        const entries = buildMorphEntries(tree1, tree2);
+        const entries = buildMorphEntries(g1, g2, []);
 
         const area0 = shapeArea(union(resolveMorphAt(entries, 0).outlines));
         const area1 = shapeArea(union(resolveMorphAt(entries, 1).outlines));
@@ -104,7 +104,7 @@ describe('envelope union on real glyphs (exact app pipeline)', () => {
         (globalThis as any)._debug_ = {};
         enableDebugForBooleanOp(true);
         try {
-            const entries = buildMorphEntries(tree1, tree2);
+            const entries = buildMorphEntries(g1, g2, []);
 
             for (const t of [0, 0.25, 0.5, 0.75, 1]) {
                 const outlineUnion = union(resolveMorphAt(entries, t).outlines);

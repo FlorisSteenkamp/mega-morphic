@@ -1,16 +1,21 @@
-import type { FatBranchEdge } from '../fat-branch/fat-branch.js';
+import type { Segment } from '../segment-graph/segment.js';
 
 
 /**
- * A child fork lying ON a path (pooled across the path's pieces), with
- * side/angle relative to the PATH's travel direction.
+ * A subtree hanging off a matched route, with side/angle relative to the
+ * ROUTE's travel direction.
  */
 interface PooledChild {
-    readonly edge: FatBranchEdge;
-    /** skeleton arc distance from the path's start end to the fork */
+    /** the segment through which the subtree hangs off the route */
+    readonly entry: Segment;
+    /** the whole hanging subtree */
+    readonly segs: Segment[];
+    /** skeleton arc distance from the route's start to the attach vertex */
     readonly dist: number;
     readonly side: 1 | -1;
     readonly angle: number;
+    /** ≈ salience fraction of the subtree (÷ unit²) */
+    readonly material: number;
 }
 
 

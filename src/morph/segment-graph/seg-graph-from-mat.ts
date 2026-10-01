@@ -1,37 +1,16 @@
 import type { CpNode } from 'flo-mat';
 import { getMatCurveToNext, getBoundaryBeziersToNext } from 'flo-mat';
+import { getShapeArea } from 'flo-boolean';
 import type { SegVertex } from './seg-vertex.js';
+import type { Segment } from './segment.js';
+import type { SegGraph } from './seg-graph.js';
 import { getCircleId } from '../fat-branch/get-circle-id.js';
+import { outlineLoopOf } from './outline-loop.js';
 import { totalLength$ } from '../fs/total-length.js';
 import { sum } from '../../utils/sum.js';
 import { mean } from '../../utils/mean.js';
 
-
-/**
- * A fork-to-fork/leaf skeleton stretch cut DIRECTLY from the MAT - no
- * fat-branch provenance, no rooting; direction is walk-derived (arbitrary
- * but fixed).
- */
-interface MatSegment {
-    readonly v0: number;
-    readonly v1: number;
-    /** skeleton beziers, v0 → v1 */
-    readonly pss: number[][][];
-    /** maximal-disk radius per bezier knot (`pss.length + 1` values) */
-    readonly radii: number[];
-    /** arc length of the segment's skeleton */
-    readonly len: number;
-    /** skeleton material 2·r̄·len in RAW area units */
-    readonly material: number;
-    /** boundary pieces alongside each skeleton edge (`pss.length` entries),
-     *  per side, each in outline direction (`out` runs with the segment) */
-    readonly sleeves: readonly { out: number[][][]; back: number[][][] }[];
-}
-
-interface MatSegGraph {
-    readonly vertices: SegVertex[];
-    readonly segments: MatSegment[];
-}
+const { abs, sqrt } = Math;
 
 
 /** One skeleton edge's two boundary-side occurrences. */
@@ -50,9 +29,10 @@ interface MatEdge {
  * collects every skeleton edge's two boundary-side occurrences (keyed by
  * circle-id pair; same-circle steps = leaf-tip caps, not edges), then the
  * edge graph is cut at every non-degree-2 circle (forks + leaf tips).
- * Rooting-free - unlike `segGraphOf` no fat-branch tree is involved.
+ * Rooting-free - no fat-branch tree is involved; segment direction is
+ * walk-derived (arbitrary but fixed).
  */
-function segGraphFromMat(start: CpNode): MatSegGraph {
+function segGraphFromMat(start: CpNode): SegGraph {
 
     const edges = new Map<string, MatEdge>();
     /** incident edge keys per circle id */
@@ -88,9 +68,12 @@ function segGraphFromMat(start: CpNode): MatSegGraph {
         cp = cp.next;
     } while (cp !== start);
 
+    const loop = outlineLoopOf(start);
+    const unit = sqrt(abs(getShapeArea(loop)));
+
     const vertices: SegVertex[] = [];
     const vertexOf = new Map<number, number>();
-    const segments: MatSegment[] = [];
+    const segments: Segment[] = [];
     const visited = new Set<string>();
 
     const isVertexCircle = (c: number): boolean =>
@@ -153,9 +136,8 @@ function segGraphFromMat(start: CpNode): MatSegGraph {
         }
     }
 
-    return { vertices, segments };
+    return { loop, unit, vertices, segments };
 }
 
 
 export { segGraphFromMat }
-export type { MatSegGraph, MatSegment }

@@ -4,8 +4,7 @@ import { describe, test, expect } from '@jest/globals';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { findMats, getPathsFromStr, MatOptions } from 'flo-mat';
-import { getFatBranchTree } from '../../src/morph/fat-branch/get-fat-branch-tree.js';
-import { getFattestCpNode } from '../../src/morph/fat-branch/get-fattest-cp-node.js';
+import { segGraphFromMat } from '../../src/morph/segment-graph/seg-graph-from-mat.js';
 import { buildMorphEntries } from '../../src/morph/build-morph-entries/build-morph-entries.js';
 import { resolveMorphAt } from '../../src/morph/resolve-morph-at/resolve-morph-at.js';
 import { parseSvgFont } from '../../src/load-svg/load-svg-font.js';
@@ -17,12 +16,12 @@ const options: MatOptions = {
     maxLength: 40, angleIncrement: 15, simplifyTolerance: 2**-5
 };
 
-function loadTree(glyphName: string) {
+function loadGraph(glyphName: string) {
     const font = parseSvgFont(
         readFileSync(resolve('fonts-test/achispado.svg'), 'utf-8'));
     const d = font.find(g => g.name === glyphName)!.d;
     const mats = findMats(getPathsFromStr(d), options);
-    return getFatBranchTree(getFattestCpNode(mats[0].cpNode))!;
+    return segGraphFromMat(mats[0].cpNode);
 }
 
 function dirAtStart(ps: number[][]): number[] {
@@ -50,8 +49,8 @@ function len(ps: number[][]): number {
 
 describe('TEMP kink anatomy', () => {
     test('positional wobble + short-way θ flips', () => {
-        const tA = loadTree('v');
-        const tB = loadTree('Q_V');
+        const tA = loadGraph('v');
+        const tB = loadGraph('Q_V');
         const entries = buildMorphEntries(tA, tB, []);
 
         // zigzag amplitude: deviation of each piece-joint from the local
@@ -110,8 +109,8 @@ describe('TEMP kink anatomy', () => {
     }
 
     test('what pieces meet at the big kinks (t=0.5)', () => {
-        const tA = loadTree('v');
-        const tB = loadTree('Q_V');
+        const tA = loadGraph('v');
+        const tB = loadGraph('Q_V');
         const entries = buildMorphEntries(tA, tB, []);
 
         for (const t of [0, 0.5]) {

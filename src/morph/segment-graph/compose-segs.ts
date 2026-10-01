@@ -1,4 +1,3 @@
-import type { FatBranch } from '../fat-branch/fat-branch.js';
 import type { Segment, RouteStep } from './segment.js';
 
 
@@ -8,29 +7,6 @@ interface ComposedGeom {
     bz: number[][][];
     rd: number[];
     edges: SleevePair[];
-}
-
-
-/** A route's contiguous same-branch run (segments in tip → junction
- *  order regardless of travel direction). */
-type Run = { branch: FatBranch; segs: Segment[]; reversed: boolean };
-
-
-/** Route steps → contiguous same-branch runs (≤1 per branch - routes are
- *  simple paths in a tree). */
-function runsOf(route: readonly RouteStep[]): Run[] {
-    const out: Run[] = [];
-    for (const { seg, reversed } of route) {
-        const last = out[out.length - 1];
-        if (last !== undefined && last.branch === seg.branch) {
-            // reversed steps arrive junction → tip: restore branch order
-            if (reversed) { last.segs.unshift(seg); }
-            else { last.segs.push(seg); }
-            continue;
-        }
-        out.push({ branch: seg.branch, segs: [seg], reversed });
-    }
-    return out;
 }
 
 
@@ -83,5 +59,5 @@ function composeRouteGeom(route: readonly RouteStep[]): ComposedGeom {
 }
 
 
-export { composeSegs, composeRouteGeom, runsOf }
-export type { ComposedGeom, Run }
+export { composeSegs, composeRouteGeom }
+export type { ComposedGeom }

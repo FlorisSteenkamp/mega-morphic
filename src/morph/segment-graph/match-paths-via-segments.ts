@@ -14,8 +14,6 @@ import { alignProfiles } from '../match-paths/align-profiles.js';
 import { matchSegGraphs, composeRoute } from './match-seg-graphs.js';
 import { procrustes } from '../procrustes/procrustes-analysis.js';
 
-const { sqrt } = Math;
-
 
 /**
  * The segment-graph matcher:
@@ -36,19 +34,19 @@ function matchPathsViaSegments(
         ...opts.weights
     };
 
-    const unit1 = sqrt(gA.root.roundSalience);
-    const unit2 = sqrt(gB.root.roundSalience);
+    const unit1 = gA.unit;
+    const unit2 = gB.unit;
 
-    // sway visibility factor (trunk pss = whole glyph loop)
+    // sway visibility factor
     const aniso = (
-        procrustes(gA.root.pss).anisotropy +
-        procrustes(gB.root.pss).anisotropy
+        procrustes(gA.loop).anisotropy +
+        procrustes(gB.loop).anisotropy
     ) / 2;
 
     const r = matchSegGraphs(gA, gB, unit1, unit2, weights, aniso);
 
     return {
-        trunk: toMatchedPath(r.root, true, gA, gB, unit1, unit2, weights),
+        trunk: toMatchedPath(r.root, true, unit1, unit2, weights),
         gA,
         gB,
         // routes carry their own directions per piece - no global flip
@@ -61,8 +59,6 @@ function matchPathsViaSegments(
 function toMatchedPath(
         pair: SegMatchedPair,
         trunkLevel: boolean,
-        gA: SegGraph,
-        gB: SegGraph,
         unit1: number,
         unit2: number,
         weights: PathCostWeights): MatchedPath {
@@ -72,15 +68,15 @@ function toMatchedPath(
         if (op.type === 'match') {
             children.push({
                 type: 'match',
-                a: pooledOf(op.a, unit1, gA),
-                b: pooledOf(op.b, unit2, gB),
+                a: pooledOf(op.a),
+                b: pooledOf(op.b),
                 sub: toMatchedPath(
-                    op.sub, false, gA, gB, unit1, unit2, weights)
+                    op.sub, false, unit1, unit2, weights)
             });
         } else if (op.type === 'delete') {
-            children.push({ type: 'delete', a: pooledOf(op.a, unit1, gA) });
+            children.push({ type: 'delete', a: pooledOf(op.a) });
         } else {
-            children.push({ type: 'insert', b: pooledOf(op.b, unit2, gB) });
+            children.push({ type: 'insert', b: pooledOf(op.b) });
         }
     }
 
@@ -100,7 +96,7 @@ function toMatchedPath(
         // Debug-only: same viz data the classic matcher attaches - align is
         // the classic Gotoh re-run on the CHOSEN routes (viz-equivalent).
         ...(typeof _debug_ !== 'undefined'
-            ? debugFields(pair, trunkLevel, gA, gB, unit1, unit2, weights)
+            ? debugFields(pair, trunkLevel, unit1, unit2, weights)
             : {})
     };
 }
@@ -109,8 +105,6 @@ function toMatchedPath(
 function debugFields(
         pair: SegMatchedPair,
         trunkLevel: boolean,
-        gA: SegGraph,
-        gB: SegGraph,
         unit1: number,
         unit2: number,
         weights: PathCostWeights): Partial<MatchedPath> {
@@ -118,14 +112,14 @@ function debugFields(
     const pooledDp: PooledDp[] | undefined = pair.dp?.map(d => ({
         side: d.side,
         D: d.D,
-        as: d.as.map(c => pooledOf(c, unit1, gA)),
-        bs: d.bs.map(c => pooledOf(c, unit2, gB)),
+        as: d.as.map(pooledOf),
+        bs: d.bs.map(pooledOf),
         ops: d.ops.map(op => op.type === 'match'
             ? { type: 'match' as const,
-                a: pooledOf(op.a, unit1, gA), b: pooledOf(op.b, unit2, gB) }
+                a: pooledOf(op.a), b: pooledOf(op.b) }
             : op.type === 'delete'
-            ? { type: 'delete' as const, a: pooledOf(op.a, unit1, gA) }
-            : { type: 'insert' as const, b: pooledOf(op.b, unit2, gB) })
+            ? { type: 'delete' as const, a: pooledOf(op.a) }
+            : { type: 'insert' as const, b: pooledOf(op.b) })
     }));
 
     return {
@@ -165,25 +159,14 @@ function alignOfRoutes(
 }
 
 
-function pooledOf(
-        c: SegChild,
-        unit: number,
-        g: SegGraph): PooledChild {
-
-    // best-effort real tree edge (debug tools read edge.branch identity/
-    // pss); otherwise a synthesized edge onto the entry segment's branch
-    const info = g.attachOf.get(c.entry.branch);
+function pooledOf(c: SegChild): PooledChild {
     return {
-        edge: (info?.v === c.attachV ? info.edge : undefined) ?? {
-            branch: c.entry.branch,
-            distanceFromLeaf: c.dist,
-            roundSalienceFromLeaf: c.material * unit*unit,
-            angle: c.angle,
-            side: c.side
-        },
+        entry: c.entry,
+        segs: c.segs,
         dist: c.dist,
         side: c.side,
-        angle: c.angle
+        angle: c.angle,
+        material: c.material
     };
 }
 

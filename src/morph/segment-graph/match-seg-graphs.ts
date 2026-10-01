@@ -583,11 +583,11 @@ function subDtwOf(
         b: SegChild): SubDtw {
 
     const subA: SegGraph = {
-        root: gA.root, vertices: gA.vertices, segments: a.segs,
-        attachOf: gA.attachOf, parentOf: gA.parentOf };
+        loop: gA.loop, unit: gA.unit, vertices: gA.vertices,
+        segments: a.segs };
     const subB: SegGraph = {
-        root: gB.root, vertices: gB.vertices, segments: b.segs,
-        attachOf: gB.attachOf, parentOf: gB.parentOf };
+        loop: gB.loop, unit: gB.unit, vertices: gB.vertices,
+        segments: b.segs };
     const smA = sampleSegGraph(subA, unitA,
         targetFor(getSegsLen(a.segs), δA), a.attachV);
     const smB = sampleSegGraph(subB, unitB,

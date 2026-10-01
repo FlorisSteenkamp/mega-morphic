@@ -22,33 +22,28 @@ function drawFatBranchTree(
 
     if (!fullTree) { return; }
 
-    // Tree levels, each in its own color; log the edge metadata.
+    // Tree levels, each in its own color.
     const levelColors = [
         'green', 'orange', 'purple', 'cyan', 'deeppink', 'darkgreen', 'brown'
     ];
     let level = [fatBranch];
     for (let depth = 0; level.length > 0; depth++) {
         const color = levelColors[depth % levelColors.length];
-        const edges = level.flatMap(branch => branch.children);
+        const children = level.flatMap(branch => branch.children);
 
-        for (const edge of edges) {
-            const { branch, distanceFromLeaf, roundSalienceFromLeaf, angle } = edge;
-
+        for (const branch of children) {
             drawOutline(g, branch.pss, color, showDelay);
             drawMatCurves(g, branch.cpChain, color, showDelay);
 
             if (logit) {
                 console.log(
                     `level ${depth + 1} (${color}):`,
-                    'distanceFromLeaf', distanceFromLeaf,
-                    'roundSalienceFromLeaf', roundSalienceFromLeaf,
-                    'angle', angle,
                     'roundSalience', branch.roundSalience
                 );
             }
         }
 
-        level = edges.map(edge => edge.branch);
+        level = children;
     }
 }
 

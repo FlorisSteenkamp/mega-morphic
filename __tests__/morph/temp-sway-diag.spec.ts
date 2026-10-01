@@ -4,13 +4,10 @@ import { describe, test } from '@jest/globals';
 import { readFileSync, writeFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { findMats, getPathsFromStr, MatOptions } from 'flo-mat';
-import type { FatBranch } from '../../src/morph/fat-branch/fat-branch.js';
-import { getFatBranchTree } from '../../src/morph/fat-branch/get-fat-branch-tree.js';
-import { getFattestCpNode } from '../../src/morph/fat-branch/get-fattest-cp-node.js';
 import { defaultPathWeights } from '../../src/morph/match-paths/path-cost-weights.js';
-import { segGraphOf } from '../../src/morph/segment-graph/segment-graph.js';
+import { segGraphFromMat } from '../../src/morph/segment-graph/seg-graph-from-mat.js';
 import { routeSegments } from '../../src/morph/segment-graph/route-segments.js';
-import type { SegGraph } from '../../src/morph/segment-graph/segment-graph.js';
+import type { SegGraph } from '../../src/morph/segment-graph/seg-graph.js';
 import { matchSegGraphs, composeRoute } from '../../src/morph/segment-graph/match-seg-graphs.js';
 import type { RouteStep } from '../../src/morph/segment-graph/match-seg-graphs.js';
 import { procrustes } from '../../src/morph/procrustes/procrustes-analysis.js';
@@ -31,12 +28,12 @@ const options: MatOptions = {
     simplifyTolerance: 2**-5
 };
 
-function loadTree(glyphName: string): FatBranch {
+function loadGraph(glyphName: string): SegGraph {
     const font = parseSvgFont(
         readFileSync(resolve('fonts-test/achispado.svg'), 'utf-8'));
     const d = font.find(g => g.name === glyphName)!.d;
     const mats = findMats(getPathsFromStr(d), options);
-    return getFatBranchTree(getFattestCpNode(mats[0].cpNode))!;
+    return segGraphFromMat(mats[0].cpNode);
 }
 
 function meanAngleOf(route: RouteStep[]): number {
@@ -129,16 +126,14 @@ function localAbsSway(rA: RouteStep[], rB: RouteStep[]): number {
 
 describe('temp sway diagnostic', () => {
     test('M → N trunk candidates', () => {
-        const tA = loadTree('M');
-        const tB = loadTree('N');
+        const gA = loadGraph('M');
+        const gB = loadGraph('N');
         // AFTER findMats - flo-boolean's debug branches crash on a bare {}
         (globalThis as any)._debug_ = {};
-        const gA = segGraphOf(tA);
-        const gB = segGraphOf(tB);
-        const uA = sqrt(tA.roundSalience);
-        const uB = sqrt(tB.roundSalience);
-        const aniso = (procrustes(tA.pss).anisotropy +
-            procrustes(tB.pss).anisotropy) / 2;
+        const uA = gA.unit;
+        const uB = gB.unit;
+        const aniso = (procrustes(gA.loop).anisotropy +
+            procrustes(gB.loop).anisotropy) / 2;
 
         const vtx = (g: SegGraph, i: number): string => {
             const v = g.vertices[i];

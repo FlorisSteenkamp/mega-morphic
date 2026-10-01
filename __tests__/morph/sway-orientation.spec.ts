@@ -5,11 +5,9 @@ import { describe, test, expect } from '@jest/globals';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { findMats, getPathsFromStr, MatOptions } from 'flo-mat';
-import type { FatBranch } from '../../src/morph/fat-branch/fat-branch.js';
-import { getFatBranchTree } from '../../src/morph/fat-branch/get-fat-branch-tree.js';
-import { getFattestCpNode } from '../../src/morph/fat-branch/get-fattest-cp-node.js';
+import type { SegGraph } from '../../src/morph/segment-graph/seg-graph.js';
 import { defaultPathWeights } from '../../src/morph/match-paths/path-cost-weights.js';
-import { segGraphOf } from '../../src/morph/segment-graph/segment-graph.js';
+import { segGraphFromMat } from '../../src/morph/segment-graph/seg-graph-from-mat.js';
 import { matchSegGraphs, composeRoute } from '../../src/morph/segment-graph/match-seg-graphs.js';
 import type { RouteStep } from '../../src/morph/segment-graph/match-seg-graphs.js';
 import { procrustes } from '../../src/morph/procrustes/procrustes-analysis.js';
@@ -32,12 +30,12 @@ const options: MatOptions = {
 
 let SAT = false;
 
-function loadTree(glyphName: string): FatBranch {
+function loadGraph(glyphName: string): SegGraph {
     const font = parseSvgFont(
         readFileSync(resolve('fonts-test/achispado.svg'), 'utf-8'));
     const d = font.find(g => g.name === glyphName)!.d;
     const mats = findMats(getPathsFromStr(d), { ...options, applySat: SAT });
-    return getFatBranchTree(getFattestCpNode(mats[0].cpNode))!;
+    return segGraphFromMat(mats[0].cpNode);
 }
 
 function meanAngleOf(route: RouteStep[]): number {
@@ -52,11 +50,10 @@ function meanAngleOf(route: RouteStep[]): number {
 }
 
 function swing(nameA: string, nameB: string, aniso: number): number {
-    const tA = loadTree(nameA);
-    const tB = loadTree(nameB);
+    const gA = loadGraph(nameA);
+    const gB = loadGraph(nameB);
     const r = matchSegGraphs(
-        segGraphOf(tA), segGraphOf(tB),
-        sqrt(tA.roundSalience), sqrt(tB.roundSalience),
+        gA, gB, gA.unit, gB.unit,
         defaultPathWeights, aniso);
     return abs(wrapAngle(
         meanAngleOf(r.root.routeB) - meanAngleOf(r.root.routeA)));
@@ -68,10 +65,10 @@ describe('sway orientation tie-break', () => {
             SAT = sat;
             for (const [a, b] of [
                     ['hyphen', 'hyphen-2'], ['hyphen-2', 'hyphen']] as const) {
-                const tA = loadTree(a);
-                const tB = loadTree(b);
-                const aniso = (procrustes(tA.pss).anisotropy +
-                    procrustes(tB.pss).anisotropy) / 2;
+                const gA = loadGraph(a);
+                const gB = loadGraph(b);
+                const aniso = (procrustes(gA.loop).anisotropy +
+                    procrustes(gB.loop).anisotropy) / 2;
 
                 const withSway = swing(a, b, aniso);
                 const noSway = swing(a, b, 0);

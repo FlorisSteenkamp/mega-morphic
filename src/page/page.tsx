@@ -27,7 +27,7 @@ import { panMouseDown } from './mouse/pan.js';
 import { drawElements } from './fs-consts-types/draw-elems.js';
 import { getGlyphNames, loadPath } from './fs-consts-types/load-path.js';
 import { drawMatch } from './events/draw-match.js';
-import { showBranchNums } from './events/show-branch-nums.js';
+import { showVertexNums } from './events/show-vertex-nums.js';
 import { NeedleWindow } from './components/needle-window.js';
 import { onMorphClicked } from './events/on-morph-clicked.js';
 import { drawMorph } from '../morph/draw-morph/draw-morph.js';
@@ -295,7 +295,7 @@ function Page(props: Props) {
 
     function onShowBranchNumsChanged(show: boolean) {
         upd(pageState, { showBranchNums: show });
-        showBranchNums(refPageData, show);
+        showVertexNums(refPageData, show);
     }
 
     function pathWeightChanged(key: keyof PathCostWeights) {
@@ -373,7 +373,7 @@ function Page(props: Props) {
             <Checkbox
                 checked={pageState.showBranchNums}
                 styles={toDrawCheckboxStyles}
-                text="branch #s"
+                text="vertex #s"
                 onChanged={onShowBranchNumsChanged}
             />
             </div>

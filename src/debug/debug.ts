@@ -3,7 +3,6 @@ import type { DebugElems as DebugElemsBoolean } from 'flo-boolean';
 import type { Debug as DebugMat } from 'flo-mat';
 import type { Debug as DebugBooleanOp } from 'flo-boolean';
 import type { PathMatchResult } from '../morph/match-paths/path-match-result';
-import type { FatBranch } from '../morph/fat-branch/fat-branch';
 
 
 type DebugElemsMat = {
@@ -26,8 +25,6 @@ type DebugElemsMat = {
 
 type DebugElemsMorph = {
     pathMatchResult: PathMatchResult[];
-    /** the matched tree pair, pushed in sync with `pathMatchResult` */
-    matchTrees: { tree1: FatBranch; tree2: FatBranch }[];
 }
 
 

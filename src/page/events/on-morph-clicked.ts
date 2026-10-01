@@ -3,11 +3,10 @@ import type { FeatureMark } from '../../morph/build-morph-entries/build-morph-en
 import type { PoseRamp, PoseComponents } from '../../morph/pose-ramp.js';
 import { buildMorphEntries } from '../../morph/build-morph-entries/build-morph-entries.js';
 import { drawMorph } from '../../morph/draw-morph/draw-morph.js';
-import { getFatBranchTree, getSkeletonBeziers } from '../../morph/fat-branch/get-fat-branch-tree.js';
+import { segGraphFromMat } from '../../morph/segment-graph/seg-graph-from-mat.js';
 import { XMLNS } from '../../draw/xmlns.js';
-import { getFattestCpNode } from '../../morph/fat-branch/get-fattest-cp-node.js';
 import { drawMatch } from './draw-match.js';
-import { showBranchNums } from './show-branch-nums.js';
+import { showVertexNums } from './show-vertex-nums.js';
 
 
 function onMorphClicked(
@@ -19,15 +18,14 @@ function onMorphClicked(
     const { deduced, morphT } = pageState;
     const { mats1, mats2 } = deduced;
 
-    //-----------
-    // Get trees
-    //-----------
-    const tree1 = getFatBranchTree(getFattestCpNode(mats1[0].cpNode));
-    const tree2 = getFatBranchTree(getFattestCpNode(mats2[0].cpNode));
-    if (tree1 === undefined || tree2 === undefined) { return; }
+    //-------------------------------------------
+    // Cut the segment graphs directly off the MATs
+    //-------------------------------------------
+    const gA = segGraphFromMat(mats1[0].cpNode);
+    const gB = segGraphFromMat(mats2[0].cpNode);
 
     //--------------------------------------------
-    // Match tree branches and build morph entries
+    // Match the graphs and build morph entries
     //--------------------------------------------
     const marks: FeatureMark[] = [];
     const { poseCentroid, poseScale, poseMoment } = pageState;
@@ -41,7 +39,7 @@ function onMorphClicked(
         } as { components: PoseComponents; ramp?: PoseRamp }
         : undefined;
     morphRef.current = buildMorphEntries(
-        tree1, tree2, marks, pageState.pathWeights, poseOut);
+        gA, gB, marks, pageState.pathWeights, poseOut);
     morphMarksRef.current = marks;
     morphPoseRef.current = poseOut?.ramp ?? null;
 
@@ -54,17 +52,13 @@ function onMorphClicked(
         .filter(m => m.pB !== undefined)
         .map(m => ({ p: m.pB!, classes: m.classes, dot: m.dot })));
 
-    // × at each tree's trunk skeleton start (its own orientation).
-    drawTrunkStartCross(svgRef1.current, getSkeletonBeziers(tree1)[0][0]);
-    drawTrunkStartCross(svgRef2.current, getSkeletonBeziers(tree2)[0][0]);
-
     drawMorph(refPageData, morphT / 100);
 
     // Refresh the overlay for the newly built match.
     if (pageState.showMatch) {
         drawMatch(refPageData, true, pageState.showMatchBoundary);
     }
-    if (pageState.showBranchNums) { showBranchNums(refPageData, true); }
+    if (pageState.showBranchNums) { showVertexNums(refPageData, true); }
 }
 
 
@@ -97,25 +91,6 @@ function drawFeatureMarks(
         $path.setAttributeNS(null, 'class', `${classes} feature-mark`);
         g.appendChild($path);
     }
-}
-
-
-/** Thickish purple 45°-rotated cross (×) at the trunk's skeleton start.
- *  Tagged `feature-mark` so the next morph replaces it. */
-function drawTrunkStartCross(
-        svg$: SVGSVGElement | null,
-        p: number[]) {
-
-    if (svg$ === null) { return; }
-    const g = svg$.getElementsByTagName('g')[0];
-
-    const s = 14;
-    const $path = document.createElementNS(XMLNS, 'path');
-    $path.setAttributeNS(null, 'd',
-        `M${p[0] - s} ${p[1] - s} L${p[0] + s} ${p[1] + s} ` +
-        `M${p[0] - s} ${p[1] + s} L${p[0] + s} ${p[1] - s}`);
-    $path.setAttributeNS(null, 'class', 'purple thin50 nofill feature-mark');
-    g.appendChild($path);
 }
 
 

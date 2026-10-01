@@ -4,7 +4,6 @@ import type { PathMatchResult } from '../../morph/match-paths/path-match-result.
 import type { MatchedPath } from '../../morph/match-paths/matched-path.js';
 import type { PathChildOp } from '../../morph/match-paths/path-child-op.js';
 import type { PooledChild } from '../../morph/match-paths/pooled-child.js';
-import type { FatBranch } from '../../morph/fat-branch/fat-branch.js';
 import { drawBeziersAsSinglePath } from '../../draw/draw-beziers-as-single-path.js';
 
 const { hypot, PI: π } = Math;
@@ -12,7 +11,8 @@ const { hypot, PI: π } = Math;
 
 /**
  * Logs the trunk-match child op (match/delete/insert) nearest to the
- * clicked point and highlights its branch(es) for `showDelay` millis.
+ * clicked point and highlights its subtree skeleton(s) for `showDelay`
+ * millis.
  */
 function logPathMatchResult(
         g: SVGGElement, p: number[], showDelay?: number) {
@@ -33,20 +33,20 @@ function logPathMatchResult(
     for (const op of ops) {
         const d = op.type === 'match'
             ? Math.min(
-                distToBranch(p, op.a.edge.branch),
-                distToBranch(p, op.b.edge.branch))
-            : distToBranch(
-                p, (op.type === 'delete' ? op.a : op.b).edge.branch);
+                distToChild(p, op.a),
+                distToChild(p, op.b))
+            : distToChild(
+                p, op.type === 'delete' ? op.a : op.b);
 
         if (d < bestD) { bestD = d; best = op; }
     }
 
     // Highlight in the app's frame convention: a = red, b = green.
     if (best.type !== 'insert') {
-        highlight(g, best.a.edge.branch.pss, 'red', showDelay);
+        highlight(g, best.a.segs.flatMap(s => s.pss), 'red', showDelay);
     }
     if (best.type !== 'delete') {
-        highlight(g, best.b.edge.branch.pss, 'green', showDelay);
+        highlight(g, best.b.segs.flatMap(s => s.pss), 'green', showDelay);
     }
 
     console.log(`nearest op: ${best.type}`);
@@ -71,21 +71,22 @@ function logChild(side: 'a' | 'b', c: PooledChild): void {
         angleFromParent: `${c.angle.toFixed(3)} rad (${
             (c.angle * 180 / π).toFixed(1)}°)`,
         sideOfParent: c.side,
-        distAlongPath: c.dist,
-        distanceFromLeaf: c.edge.distanceFromLeaf,
-        roundSalience: c.edge.branch.roundSalience,
-        roundSalienceFromLeaf: c.edge.roundSalienceFromLeaf,
-        branch: c.edge.branch
+        distAlongRoute: c.dist,
+        material: c.material,
+        entry: c.entry,
+        segs: c.segs
     });
 }
 
 
-/** Min distance from `p` to the outline's control points. */
-function distToBranch(p: number[], branch: FatBranch): number {
+/** Min distance from `p` to the subtree's skeleton control points. */
+function distToChild(p: number[], c: PooledChild): number {
     let d = Infinity;
-    for (const ps of branch.pss) {
-        for (const q of ps) {
-            d = Math.min(d, hypot(q[0] - p[0], q[1] - p[1]));
+    for (const seg of c.segs) {
+        for (const ps of seg.pss) {
+            for (const q of ps) {
+                d = Math.min(d, hypot(q[0] - p[0], q[1] - p[1]));
+            }
         }
     }
     return d;
@@ -98,7 +99,7 @@ function highlight(
         color: string,
         showDelay?: number): void {
 
-    const [$path] = drawBeziersAsSinglePath(g, pss, `thin20 ${color} fill25`);
+    const [$path] = drawBeziersAsSinglePath(g, pss, `thin20 ${color} nofill`);
     if ($path !== undefined && showDelay) {
         setTimeout(() => $path.remove(), showDelay);
     }

@@ -13,8 +13,7 @@ function enableDebugForMorph(debugOn: boolean) {
         ...debug, 
         elems: { 
             ...debug?.elems,
-            pathMatchResult: [],
-            matchTrees: []
+            pathMatchResult: []
         },
         timing: {
             ...debug?.timing,

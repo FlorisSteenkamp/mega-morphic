@@ -1,16 +1,14 @@
-import type { FatBranch } from '../fat-branch/fat-branch.js';
 import type { PathCostWeights } from '../match-paths/path-cost-weights.js';
 import type { PathAlignDebug } from '../match-paths/matched-path.js';
+import type { Segment } from './segment.js';
+import type { SegGraph } from './seg-graph.js';
 import type { SegMatchedPair, SegOp, SegChild, ChildPairPrice, RouteStep }
     from './match-seg-graphs.js';
 import { matchSegGraphs, priceChildPair, reverseRoute }
     from './match-seg-graphs.js';
-import { segGraphOf } from './segment-graph.js';
 import { routeSegments } from './route-segments.js';
 import { alignOfRoutes } from './match-paths-via-segments.js';
 import { procrustes } from '../procrustes/procrustes-analysis.js';
-
-const { sqrt } = Math;
 
 const routeLenOf = (r: RouteStep[]): number => {
     let L = 0;
@@ -19,12 +17,12 @@ const routeLenOf = (r: RouteStep[]): number => {
 };
 
 
-/** How a clicked branch maps to a pooled child of the winning match. */
+/** How a clicked segment maps to a pooled child of the winning match. */
 interface ChildLocation {
     readonly child: SegChild;
     /** the parent pair the child is pooled on */
     readonly pair: SegMatchedPair;
-    /** 'inside subtree': the branch is buried in `child`'s hanging subtree */
+    /** 'inside subtree': the segment is buried in `child`'s hanging subtree */
     readonly role: 'direct' | 'inside subtree';
     /** the winning match's actual decision for this child */
     readonly outcome: { type: SegOp['type']; partner?: SegChild };
@@ -47,35 +45,34 @@ interface ChildPairEval {
 
 
 /**
- * Prices a clicked child-branch pair with the segment matcher's actual
- * economics: a fresh `matchSegGraphs` run (current weights) locates the
- * branches as pooled children of the winning match, then the pair is priced
- * exactly as the matcher's relabel-vs-drop decision would price it.
+ * Prices a clicked child-segment pair with the segment matcher's actual
+ * economics: a fresh `matchSegGraphs` run on the SAME graphs (current
+ * weights - graph construction is weight-independent) locates the segments
+ * as pooled children of the winning match, then the pair is priced exactly
+ * as the matcher's relabel-vs-drop decision would price it.
  */
 function evalChildPair(
-        tree1: FatBranch,
-        tree2: FatBranch,
-        brA: FatBranch,
-        brB: FatBranch,
+        gA: SegGraph,
+        gB: SegGraph,
+        segA: Segment,
+        segB: Segment,
         weights: PathCostWeights): ChildPairEval {
 
-    const unitA = sqrt(tree1.roundSalience);
-    const unitB = sqrt(tree2.roundSalience);
-    const gA = segGraphOf(tree1);
-    const gB = segGraphOf(tree2);
-    const aniso = (procrustes(tree1.pss).anisotropy +
-        procrustes(tree2.pss).anisotropy) / 2;
+    const unitA = gA.unit;
+    const unitB = gB.unit;
+    const aniso = (procrustes(gA.loop).anisotropy +
+        procrustes(gB.loop).anisotropy) / 2;
     const root =
         matchSegGraphs(gA, gB, unitA, unitB, weights, aniso).root;
 
-    const a = locate(root, brA, 'a');
-    const b = locate(root, brB, 'b');
+    const a = locate(root, segA, 'a');
+    const b = locate(root, segB, 'b');
     if (a === undefined || b === undefined) {
         return {
             ...(a !== undefined ? { a } : {}),
             ...(b !== undefined ? { b } : {}),
             root,
-            verdict: 'not pooled children of the winning match (branch ' +
+            verdict: 'not pooled children of the winning match (segment ' +
                 'lies on a matched route?) - price undeterminable'
         };
     }
@@ -129,13 +126,13 @@ function seqIdOf(c: SegChild): 1 | -1 {
 
 
 /**
- * Finds the branch among the winning match's pooled children (all children
+ * Finds the segment among the winning match's pooled children (all children
  * appear in `ops` as match/delete/insert). Direct hits (the child hangs
- * through a segment of the branch) win over merely containing subtrees.
+ * through the segment) win over merely containing subtrees.
  */
 function locate(
         root: SegMatchedPair,
-        br: FatBranch,
+        seg: Segment,
         key: 'a' | 'b'): ChildLocation | undefined {
 
     let direct: ChildLocation | undefined;
@@ -148,7 +145,7 @@ function locate(
                 : (op.type !== 'delete' ? op.b : undefined);
             if (c !== undefined) {
                 const role: ChildLocation['role'] =
-                    c.entry.branch === br ? 'direct'
+                    c.entry === seg ? 'direct'
                     : 'inside subtree';
                 const outcome: ChildLocation['outcome'] =
                     op.type === 'match'
@@ -160,7 +157,7 @@ function locate(
                 if (role === 'direct') {
                     direct ??= loc;
                 } else if (containing === undefined &&
-                        c.segs.some(s => s.branch === br)) {
+                        c.segs.includes(seg)) {
                     containing = loc;
                 }
             }
