@@ -1,4 +1,5 @@
 import type { Mat } from "flo-mat";
+import type { PoseRamp } from "../morph/procrustes/pose-ramp.js";
 
 
 interface DeducedState {
@@ -8,6 +9,8 @@ interface DeducedState {
     readonly mats2: Mat[];
     readonly bezierLoops1: number[][][][];
     readonly bezierLoops2: number[][][][];
+    /** the LAST morph's pose-pinning ramp (undefined = pose off) */
+    readonly morphPose: PoseRamp | undefined;
 }
 
 

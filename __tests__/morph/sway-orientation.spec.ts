@@ -10,7 +10,7 @@ import { defaultPathWeights } from '../../src/morph/match-paths/path-cost-weight
 import { segGraphFromMat } from '../../src/morph/segment-graph/seg-graph-from-mat.js';
 import { matchSegGraphs, composeRoute } from '../../src/morph/segment-graph/match-seg-graphs.js';
 import type { RouteStep } from '../../src/morph/segment-graph/match-seg-graphs.js';
-import { procrustes } from '../../src/morph/procrustes/procrustes-analysis.js';
+import { calcProcrustes } from '../../src/morph/procrustes/calc-procrustes.js';
 import { unwrappedChordAngles } from '../../src/morph/intrinsic-skeleton/unwrapped-chord-angles.js';
 import { wrapAngle } from '../../src/morph/intrinsic-skeleton/wrap-angle.js';
 import { totalLength$ } from '../../src/morph/fs/total-length.js';
@@ -67,8 +67,8 @@ describe('sway orientation tie-break', () => {
                     ['hyphen', 'hyphen-2'], ['hyphen-2', 'hyphen']] as const) {
                 const gA = loadGraph(a);
                 const gB = loadGraph(b);
-                const aniso = (procrustes(gA.loop).anisotropy +
-                    procrustes(gB.loop).anisotropy) / 2;
+                const aniso = (calcProcrustes(gA.loop).anisotropy +
+                    calcProcrustes(gB.loop).anisotropy) / 2;
 
                 const withSway = swing(a, b, aniso);
                 const noSway = swing(a, b, 0);

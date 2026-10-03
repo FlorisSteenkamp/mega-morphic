@@ -1,7 +1,7 @@
 import type { PageData } from '../page-data.js';
 import type { FeatureMark } from '../../morph/build-morph-entries/build-morph-entries.js';
-import type { PoseRamp, PoseComponents } from '../../morph/pose-ramp.js';
 import { buildMorphEntries } from '../../morph/build-morph-entries/build-morph-entries.js';
+import { applyProcrustes } from '../../morph/apply-procrustes.js';
 import { drawMorph } from '../../morph/draw-morph/draw-morph.js';
 import { segGraphFromMat } from '../../morph/segment-graph/seg-graph-from-mat.js';
 import { XMLNS } from '../../draw/xmlns.js';
@@ -12,15 +12,20 @@ import { showVertexNums } from './show-vertex-nums.js';
 function onMorphClicked(
         refPageData: React.RefObject<PageData | null>) {
 
-    const { props, morphRef, morphMarksRef, morphPoseRef,
-        svgRef1, svgRef2 } = refPageData.current!;
-    const { pageState } = props;
-    const { deduced, morphT } = pageState;
+    //-------------
+    // Gather data
+    //-------------
+    const { props, morphRef, morphMarksRef } = refPageData.current!;
+
+    const { stateControl } = props;
+    const { upd, state: { appState } } = stateControl;
+    const { pageState } = appState;
+    const { deduced, morphT, poseOptions, pathWeights } = pageState;
     const { mats1, mats2 } = deduced;
 
-    //-------------------------------------------
+    //----------------------------------------------
     // Cut the segment graphs directly off the MATs
-    //-------------------------------------------
+    //----------------------------------------------
     const gA = segGraphFromMat(mats1[0].cpNode);
     const gB = segGraphFromMat(mats2[0].cpNode);
 
@@ -28,36 +33,36 @@ function onMorphClicked(
     // Match the graphs and build morph entries
     //--------------------------------------------
     const marks: FeatureMark[] = [];
-    const { poseCentroid, poseScale, poseMoment } = pageState;
-    const poseOut = poseCentroid || poseScale || poseMoment
-        ? {
-            components: {
-                centroid: poseCentroid,
-                scale: poseScale,
-                moment: poseMoment
-            }
-        } as { components: PoseComponents; ramp?: PoseRamp }
-        : undefined;
-    morphRef.current = buildMorphEntries(
-        gA, gB, marks, pageState.pathWeights, poseOut);
-    morphMarksRef.current = marks;
-    morphPoseRef.current = poseOut?.ramp ?? null;
+    const morphEntries = buildMorphEntries(gA, gB, marks, pathWeights);
 
-    drawFeatureMarks(svgRef1.current,
-        marks
-        .filter(m => m.pA !== undefined)
-        .map(m => ({ p: m.pA!, classes: m.classes, dot: m.dot })));
-    drawFeatureMarks(svgRef2.current,
-        marks
-        .filter(m => m.pB !== undefined)
-        .map(m => ({ p: m.pB!, classes: m.classes, dot: m.dot })));
+    //--------------------------------------------------------
+    // Pose-align shape 2's frame onto shape 1 (when enabled)
+    //--------------------------------------------------------
+    const posed = applyProcrustes(gA.loop, gB.loop, morphEntries, poseOptions);
+
+    morphRef.current = posed?.entries ?? morphEntries;
+    morphMarksRef.current = marks;
+    // Derived per-morph data (also CLEARS a stale pose when the pose
+    // checkboxes are off).
+    upd(deduced, { morphPose: posed?.poseRamp });
+
+    //--------------------------------
+    // Don't delete - keep for future
+    //--------------------------------
+    // drawFeatureMarks(svgRef1.current,
+    //     marks
+    //     .filter(m => m.pA !== undefined)
+    //     .map(m => ({ p: m.pA!, classes: m.classes, dot: m.dot })));
+    // drawFeatureMarks(svgRef2.current,
+    //     marks
+    //     .filter(m => m.pB !== undefined)
+    //     .map(m => ({ p: m.pB!, classes: m.classes, dot: m.dot })));
+    //--------------------------------
 
     drawMorph(refPageData, morphT / 100);
 
     // Refresh the overlay for the newly built match.
-    if (pageState.showMatch) {
-        drawMatch(refPageData, true, pageState.showMatchBoundary);
-    }
+    if (pageState.showMatch) { drawMatch(refPageData, true, pageState.showMatchBoundary); }
     if (pageState.showBranchNums) { showVertexNums(refPageData, true); }
 }
 

@@ -8,7 +8,7 @@ import type { Segment } from "./segment.js";
  * leaf-to-leaf path decomposes into whole segments.
  */
 interface SegGraph {
-    /** the glyph's outline loop (outline direction) */
+    /** the glyph's outline loop */
     readonly loop: number[][][];
     /** intrinsic length scale √|loop area| (unit² = the area normalizer) */
     readonly unit: number;

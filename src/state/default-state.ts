@@ -20,7 +20,6 @@ const defaultTransientState: TransientState = {
     zoomState: { mouseIsDown: false, prevViewboxXY: [], zoomRect: undefined! },
     $svgs: createEmptyGeneratedSvgs(),
     $svgs2: createEmptyGeneratedSvgs(),
-    // mats: undefined!
 }
 
 
@@ -36,7 +35,8 @@ const defaultDeduced: DeducedState = {
     pathStr2: '',
     mats2: [],
     bezierLoops1: [],
-    bezierLoops2: []
+    bezierLoops2: [],
+    morphPose: undefined
 }
 
 const defaultPageState: PageState = {
@@ -56,9 +56,7 @@ const defaultPageState: PageState = {
     showSvgs: [true, true, true],
     showWeights: true,
     morphFillOnly: false,
-    poseCentroid: false,
-    poseScale: false,
-    poseMoment: false,
+    poseOptions: { applyCentroid: false, applyScale: false, trunkOnlyTisserand: false },
     showPose: false,
     showMatch: false,
     showMatchBoundary: false,

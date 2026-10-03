@@ -77,6 +77,8 @@ function label(
     $t.setAttributeNS(null, 'x', `${p[0]}`);
     $t.setAttributeNS(null, 'y', `${p[1]}`);
     $t.setAttributeNS(null, 'class', 'branch-num');
+    // Counter-flip about the label's own y (the parent g is y-flipped).
+    $t.setAttributeNS(null, 'transform', `matrix(1 0 0 -1 0 ${2*p[1]})`);
     // White casing keeps the number readable on any overlay.
     $t.setAttributeNS(null, 'style',
         `font-size: ${fontSize}px; fill: ${color}; stroke: #fff; ` +

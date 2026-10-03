@@ -10,7 +10,7 @@ import { routeSegments } from '../../src/morph/segment-graph/route-segments.js';
 import type { SegGraph } from '../../src/morph/segment-graph/seg-graph.js';
 import { matchSegGraphs, composeRoute } from '../../src/morph/segment-graph/match-seg-graphs.js';
 import type { RouteStep } from '../../src/morph/segment-graph/match-seg-graphs.js';
-import { procrustes } from '../../src/morph/procrustes/procrustes-analysis.js';
+import { calcProcrustes } from '../../src/morph/procrustes/calc-procrustes.js';
 import { unwrappedChordAngles } from '../../src/morph/intrinsic-skeleton/unwrapped-chord-angles.js';
 import { wrapAngle } from '../../src/morph/intrinsic-skeleton/wrap-angle.js';
 import { totalLength$ } from '../../src/morph/fs/total-length.js';
@@ -132,8 +132,8 @@ describe('temp sway diagnostic', () => {
         (globalThis as any)._debug_ = {};
         const uA = gA.unit;
         const uB = gB.unit;
-        const aniso = (procrustes(gA.loop).anisotropy +
-            procrustes(gB.loop).anisotropy) / 2;
+        const aniso = (calcProcrustes(gA.loop).anisotropy +
+            calcProcrustes(gB.loop).anisotropy) / 2;
 
         const vtx = (g: SegGraph, i: number): string => {
             const v = g.vertices[i];

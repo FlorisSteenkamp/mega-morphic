@@ -6,7 +6,7 @@ import { intrinsicSkeletonLerp } from '../intrinsic-skeleton/intrinsic-skeleton.
 import { unwrappedChordAngles } from '../intrinsic-skeleton/unwrapped-chord-angles.js';
 import { wrapAngle } from '../intrinsic-skeleton/wrap-angle.js';
 
-const { min, max, floor, cos, sin } = Math;
+const { min, max, floor, cos, sin, hypot, round, PI: π } = Math;
 
 
 /**
@@ -43,6 +43,27 @@ const getMorphedSkeleton = memoize(function(
     let α = φ0A + t*wrapAngle(φ0B - φ0A);
 
     if (glue === undefined) {
+        // No-net-rotation gauge (free-floating = trunk; children ride it
+        // via glue): the intrinsic lerp anchors orientation at the route's
+        // START tangent, so when the two turning profiles differ by ~±2π
+        // of integrated bend (unequal U-turn folds, M→N) all downstream
+        // material orbits a full turn just to land where it started.
+        // Counter-rotate the WHOLE-TURN part of the material's
+        // length-weighted mean orientation sweep, linearly in t, about the
+        // skeleton's own mean point - 2π-multiples are exact at t=0/1, the
+        // dominant material stays put and the folds unroll locally. The
+        // fractional part is genuine rotation and is kept. Skipped at
+        // EXACTLY t=0/1: ρ there is a whole turn = identity only up to
+        // float dust, which breaks the bit-exact seam coincidence the
+        // boolean union needs (the skip is the continuous limit).
+        const m = t === 0 || t === 1
+            ? 0
+            : netTurns(ψsAe, ψsBe, skelPssA, skelPssB);
+        if (m !== 0) {
+            const ρ = -t*2*π*m;
+            pss = rotateAbout(pss, meanPoint(pss), ρ);
+            α += ρ;
+        }
         return { alpha: α, pss };
     }
 
@@ -191,4 +212,84 @@ function profileAngleAt(ψs: number[], kf: number): number {
 }
 
 
-export { getMorphedSkeleton }
+/**
+ * Whole turns of the lerp's length-weighted mean orientation sweep: per
+ * knot the sweep is Δk = φ0-short-way + the profiles' cumulative turning
+ * difference; weights are the mean chord lengths (t-independent).
+ */
+function netTurns(
+        ψsA: number[],
+        ψsB: number[],
+        a: number[][][],
+        b: number[][][]): number {
+
+    const d0 = wrapAngle(ψsB[0] - ψsA[0]);
+
+    let sumΔ = 0;
+    let sumL = 0;
+    for (let k = 0; k < ψsA.length; k++) {
+        const L = (chordLen(a[k]) + chordLen(b[k])) / 2;
+        sumΔ += L*(d0 + (ψsB[k] - ψsB[0]) - (ψsA[k] - ψsA[0]));
+        sumL += L;
+    }
+
+    return sumL > 0 ? round(sumΔ / sumL / (2*π)) : 0;
+}
+
+
+function chordLen(ps: number[][]): number {
+    const p0 = ps[0];
+    const p1 = ps[ps.length - 1];
+    return hypot(p1[0] - p0[0], p1[1] - p0[1]);
+}
+
+
+/** Chord-length-weighted mean of the beziers' chord midpoints. */
+function meanPoint(pss: number[][][]): number[] {
+    let x = 0, y = 0, sumL = 0;
+    for (const ps of pss) {
+        const p0 = ps[0];
+        const p1 = ps[ps.length - 1];
+        const L = hypot(p1[0] - p0[0], p1[1] - p0[1]);
+        x += L*(p0[0] + p1[0])/2;
+        y += L*(p0[1] + p1[1])/2;
+        sumL += L;
+    }
+    return sumL > 0
+        ? [x/sumL, y/sumL]
+        : [pss[0][0][0], pss[0][0][1]];
+}
+
+
+function rotateAbout(
+        pss: number[][][],
+        c: number[],
+        ρ: number): number[][][] {
+
+    const cosρ = cos(ρ);
+    const sinρ = sin(ρ);
+    return pss.map(ps => ps.map(p => {
+        const ux = p[0] - c[0];
+        const uy = p[1] - c[1];
+        return [
+            c[0] + cosρ*ux - sinρ*uy,
+            c[1] + sinρ*ux + cosρ*uy
+        ];
+    }));
+}
+
+
+/**
+ * The trunk gauge's whole-turn count for an entry (display/diagnostics -
+ * the same value the drawn gauge uses).
+ */
+function entryNetTurns(e: MorphEntry): number {
+    return netTurns(
+        unwrappedChordAngles(e.skelPssA),
+        unwrappedChordAngles(e.skelPssB),
+        e.skelPssA, e.skelPssB
+    );
+}
+
+
+export { getMorphedSkeleton, entryNetTurns }

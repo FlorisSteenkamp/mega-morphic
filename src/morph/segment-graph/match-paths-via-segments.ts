@@ -12,7 +12,7 @@ import { defaultPathWeights } from '../match-paths/path-cost-weights.js';
 import { sampleFeatures$ } from '../match-paths/sample-features.js';
 import { alignProfiles } from '../match-paths/align-profiles.js';
 import { matchSegGraphs, composeRoute } from './match-seg-graphs.js';
-import { procrustes } from '../procrustes/procrustes-analysis.js';
+import { calcProcrustes } from '../procrustes/calc-procrustes.js';
 
 
 /**
@@ -39,8 +39,8 @@ function matchPathsViaSegments(
 
     // sway visibility factor
     const aniso = (
-        procrustes(gA.loop).anisotropy +
-        procrustes(gB.loop).anisotropy
+        calcProcrustes(gA.loop).anisotropy +
+        calcProcrustes(gB.loop).anisotropy
     ) / 2;
 
     const r = matchSegGraphs(gA, gB, unit1, unit2, weights, aniso);

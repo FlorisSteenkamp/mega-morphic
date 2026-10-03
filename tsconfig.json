@@ -14,7 +14,7 @@
         "rootDir": "..",
         "outDir": "./dist",
         "paths": {
-            "flo-mat": ["../mat/src/index.ts"],
+            // "flo-mat": ["../mat/src/index.ts"],
             // "flo-boolean": ["../boolean/src/index.tsx"]
         },
     },

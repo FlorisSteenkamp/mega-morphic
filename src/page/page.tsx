@@ -7,7 +7,7 @@ import type { Props } from './props.js';
 import type { PageData } from './page-data.js';
 import type { MorphEntry } from '../morph/draw-morph/draw-morph.js';
 import type { FeatureMark } from '../morph/build-morph-entries/build-morph-entries.js';
-import type { PoseRamp } from '../morph/pose-ramp.js';
+import type { PoseRamp } from '../morph/procrustes/pose-ramp.js';
 import type { PathCostWeights } from '../morph/match-paths/path-cost-weights.js';
 import { defaultPathWeights } from '../morph/match-paths/path-cost-weights.js';
 import { useRef, useEffect } from 'react';
@@ -32,6 +32,7 @@ import { NeedleWindow } from './components/needle-window.js';
 import { onMorphClicked } from './events/on-morph-clicked.js';
 import { drawMorph } from '../morph/draw-morph/draw-morph.js';
 import { beziersToSvgPathStr } from 'flo-boolean';
+import { StateControl } from '../state-control/state-control.js';
 
 
 const toDrawCheckboxStyles: CheckboxStyles = { 
@@ -82,9 +83,10 @@ const weightGroupColors = {
 } as const;
 
 /** slider range + cost-class group per path-matching weight */
-const weightRanges: Record<keyof PathCostWeights,
-        { max: number; step: number;
-          group: keyof typeof weightGroupColors }> = {
+const weightRanges: Record<
+        keyof PathCostWeights,
+        { max: number; step: number; group: keyof typeof weightGroupColors }
+    > = {
     radius: { max: 3, step: 0.05, group: 'dtw' },
     turning: { max: 1, step: 0.01, group: 'dtw' },
     gapOpen: { max: 1, step: 0.01, group: 'dtw' },
@@ -107,9 +109,9 @@ function Page(props: Props) {
     const {
         toDraw, viewbox1, viewbox2, viewbox3, deduced, showSvgs, flipH, flipV,
         showWeights, glyph1Name, glyph2Name, clickFor,
-        simplify, viewMat, morphFillOnly, poseCentroid, poseScale,
-        poseMoment, showPose, satScale, showDelay, pathWeights,
-        morphT
+        simplify, viewMat, morphFillOnly, poseOptions,
+        showPose, satScale, showDelay, pathWeights,
+        morphT,
     } = pageState;
     const { mats1, mats2, pathStr1, pathStr2 } = deduced;
 
@@ -128,19 +130,15 @@ function Page(props: Props) {
     // parent entry so their junction stays attached throughout the morph.
     const morphRef = useRef<MorphEntry[] | null>(null);
     const morphMarksRef = useRef<FeatureMark[] | null>(null);
-    const morphPoseRef = useRef<PoseRamp | null>(null);
-    // const [morphT, setMorphT] = React.useState(0);  // slider value 0..100
     const [showNeedle, setShowNeedle] = React.useState(false);
 
     const refPageData = useRef<PageData>(null);
-    const pageData: PageData = {
+    refPageData.current = {
         props, svgRef1, svgRef2, svgRef3, morphRef, morphMarksRef,
-        morphPoseRef//, morphT
     };
-    refPageData.current = pageData;
 
+    useEffect(function() { lazyLoadDeduced(refPageData, false) }, []); // run only once
 
-    useEffect(function() { lazyLoadDeduced(false) }, []); // run only once
 
     function toDrawChanged(key: keyof ToDraw) {
         return (shouldDraw: boolean) => {
@@ -163,12 +161,12 @@ function Page(props: Props) {
 
     function onViewMatChanged(viewMat: boolean) {
         upd(pageState, { viewMat });
-        lazyLoadDeduced(false);
+        lazyLoadDeduced(refPageData, false);
     }
 
     function onSimplifyChanged(simplify: boolean) {
         upd(pageState, { simplify });
-        lazyLoadDeduced(false);
+        lazyLoadDeduced(refPageData, false);
     }
 
     function showDelayChanged(
@@ -182,48 +180,8 @@ function Page(props: Props) {
                 
         let satScale = value as number;
         upd(pageState, { satScale });
-        lazyLoadDeduced(false);
+        lazyLoadDeduced(refPageData, false);
     }
-
-
-    async function lazyLoadDeduced(
-            changeViewbox: boolean) {
-
-        const { pageState } = stateControl.state.appState;
-        const { satScale, glyph1Name, glyph2Name } = pageState;
-
-        const { pathStr: pathStr1 } = await loadPath(glyph1Name);
-        const { pathStr: pathStr2 } = await loadPath(glyph2Name);
-
-        const { bezierLoops1, bezierLoops2, mats1, mats2, viewbox1, viewbox2, timingAll } = 
-            loadDeducedProps(stateControl, pathStr1, pathStr2);
-
-        upd(stateControl.state.appState.pageState.deduced, {
-            bezierLoops1,
-            // Regenerated from the (possibly rotated) loops so the drawn
-            // outline always matches what the MAT consumed.
-            pathStr1: bezierLoops1
-                .map(loop => beziersToSvgPathStr(loop)).join(' '),
-            mats1,
-            bezierLoops2, pathStr2, mats2,
-        });
-
-        if (typeof _debug_ !== 'undefined') { logSomeStuff(timingAll); }
-
-        drawElements(
-            satScale, mats1, toDraw, svgRef1.current!, $svgs, viewbox1
-        );
-        drawElements(
-            satScale, mats2, toDraw, svgRef2.current!, $svgs2, viewbox2
-        );
-
-        upd(stateControl.state.appState.pageState, {
-            ...(changeViewbox ? { viewbox1 } : {}),
-            ...(changeViewbox ? { viewbox2 } : {}),
-            ...(changeViewbox ? { viewbox3: unionViewbox(viewbox1, viewbox2) } : {}),
-        });
-    }
-
 
     function onClickForChanged(key: ClickFor | 'spacer' | undefined): void {
         if (key === 'spacer') { return; }
@@ -233,12 +191,12 @@ function Page(props: Props) {
 
     function vector1Changed(vectorName: string) {
         upd(pageState, { glyph1Name: vectorName });
-        lazyLoadDeduced(true);
+        lazyLoadDeduced(refPageData, true);
     }
 
     function vector2Changed(vectorName: string) {
         upd(pageState, { glyph2Name: vectorName });
-        lazyLoadDeduced(true);
+        lazyLoadDeduced(refPageData, true);
     }
 
     function toggleSvg(i: number) {
@@ -266,16 +224,19 @@ function Page(props: Props) {
         drawMorph(refPageData, morphT / 100);
     }
 
-    function onPoseCentroidChanged(poseCentroid: boolean) {
-        upd(pageState, { poseCentroid });
+    function onPoseCentroidChanged(applyCentroid: boolean) {
+        upd(poseOptions, { applyCentroid });
+        lazyLoadDeduced(refPageData, false);
     }
 
-    function onPoseScaleChanged(poseScale: boolean) {
-        upd(pageState, { poseScale });
+    function onPoseScaleChanged(applyScale: boolean) {
+        upd(poseOptions, { applyScale });
+        lazyLoadDeduced(refPageData, false);
     }
 
-    function onPoseMomentChanged(poseMoment: boolean) {
-        upd(pageState, { poseMoment });
+    function onTrunkOnlyTisserandChanged(trunkOnlyTisserand: boolean) {
+        upd(poseOptions, { trunkOnlyTisserand });
+        lazyLoadDeduced(refPageData, false);
     }
 
     function onShowPoseChanged(showPose: boolean) {
@@ -325,19 +286,19 @@ function Page(props: Props) {
     /** Rotate shape 1 a further 10° and rebuild everything (testing). */
     function onRotate10Clicked() {
         upd(pageState, { rot1: (pageState.rot1 + 10) % 360 });
-        lazyLoadDeduced(false);
+        lazyLoadDeduced(refPageData, false);
     }
 
     /** Toggle shape 1's horizontal mirror and rebuild everything (testing). */
     function onFlipHClicked() {
         upd(pageState, { flipH: !flipH });
-        lazyLoadDeduced(false);
+        lazyLoadDeduced(refPageData, false);
     }
 
     /** Toggle shape 1's vertical mirror and rebuild everything (testing). */
     function onFlipVClicked() {
         upd(pageState, { flipV: !flipV });
-        lazyLoadDeduced(false);
+        lazyLoadDeduced(refPageData, false);
     }
 
     return <>
@@ -420,9 +381,9 @@ function Page(props: Props) {
                 <Checkbox checked={viewMat} styles={showChangedStyles} text="mat/sat" onChanged={onViewMatChanged} />
                 <Checkbox checked={morphFillOnly} styles={showChangedStyles} text="fill only" onChanged={onMorphFillOnlyChanged} />
                 <Checkbox checked={pageState.showMorphBounds} styles={showChangedStyles} text="bounds" onChanged={onShowMorphBoundsChanged} />
-                <Checkbox checked={poseCentroid} styles={showChangedStyles} text="centroid" onChanged={onPoseCentroidChanged} />
-                <Checkbox checked={poseScale} styles={showChangedStyles} text="scale" onChanged={onPoseScaleChanged} />
-                <Checkbox checked={poseMoment} styles={showChangedStyles} text="2nd moment" onChanged={onPoseMomentChanged} />
+                <Checkbox checked={poseOptions.applyCentroid} styles={showChangedStyles} text="centroid" onChanged={onPoseCentroidChanged} />
+                <Checkbox checked={poseOptions.applyScale} styles={showChangedStyles} text="scale" onChanged={onPoseScaleChanged} />
+                {/* <Checkbox checked={poseOptions.trunkOnlyTisserand} styles={showChangedStyles} text="trunk only" onChanged={onTrunkOnlyTisserandChanged} /> */}
                 <Checkbox checked={showPose} styles={showChangedStyles} text="pose" onChanged={onShowPoseChanged} />
             </div>
             <div style={{ display: 'flex', gap: '16px', alignItems: 'flex-end', paddingBottom: '8px' }}>
@@ -494,7 +455,7 @@ function Page(props: Props) {
                         flip v
                     </button>
                 </div>
-                <div style={{ display: 'flex', gap: '6px' }}>
+                {/* <div style={{ display: 'flex', gap: '6px' }}>
                     <button
                         onClick={() => onMorphClicked(refPageData)}
                         style={{
@@ -511,7 +472,7 @@ function Page(props: Props) {
                     >
                         morph
                     </button>
-                </div>
+                </div> */}
                 <div style={{ minWidth: '225px'}}>
                     <p id="slider" style={{ marginTop: 0, marginBottom: '0.35em' }}>
                         Morph
@@ -682,6 +643,59 @@ function Page(props: Props) {
             </div>
         </div>
     </>
+}
+
+
+async function lazyLoadDeduced(
+        refPageData: React.RefObject<PageData | null>,
+        changeViewbox: boolean) {
+
+    //-------------
+    // Gather data
+    //-------------
+    const pageData = refPageData.current!;
+    const { props, svgRef1, svgRef2 } = pageData;
+    const { stateControl } = props;
+    const { upd, upd$, state: { appState }, transientState } = stateControl;
+    const { $svgs, $svgs2 } = transientState;
+    const { pageState } = appState;
+    const { satScale, glyph1Name, glyph2Name, toDraw } = pageState;
+
+    //------------
+    // Load paths
+    //------------
+    const { pathStr: pathStr1 } = await loadPath(glyph1Name);
+    const { pathStr: pathStr2 } = await loadPath(glyph2Name);
+
+    const { bezierLoops1, bezierLoops2, mats1, mats2, viewbox1, viewbox2, timingAll } = 
+        loadDeducedProps(stateControl, pathStr1, pathStr2);
+
+    upd$(stateControl.state.appState.pageState.deduced, {
+        bezierLoops1,
+        // Regenerated from the (possibly rotated) loops so the drawn
+        // outline always matches what the MAT consumed.
+        pathStr1: bezierLoops1
+            .map(loop => beziersToSvgPathStr(loop)).join(' '),
+        mats1,
+        bezierLoops2, pathStr2, mats2,
+    });
+
+    if (typeof _debug_ !== 'undefined') { logSomeStuff(timingAll); }
+
+    drawElements(
+        satScale, mats1, toDraw, svgRef1.current!, $svgs, viewbox1
+    );
+    drawElements(
+        satScale, mats2, toDraw, svgRef2.current!, $svgs2, viewbox2
+    );
+
+    upd(stateControl.state.appState.pageState, {
+        ...(changeViewbox ? { viewbox1 } : {}),
+        ...(changeViewbox ? { viewbox2 } : {}),
+        ...(changeViewbox ? { viewbox3: unionViewbox(viewbox1, viewbox2) } : {}),
+    });
+
+    onMorphClicked(refPageData);
 }
 
 

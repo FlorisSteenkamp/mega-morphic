@@ -29,7 +29,7 @@ module.exports = {
         },
         alias: {
             // 'flo-boolean$': path.resolve(__dirname, projectRoot, 'boolean/src/index.ts'),
-            'flo-mat$':     path.resolve(__dirname, projectRoot, 'mat/src/index.ts'),
+            // 'flo-mat$':     path.resolve(__dirname, projectRoot, 'mat/src/index.ts'),
             // 'flo-bezier3$': path.resolve(__dirname, projectRoot, 'bezier/src/index.ts'),
         },
     },

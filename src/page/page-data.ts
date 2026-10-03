@@ -1,7 +1,7 @@
 import type { Props } from './props.js';
 import type { MorphEntry } from '../morph/draw-morph/draw-morph.js';
 import type { FeatureMark } from '../morph/build-morph-entries/build-morph-entries.js';
-import type { PoseRamp } from '../morph/pose-ramp.js';
+import type { PoseRamp } from '../morph/procrustes/pose-ramp.js';
 
 
 interface PageData {
@@ -12,9 +12,6 @@ interface PageData {
     readonly morphRef: React.RefObject<MorphEntry[] | null>,
     /** feature marks of the current morph (set together with morphRef) */
     readonly morphMarksRef: React.RefObject<FeatureMark[] | null>,
-    /** pose ramp of the current morph (set together with morphRef) */
-    readonly morphPoseRef: React.RefObject<PoseRamp | null>,
-    // readonly morphT: number;
 }
 
 

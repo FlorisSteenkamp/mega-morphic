@@ -2,6 +2,8 @@ import type { ToDraw } from './to-draw.js';
 import type { DeducedState } from './deduced-state.js';
 import type { ClickFor } from './click-for.js';
 import type { PathCostWeights } from '../morph/match-paths/path-cost-weights.js';
+import type { PoseOptions } from '../morph/procrustes/pose-options.js';
+
 
 interface PageState {
     /** Won't be save to localstorage */
@@ -26,10 +28,7 @@ interface PageState {
     readonly morphFillOnly: boolean;
     /** Pose alignment components (procrustes split): morph shape 2 in the
      *  aligned frame, ride the enabled components back globally. */
-    readonly poseCentroid: boolean;
-    readonly poseScale: boolean;
-    /** principal-axis rotation (2nd moment of inertia) */
-    readonly poseMoment: boolean;
+    readonly poseOptions: PoseOptions;
     /** Draw a pose gizmo on the morph (centroid ring ∝ √area + principal
      *  axis line), measured from the drawn outlines. */
     readonly showPose: boolean;

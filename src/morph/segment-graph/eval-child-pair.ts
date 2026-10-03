@@ -8,7 +8,7 @@ import { matchSegGraphs, priceChildPair, reverseRoute }
     from './match-seg-graphs.js';
 import { routeSegments } from './route-segments.js';
 import { alignOfRoutes } from './match-paths-via-segments.js';
-import { procrustes } from '../procrustes/procrustes-analysis.js';
+import { calcProcrustes } from '../procrustes/calc-procrustes.js';
 
 const routeLenOf = (r: RouteStep[]): number => {
     let L = 0;
@@ -60,8 +60,11 @@ function evalChildPair(
 
     const unitA = gA.unit;
     const unitB = gB.unit;
-    const aniso = (procrustes(gA.loop).anisotropy +
-        procrustes(gB.loop).anisotropy) / 2;
+    const aniso = (
+        calcProcrustes(gA.loop).anisotropy +
+        calcProcrustes(gB.loop).anisotropy
+    ) / 2;
+
     const root =
         matchSegGraphs(gA, gB, unitA, unitB, weights, aniso).root;
 

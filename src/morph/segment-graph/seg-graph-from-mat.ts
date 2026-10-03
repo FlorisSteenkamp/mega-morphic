@@ -32,7 +32,8 @@ interface MatEdge {
  * Rooting-free - no fat-branch tree is involved; segment direction is
  * walk-derived (arbitrary but fixed).
  */
-function segGraphFromMat(start: CpNode): SegGraph {
+function segGraphFromMat(
+        cpStart: CpNode): SegGraph {
 
     const edges = new Map<string, MatEdge>();
     /** incident edge keys per circle id */
@@ -49,7 +50,7 @@ function segGraphFromMat(start: CpNode): SegGraph {
         list.push(key);
     };
 
-    let cp = start;
+    let cp = cpStart;
     do {
         const from = getCircleId(cp);
         const to = getCircleId(cp.next);
@@ -66,9 +67,9 @@ function segGraphFromMat(start: CpNode): SegGraph {
             }
         }
         cp = cp.next;
-    } while (cp !== start);
+    } while (cp !== cpStart);
 
-    const loop = outlineLoopOf(start);
+    const loop = outlineLoopOf(cpStart);
     const unit = sqrt(abs(getShapeArea(loop)));
 
     const vertices: SegVertex[] = [];

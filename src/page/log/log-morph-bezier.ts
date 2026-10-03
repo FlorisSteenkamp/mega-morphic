@@ -2,8 +2,8 @@ import type { PageData } from '../page-data.js';
 import { closestPointOnBezier } from 'flo-bezier3';
 import { drawFs } from 'flo-draw';
 import { resolveMorphAt } from '../../morph/resolve-morph-at/resolve-morph-at.js';
-import { poseCorrectionAt } from '../../morph/pose-ramp.js';
-import { procrustes } from '../../morph/procrustes/procrustes-analysis.js';
+import { poseCorrectionAt } from '../../morph/procrustes/pose-ramp.js';
+import { calcProcrustes } from '../../morph/procrustes/calc-procrustes.js';
 import { XMLNS } from '../../draw/xmlns.js';
 
 const { atan2, hypot, abs, min, PI: π } = Math;
@@ -21,9 +21,11 @@ function logMorphBezier(
         refPageData: React.RefObject<PageData | null>) {
 
     return (g: SVGGElement, p: number[], showDelay = 1000): void => {
-        const { morphRef, props, morphPoseRef } = refPageData.current!;
+        const { morphRef, props } = refPageData.current!;
         const { stateControl } = props;
-        const { morphT } = stateControl.state.appState.pageState;
+        const { state: { appState } } = stateControl;
+        const { morphT, poseOptions } = appState.pageState;
+        const { morphPose } = appState.pageState.deduced;
         const entries = morphRef.current;
         
         if (/*pd === null || */entries === null || entries === undefined) {
@@ -35,10 +37,10 @@ function logMorphBezier(
         let { outlines } = resolveMorphAt(entries, t);
 
         // Match the DRAWN shape exactly - it may be pose-corrected.
-        const ramp = morphPoseRef.current;
-        if (ramp !== null && outlines.length > 0) {
-            const measured = procrustes(outlines.flat());
-            const { tf } = poseCorrectionAt(ramp, t, measured);
+        // const ramp = morphPoseRef.current;
+        if (morphPose !== undefined && outlines.length > 0) {
+            const measured = calcProcrustes(outlines.flat());
+            const { tf } = poseCorrectionAt(poseOptions, morphPose, t, measured);
             outlines = outlines.map(loop => loop.map(ps => ps.map(tf)));
         }
 

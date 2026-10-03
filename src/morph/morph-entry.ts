@@ -4,7 +4,9 @@ import type { SleeveSide } from './anchored-sleeves.js';
 
 
 /**
- * A drawable of the morph: `a` (t=0) lerped to `b` (t=1), control point
+ * A drawable of the morph
+ * 
+ * * `a` (t=0) lerped to `b` (t=1), control point
  * for control point, optionally glued to a parent entry.
  */
 interface MorphEntry {

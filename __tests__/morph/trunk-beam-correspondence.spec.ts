@@ -13,7 +13,7 @@ import { segGraphFromMat } from '../../src/morph/segment-graph/seg-graph-from-ma
 import { sampleSegGraph } from '../../src/morph/segment-graph/sample-seg-graph.js';
 import { productDtw } from '../../src/morph/segment-graph/product-dtw.js';
 import { matchSegGraphs } from '../../src/morph/segment-graph/match-seg-graphs.js';
-import { procrustes } from '../../src/morph/procrustes/procrustes-analysis.js';
+import { calcProcrustes } from '../../src/morph/procrustes/calc-procrustes.js';
 import { parseSvgFont } from '../../src/load-svg/load-svg-font.js';
 
 const { sqrt } = Math;
@@ -79,8 +79,8 @@ function probe(applySat: boolean): { pairs: number; drops: number } {
     const gB = graphOf(loopsB, applySat);
     const uA = gA.unit;
     const uB = gB.unit;
-    const aniso = (procrustes(gA.loop).anisotropy +
-        procrustes(gB.loop).anisotropy) / 2;
+    const aniso = (calcProcrustes(gA.loop).anisotropy +
+        calcProcrustes(gB.loop).anisotropy) / 2;
 
     const pd = productDtw(
         sampleSegGraph(gA, uA, 200), sampleSegGraph(gB, uB, 200),

@@ -4,14 +4,11 @@ import type { MorphEntry, MutableMorphEntry } from '../morph-entry.js';
 import type { AnchorPair } from '../align-branches.js';
 import type { MatchedPath } from '../match-paths/matched-path.js';
 import type { PathCostWeights } from '../match-paths/path-cost-weights.js';
-import type { PoseRamp, PoseComponents } from '../pose-ramp.js';
 import type { Segment } from '../segment-graph/segment.js';
 import type { SegGraph } from '../segment-graph/seg-graph.js';
 import { getShapeArea } from 'flo-boolean';
 import { matchPathsViaSegments } from '../segment-graph/match-paths-via-segments.js';
 import { composeRouteGeom } from '../segment-graph/compose-segs.js';
-import { procrustes } from '../procrustes/procrustes-analysis.js';
-import { resolveMorphAt } from '../resolve-morph-at/resolve-morph-at.js';
 import { alignBranches, resampleAt } from '../align-branches.js';
 import { buildSleeveSides, skeletonKnots } from '../anchored-sleeves.js';
 import { getLastP } from '../fs/get-last-p.js';
@@ -20,8 +17,6 @@ import { matchColors } from '../../page/events/match-colors.js';
 import { nearestIdx } from '../nearest-idx.js';
 import { placeTopology } from '../place-topology.js';
 import { getPolyBezierLength } from '../fs/get-poly-bezier-length.js';
-
-const { sqrt, sin, cos, round, PI: π } = Math;
 
 
 /**
@@ -48,22 +43,12 @@ interface FeatureMark {
  * the whole route are alignment anchors and glue points, and every
  * uncovered segment collapses onto its coverage-side vertex, glued to the
  * entry owning that boundary.
- * 
- * @param gA
- * @param gB
- * @param marks
- * @param weights
- * @param poseOut pass to enable pose alignment: the ENABLED components of shape
- * 2's frame are aligned onto shape 1 for the morph, and the
- * returned `ramp` restores its true pose over t (apply when
- * drawing)
  */
 function buildMorphEntries(
         gA: SegGraph,
         gB: SegGraph,
         marks: FeatureMark[],
-        weights?: Partial<PathCostWeights>,
-        poseOut?: { components: PoseComponents; ramp?: PoseRamp }):
+        weights?: Partial<PathCostWeights>):
         MorphEntry[] {
 
     const pm = matchPathsViaSegments(gA, gB, { weights });
@@ -90,8 +75,10 @@ function buildMorphEntries(
     /** per entry: its resampled segment boundary points, per side */
     const bnds: { a?: number[][]; b?: number[][] }[] = [];
 
-    /** covered segment → owning entry index (per side; placeTopology adds
-     *  placed segments as glue hosts for chained uncovered neighbors) */
+    /**
+     * covered segment → owning entry index (per side; placeTopology adds
+     * placed segments as glue hosts for chained uncovered neighbors)
+     */
     const owner1 = new Map<Segment, number>();
     const owner2 = new Map<Segment, number>();
 
@@ -110,11 +97,6 @@ function buildMorphEntries(
         'red thin35 nofill', capSign, bnds, entries, marks);
     placeTopology(gB, covered2, owner2, 'b',
         'green thin35 nofill', capSign, bnds, entries, marks);
-
-    if (poseOut !== undefined) {
-        poseOut.ramp = applyProcrustes(
-            gA.loop, gB.loop, entries, poseOut.components);
-    }
 
     return entries as MorphEntry[];
 
@@ -231,142 +213,6 @@ function coveredSegsOf(
     };
     walk(trunk);
     return out;
-}
-
-
-/**
- * Aligns shape 2's frame onto shape 1 (smallest principal-axis rotation,
- * √area scale, centroid-to-centroid) by mapping every b-frame coordinate of
- * the built entries into the aligned frame - the sleeve data is stored in
- * local frames (chord-normalized pieces, polar anchors) and radii are
- * scaled, so the reconstruction stays exact. Static marks are NOT touched
- * (svg2 shows the original shape). Returns the ramp restoring the true pose.
- */
-function applyProcrustes(
-        loopA: number[][][],
-        loopB: number[][][],
-        entries: MutableMorphEntry[],
-        comp: PoseComponents): PoseRamp {
-
-    const pose1 = procrustes(loopA);
-    const pose2 = procrustes(loopB);
-
-    const s = comp.scale ? pose1.scale / pose2.scale : 1;
-    // Principal axes are only defined mod π - take the smaller rotation.
-    const θ = comp.moment ? wrapModPi(pose1.angle - pose2.angle) : 0;
-
-    const cosθ = cos(θ);
-    const sinθ = sin(θ);
-    const [c2x, c2y] = pose2.centroid;
-    // centroid off: rotate/scale shape 2 in place (about its own centroid)
-    const [c1x, c1y] = comp.centroid ? pose1.centroid : pose2.centroid;
-    const tf = ([x, y]: number[]): number[] => {
-        const ux = x - c2x;
-        const uy = y - c2y;
-        return [
-            c1x + s*(cosθ*ux - sinθ*uy),
-            c1y + s*(sinθ*ux + cosθ*uy)
-        ];
-    };
-
-    for (const e of entries) {
-        // Deleted (side-a) topo entries live entirely in shape 1's frame.
-        if (e.collapsed === 'b') { continue; }
-        // An inserted entry's collapsed frame is in shape 2's coords too.
-        if (e.collapsed === 'a') { e.skelPssA = e.skelPssA.map(ps => ps.map(tf)); }
-        e.skelPssB = e.skelPssB.map(ps => ps.map(tf));
-        if (e.rb !== undefined) { e.rb = e.rb.map(r => r * s); }
-    }
-
-    // Measured axis angles of the aligned-frame morph, sampled over t and
-    // UNWRAPPED (period π). Branch decisions are chained ONLY through
-    // samples whose axis is measurable (near isotropy the angle is pure
-    // noise and nearest-branch chaining random-walks by ±π/2 hops -
-    // accumulating spurious full turns); unmeasurable stretches are filled
-    // by interpolation between confident neighbors.
-    // Only needed when the moment component is pinned (33 morph resolves).
-    if (!comp.moment) {
-        return {
-            c1: pose1.centroid,
-            c2: pose2.centroid,
-            s1: pose1.scale,
-            s2: pose2.scale,
-            thD0: 0,
-            thD1: 0,
-            ths: [0, 0],
-            pin: comp
-        };
-    }
-    const N = 32;
-    const MIN_ANISO = 0.05;
-    const angles: number[] = [];
-    const anisos: number[] = [];
-    for (let i = 0; i <= N; i++) {
-        const { outlines } = resolveMorphAt(entries as MorphEntry[], i / N);
-        if (outlines.length === 0) {
-            angles.push(angles[angles.length - 1] ?? pose1.angle);
-            anisos.push(0);
-            continue;
-        }
-        const p = procrustes(outlines.flat());
-        angles.push(p.angle);
-        anisos.push(p.anisotropy);
-    }
-
-    const conf: number[] = [];
-    for (let i = 0; i <= N; i++) {
-        if (anisos[i] >= MIN_ANISO) { conf.push(i); }
-    }
-
-    const ths = new Array<number>(N + 1);
-    if (conf.length === 0) {
-        ths.fill(angles[0]);
-    } else {
-        let prev = angles[conf[0]];
-        const vals = conf.map(i => {
-            prev = prev + wrapModPi(angles[i] - prev);
-            return prev;
-        });
-        for (let i = 0; i <= N; i++) {
-            if (i <= conf[0]) { ths[i] = vals[0]; continue; }
-            if (i >= conf[conf.length - 1]) {
-                ths[i] = vals[vals.length - 1];
-                continue;
-            }
-            const k = conf.findIndex(c => c >= i);
-            if (conf[k] === i) { ths[i] = vals[k]; continue; }
-            const f = (i - conf[k - 1]) / (conf[k] - conf[k - 1]);
-            ths[i] = vals[k - 1]*(1 - f) + vals[k]*f;
-        }
-    }
-
-    // Desired end axis: EXACTLY the inverse alignment rotation, on the 2π
-    // branch nearest the start - endpoint exactness by construction (no
-    // π-parity possible) and residual drift cannot add full turns.
-    const rotEnd = -θ;
-    const thD0 = ths[0];
-    const thsEnd = ths[N];
-    const m = round((thD0 - thsEnd - rotEnd) / (2*π));
-
-    return {
-        c1: pose1.centroid,
-        c2: pose2.centroid,
-        s1: pose1.scale,
-        s2: pose2.scale,
-        thD0,
-        thD1: thsEnd + rotEnd + 2*π*m,
-        ths,
-        pin: comp
-    };
-}
-
-
-/** Wraps an angle into (−π/2, π/2] (axis angles are mod π). */
-function wrapModPi(x: number): number {
-    let r = x % π;
-    if (r > π / 2) { r -= π; }
-    if (r < -π / 2) { r += π; }
-    return r;
 }
 
 
