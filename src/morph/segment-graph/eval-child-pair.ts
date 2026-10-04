@@ -2,22 +2,20 @@ import type { PathCostWeights } from '../match-paths/path-cost-weights.js';
 import type { PathAlignDebug } from '../match-paths/matched-path.js';
 import type { Segment } from './segment.js';
 import type { SegGraph } from './seg-graph.js';
-import type { SegMatchedPair, SegOp, SegChild, ChildPairPrice, RouteStep }
-    from './match-seg-graphs.js';
-import { matchSegGraphs, priceChildPair, reverseRoute }
-    from './match-seg-graphs.js';
+import type { SegMatchedPair, SegOp, SegChild, ChildPairPrice, RouteStep } from './match-seg-graphs.js';
+import { matchSegGraphs, priceChildPair, reverseRoute } from './match-seg-graphs.js';
 import { routeSegments } from './route-segments.js';
 import { alignOfRoutes } from './match-paths-via-segments.js';
 import { calcProcrustes } from '../procrustes/calc-procrustes.js';
-
-const routeLenOf = (r: RouteStep[]): number => {
-    let L = 0;
-    for (const s of r) { L += s.seg.len; }
-    return L;
-};
+import { getUnit$ } from './get-unit.js';
+import { lenOfRoute$ } from './len-of.js';
 
 
-/** How a clicked segment maps to a pooled child of the winning match. */
+/**
+ * * **Debug only**
+ * 
+ * How a clicked segment maps to a pooled child of the winning match.
+ */
 interface ChildLocation {
     readonly child: SegChild;
     /** the parent pair the child is pooled on */
@@ -28,6 +26,10 @@ interface ChildLocation {
     readonly outcome: { type: SegOp['type']; partner?: SegChild };
 }
 
+
+/**
+ * * **Debug only**
+ */
 interface ChildPairEval {
     readonly a?: ChildLocation;
     readonly b?: ChildLocation;
@@ -45,6 +47,8 @@ interface ChildPairEval {
 
 
 /**
+ * * **Debug only**
+ * 
  * Prices a clicked child-segment pair with the segment matcher's actual
  * economics: a fresh `matchSegGraphs` run on the SAME graphs (current
  * weights - graph construction is weight-independent) locates the segments
@@ -58,8 +62,8 @@ function evalChildPair(
         segB: Segment,
         weights: PathCostWeights): ChildPairEval {
 
-    const unitA = gA.unit;
-    const unitB = gB.unit;
+    const unitA = getUnit$(gA.loop);
+    const unitB = getUnit$(gB.loop);
     const aniso = (
         calcProcrustes(gA.loop).anisotropy +
         calcProcrustes(gB.loop).anisotropy
@@ -82,8 +86,11 @@ function evalChildPair(
 
     const price = priceChildPair(
         gA, gB, unitA, unitB,
-        routeLenOf(a.pair.routeA), routeLenOf(b.pair.routeB),
-        weights, weights.sway*aniso, a.child, b.child);
+        lenOfRoute$(a.pair.routeA),
+        lenOfRoute$(b.pair.routeB),
+        weights, weights.sway*aniso,
+        a.child, b.child
+    );
     const dropCost = price.deleteCost + price.insertCost;
 
     const sameParent = a.pair === b.pair;
@@ -173,5 +180,5 @@ function locate(
 }
 
 
-export { evalChildPair }
 export type { ChildPairEval, ChildLocation }
+export { evalChildPair }

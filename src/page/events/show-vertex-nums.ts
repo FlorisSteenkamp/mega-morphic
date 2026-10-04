@@ -1,6 +1,6 @@
 import type { PageData } from '../page-data.js';
 import type { SegGraph } from '../../morph/segment-graph/seg-graph.js';
-import { segGraphFromMat } from '../../morph/segment-graph/seg-graph-from-mat.js';
+import { segGraphFromCp } from '../../morph/segment-graph/seg-graph-from-mat.js';
 import { XMLNS } from '../../draw/xmlns.js';
 
 
@@ -28,8 +28,8 @@ function showVertexNums(
     const { mats1, mats2 } = props.pageState.deduced;
     if (mats1.length === 0 || mats2.length === 0) { return; }
 
-    drawNums(g1, segGraphFromMat(mats1[0].cpNode));
-    drawNums(g2, segGraphFromMat(mats2[0].cpNode));
+    drawNums(g1, segGraphFromCp(mats1[0].cpNode));
+    drawNums(g2, segGraphFromCp(mats2[0].cpNode));
 }
 
 
@@ -45,7 +45,7 @@ function drawNums(g: SVGGElement, graph: SegGraph): void {
 
     for (const v of graph.vertices) {
         const inc = graph.segments.filter(
-            s => s.v0 === v.id || s.v1 === v.id);
+            s => s.vertIdS === v.id || s.vertIdE === v.id);
         const leaf = inc.length === 1;
 
         let p = v.p;
@@ -53,9 +53,9 @@ function drawNums(g: SVGGElement, graph: SegGraph): void {
             // nudge PAST the tip (opposite the inward tangent) so the
             // number sits clear of the skeleton
             const s = inc[0];
-            const ps = s.v0 === v.id
-                ? s.pss[0]
-                : s.pss[s.pss.length - 1].toReversed();
+            const ps = s.vertIdS === v.id
+                ? s.skelPss[0]
+                : s.skelPss[s.skelPss.length - 1].toReversed();
             const d = tipTangent(ps);
             const off = fontSize * 0.5;
             p = [v.p[0] - off*d[0], v.p[1] - off*d[1]];

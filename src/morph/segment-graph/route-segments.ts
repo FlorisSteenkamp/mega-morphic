@@ -14,8 +14,8 @@ function routeSegments(
     const adj: { seg: Segment; to: number }[][] =
         g.vertices.map(() => []);
     for (const seg of g.segments) {
-        adj[seg.v0].push({ seg, to: seg.v1 });
-        adj[seg.v1].push({ seg, to: seg.v0 });
+        adj[seg.vertIdS].push({ seg, to: seg.vertIdE });
+        adj[seg.vertIdE].push({ seg, to: seg.vertIdS });
     }
 
     const prev = new Array<{ seg: Segment; from: number } | undefined>(
@@ -39,7 +39,7 @@ function routeSegments(
     while (u !== v0) {
         const p = prev[u];
         if (p === undefined) { return []; }  // disconnected (shouldn't happen)
-        out.push({ seg: p.seg, reversed: p.seg.v1 !== u });
+        out.push({ seg: p.seg, reversed: p.seg.vertIdE !== u });
         u = p.from;
     }
     return out.reverse();

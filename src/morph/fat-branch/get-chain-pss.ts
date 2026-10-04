@@ -4,6 +4,8 @@ import { getArcBeziersBetween } from '../fs/get-arc-beziers-between.js';
 
 
 /**
+ * * **Debug only**
+ * 
  * Returns the Bezier pieces traced by a (not necessarily closed) CpNode
  * chain, including the circular sectors needed when consecutive contacts
  * share a maximal disk.

@@ -1,9 +1,9 @@
 import { fromTo, getTAtLength, toCubic, evalDeCasteljau } from 'flo-bezier3';
 import { distributeBezierListsEvenly } from './distribute-beziers-evenly.js';
 import { clamp } from '../utils/clamp.js';
-import { getPolyBezierLength } from './fs/get-poly-bezier-length.js';
-import { totalLength$ } from './fs/total-length.js';
+import { length$ } from './fs/length.js';
 import { sum } from '../utils/sum.js';
+import { lenOf$ } from './segment-graph/len-of.js';
 
 const { atan2, hypot, PI: π } = Math;
 
@@ -53,12 +53,16 @@ interface SleeveFrame {
 function skeletonKnots(
         pss: number[][][]): number[] {
 
-    const lens = pss.map(totalLength$);
+    const lens = pss.map(length$);
     const total = sum(lens);
 
     const knots = [0];
     let cum = 0;
-    for (const l of lens) { cum += l; knots.push(total > 0 ? cum/total : 0); }
+    for (const l of lens) {
+        cum += l;
+        knots.push(total > 0 ? cum/total : 0);
+    }
+
     knots[knots.length - 1] = 1;
 
     return knots;
@@ -108,8 +112,8 @@ function buildSide(
         // real side's structure so control points still correspond.
         let pA = sA.pieces;
         let pB = sB.pieces;
-        const degA = getPolyBezierLength(pA) < EPS_LEN;
-        const degB = getPolyBezierLength(pB) < EPS_LEN;
+        const degA = lenOf$(pA) < EPS_LEN;
+        const degB = lenOf$(pB) < EPS_LEN;
         if (degA && degB) {
             pA = [[sA.from, sA.to]];
             pB = [[sB.from, sB.to]];
@@ -235,7 +239,7 @@ function cutByArcFraction(
         f0: number,
         f1: number): number[][][] {
 
-    const lens = pieces.map(totalLength$);
+    const lens = pieces.map(length$);
     const total = sum(lens);
 
     if (total < EPS_LEN) {

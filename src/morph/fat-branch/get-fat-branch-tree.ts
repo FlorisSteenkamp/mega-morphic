@@ -6,6 +6,8 @@ import { getFatBranchesFrom } from "./get-fat-branches-from.js";
 
 
 /**
+ * * **Debug only**
+ * 
  * Returns the fat branch through the given `CpNode` as the trunk of a fully
  * recursive tree.
  */
@@ -28,7 +30,11 @@ function getFatBranchTree(
 }
 
 
-/** Adds child `FatBranch`es to the given parent `FatBranch`, recursively. */
+/**
+ * * **Debug only**
+ * 
+ * Adds child `FatBranch`es to the given parent `FatBranch`, recursively.
+ */
 function addChildren(
         parent: FatBranch): void {
 
@@ -39,6 +45,4 @@ function addChildren(
 }
 
 
-export {
-    getFatBranchTree
-}
+export { getFatBranchTree }

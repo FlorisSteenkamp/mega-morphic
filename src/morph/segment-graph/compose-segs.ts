@@ -25,7 +25,7 @@ function composeSegs(
     let edges: SleevePair[] = [];
 
     for (const seg of segs) {
-        bz = [...bz, ...seg.pss];
+        bz = [...bz, ...seg.skelPss];
         rd = rd.length === 0 ? [...seg.radii] : [...rd, ...seg.radii.slice(1)];
         edges = [...edges, ...seg.sleeves];
     }

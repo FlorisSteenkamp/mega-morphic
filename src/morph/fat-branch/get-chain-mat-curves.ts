@@ -3,6 +3,8 @@ import { getMatCurveToNext, isTerminating } from "flo-mat";
 
 
 /**
+ * * **Debug only**
+ * 
  * Returns the medial axis curves along a fat branch chain (both sides, so
  * each MAT edge appears twice - harmless for drawing).
  */

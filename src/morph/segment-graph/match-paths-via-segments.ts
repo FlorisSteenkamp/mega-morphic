@@ -13,6 +13,7 @@ import { sampleFeatures$ } from '../match-paths/sample-features.js';
 import { alignProfiles } from '../match-paths/align-profiles.js';
 import { matchSegGraphs, composeRoute } from './match-seg-graphs.js';
 import { calcProcrustes } from '../procrustes/calc-procrustes.js';
+import { getUnit$ } from './get-unit.js';
 
 
 /**
@@ -34,8 +35,8 @@ function matchPathsViaSegments(
         ...opts.weights
     };
 
-    const unit1 = gA.unit;
-    const unit2 = gB.unit;
+    const unit1 = getUnit$(gA.loop);
+    const unit2 = getUnit$(gB.loop);
 
     // sway visibility factor
     const aniso = (

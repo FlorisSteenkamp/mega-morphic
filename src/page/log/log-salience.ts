@@ -4,7 +4,8 @@ import { distanceBetween } from 'flo-vector2d';
 import { sum } from '../../utils/sum.js';
 import { getBoundaryBeziersBetween } from '../../../../mat/src/cp-node/fs/get-boundary-beziers-between.js';
 import { getNearestCpNode } from '../get-nearest/get-nearest-cp-node.js';
-import { totalLength$ } from '../../morph/fs/total-length.js';
+import { length$ } from '../../morph/fs/length.js';
+import { lenOf$ } from '../../morph/segment-graph/len-of.js';
 
 
 function logSalience(mats: Mat[]) {
@@ -26,7 +27,7 @@ function logSalience(mats: Mat[]) {
             drawFs.bezier(g, ps, 'thin20 red nofill', showDelay);
         })
 
-        const s = sum(bps.map(totalLength$));
+        const s = lenOf$(bps);
 
         const salience = hasHoleCloser ? Infinity : s/d;
         

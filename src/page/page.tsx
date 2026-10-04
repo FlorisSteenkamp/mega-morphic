@@ -234,11 +234,6 @@ function Page(props: Props) {
         lazyLoadDeduced(refPageData, false);
     }
 
-    function onTrunkOnlyTisserandChanged(trunkOnlyTisserand: boolean) {
-        upd(poseOptions, { trunkOnlyTisserand });
-        lazyLoadDeduced(refPageData, false);
-    }
-
     function onShowPoseChanged(showPose: boolean) {
         upd(pageState, { showPose });
         drawMorph(refPageData, morphT / 100);
@@ -383,7 +378,6 @@ function Page(props: Props) {
                 <Checkbox checked={pageState.showMorphBounds} styles={showChangedStyles} text="bounds" onChanged={onShowMorphBoundsChanged} />
                 <Checkbox checked={poseOptions.applyCentroid} styles={showChangedStyles} text="centroid" onChanged={onPoseCentroidChanged} />
                 <Checkbox checked={poseOptions.applyScale} styles={showChangedStyles} text="scale" onChanged={onPoseScaleChanged} />
-                {/* <Checkbox checked={poseOptions.trunkOnlyTisserand} styles={showChangedStyles} text="trunk only" onChanged={onTrunkOnlyTisserandChanged} /> */}
                 <Checkbox checked={showPose} styles={showChangedStyles} text="pose" onChanged={onShowPoseChanged} />
             </div>
             <div style={{ display: 'flex', gap: '16px', alignItems: 'flex-end', paddingBottom: '8px' }}>

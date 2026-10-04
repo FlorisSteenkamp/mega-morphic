@@ -20,6 +20,9 @@ TODO
 
 FUTURE
 ------
+* In `Segment` material is calculated as `2*mean(r)*l` thus dropping half of
+  the for circle - is this optimal? We could store size of for circle of segment
+  with Segment and do a Green's Theorem instead so trunk don't lose its salience
 * Better boundary lerping - currently jagged / intersecting
   - currently fixed by adding more 2-prongs by making maxLength === 10 (instead of 40)
 

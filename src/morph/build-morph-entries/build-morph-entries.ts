@@ -16,7 +16,8 @@ import { clamp } from '../../utils/clamp.js';
 import { matchColors } from '../../page/events/match-colors.js';
 import { nearestIdx } from '../nearest-idx.js';
 import { placeTopology } from '../place-topology.js';
-import { getPolyBezierLength } from '../fs/get-poly-bezier-length.js';
+import { getUnit$ } from '../segment-graph/get-unit.js';
+import { lenOf$ } from '../segment-graph/len-of.js';
 
 
 /**
@@ -67,8 +68,8 @@ function buildMorphEntries(
     // loop gives a reliable winding for the cap arcs.
     const capSign = getShapeArea(gA.loop) < 0 ? -1 : 1;
 
-    const unit1 = gA.unit;
-    const unit2 = gB.unit;
+    const unitA = getUnit$(gA.loop);
+    const unitB = getUnit$(gB.loop);
 
     const entries: MutableMorphEntry[] = [];
 
@@ -118,8 +119,8 @@ function buildMorphEntries(
 
         // Feature anchors: ALL matched child forks along the paths (incl.
         // absorbed stretches - the matcher pooled them).
-        const LA = getPolyBezierLength(gA.bz);
-        const LB = getPolyBezierLength(gB.bz);
+        const LA = lenOf$(gA.bz);
+        const LB = lenOf$(gB.bz);
 
         const matchOps = mp.children.filter(
             op => op.type === 'match');
@@ -130,7 +131,7 @@ function buildMorphEntries(
 
         // Non-linear (feature-warped) correspondence along the skeleton.
         const al = alignBranches(
-            gA.bz, gA.rd, gB.bz, gB.rd, anchors, unit1, unit2
+            gA.bz, gA.rd, gB.bz, gB.rd, anchors, unitA, unitB
         );
 
         const mA = resampleAt(gA.bz, gA.rd, al.usA);

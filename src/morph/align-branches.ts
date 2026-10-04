@@ -1,7 +1,7 @@
 import { evalDeCasteljau, fromTo, getTAtLength, toCubic } from 'flo-bezier3';
 import { unwrappedChordAngles } from './intrinsic-skeleton/unwrapped-chord-angles.js';
 import { clamp } from '../utils/clamp.js';
-import { totalLength$ } from './fs/total-length.js';
+import { length$ } from './fs/length.js';
 import { sum } from '../utils/sum.js';
 
 const { abs, max, min, round } = Math;
@@ -135,7 +135,7 @@ function sampleCount(bz: number[][][]): number {
 
 /** Normalized cumulative arc-length knots. */
 function arcKnots(bz: number[][][]): number[] {
-    const lens = bz.map(totalLength$);
+    const lens = bz.map(length$);
     const total = sum(lens);
 
     const knots = [0];
@@ -348,7 +348,7 @@ function resampleAt(
         us: number[]): { beziers: number[][][]; radii: number[] } {
 
     const knots = arcKnots(bz);
-    const lens = bz.map(totalLength$);
+    const lens = bz.map(length$);
 
     const beziers: number[][][] = [];
     for (let s = 0; s < us.length - 1; s++) {

@@ -37,7 +37,7 @@ function placeTopology(
 
     const adj = new Map<number, Segment[]>();
     for (const s of g.segments) {
-        for (const v of [s.v0, s.v1]) {
+        for (const v of [s.vertIdS, s.vertIdE]) {
             let list = adj.get(v);
             if (list === undefined) { adj.set(v, list = []); }
             list.push(s);
@@ -49,7 +49,7 @@ function placeTopology(
     const dist = new Map<number, number>();
     const queue: number[] = [];
     for (const s of covered) {
-        for (const v of [s.v0, s.v1]) {
+        for (const v of [s.vertIdS, s.vertIdE]) {
             if (!dist.has(v)) { dist.set(v, 0); queue.push(v); }
         }
     }
@@ -58,13 +58,13 @@ function placeTopology(
         const d = dist.get(v)!;
         for (const s of adj.get(v) ?? []) {
             if (covered.has(s)) { continue; }
-            const w = s.v0 === v ? s.v1 : s.v0;
+            const w = s.vertIdS === v ? s.vertIdE : s.vertIdS;
             if (!dist.has(w)) { dist.set(w, d + 1); queue.push(w); }
         }
     }
 
     const dOf = (s: Segment): number =>
-        min(dist.get(s.v0) ?? Infinity, dist.get(s.v1) ?? Infinity);
+        min(dist.get(s.vertIdS) ?? Infinity, dist.get(s.vertIdE) ?? Infinity);
 
     // closer-to-coverage first: a segment's coverage-side neighbors are
     // already placed when it is (chained glue)
@@ -75,13 +75,13 @@ function placeTopology(
     for (const seg of pending) { place(seg); }
 
     function place(seg: Segment): void {
-        const d0 = dist.get(seg.v0) ?? Infinity;
-        const d1 = dist.get(seg.v1) ?? Infinity;
+        const d0 = dist.get(seg.vertIdS) ?? Infinity;
+        const d1 = dist.get(seg.vertIdE) ?? Infinity;
         // junction = the coverage-side vertex (collapse target)
-        const jV = d0 <= d1 ? seg.v0 : seg.v1;
+        const jV = d0 <= d1 ? seg.vertIdS : seg.vertIdE;
 
         // junction LAST (pushCollapsedEntry collapses onto the last point)
-        const { bz, rd: radii, edges } = composeSegs([seg], seg.v0 === jV);
+        const { bz, rd: radii, edges } = composeSegs([seg], seg.vertIdS === jV);
 
         const junction = getLastP(bz);
 

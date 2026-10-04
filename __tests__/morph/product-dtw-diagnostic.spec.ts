@@ -260,7 +260,7 @@ describe('product-graph DTW vs current matcher (score-only)', () => {
 
         const missing: string[] = [];
         for (const seg of gA.segments) {
-            const tip = seg.pss[0][0];
+            const tip = seg.skelPss[0][0];
             let best = Infinity;
             for (const p of pts) {
                 const d = Math.hypot(p[0] - tip[0], p[1] - tip[1]);

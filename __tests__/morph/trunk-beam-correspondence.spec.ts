@@ -54,7 +54,7 @@ function graphOf(loops: number[][][][], applySat: boolean): SegGraph {
 
 function vLabel(g: SegGraph, v: number): string {
     let deg = 0;
-    for (const s of g.segments) { if (s.v0 === v || s.v1 === v) { deg++; } }
+    for (const s of g.segments) { if (s.vertIdS === v || s.vertIdE === v) { deg++; } }
     const p = g.vertices[v].p;
     return `#${v}${deg === 1 ? 'leaf' : deg >= 3 ? 'FORK' : ''}` +
         `(${p[0].toFixed(0)},${p[1].toFixed(0)})`;

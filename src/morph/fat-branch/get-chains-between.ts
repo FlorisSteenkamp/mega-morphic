@@ -2,13 +2,20 @@ import type { CpNode } from "flo-mat";
 import { getAllOnCircle, getRealProngCount } from 'flo-mat';
 
 
+/**
+ * * **Debug only**
+ */
 interface Fork {
     readonly cps: CpNode[];
     readonly returnPathCp: CpNode;
 }
 
 
-/** A partial chain still being walked, with the forks decided so far. */
+/**
+ * * **Debug only**
+ * 
+ * A partial chain still being walked, with the forks decided so far.
+ */
 interface Walk {
     readonly chain: CpNode[];
     readonly forks: Fork[];
@@ -16,6 +23,8 @@ interface Walk {
 
 
 /**
+ * * **Debug only**
+ * 
  * Returns all chains from `cpFrom` to `cpTo` following `next`, where
  * exactly one sector is walked at each fork and the remaining sectors are
  * skipped by jumping anti-clockwise around the fork circle.

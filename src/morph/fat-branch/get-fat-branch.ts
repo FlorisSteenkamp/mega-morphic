@@ -7,29 +7,14 @@ import { getFattestOfChains } from './get-fattest-of-chains.js';
 import { getChainPss } from './get-chain-pss.js';
 import { getFirstLeafFrom } from '../fs/get-first-leaf-from.js';
 
-const { abs, PI } = Math;
+const { abs, PI: π } = Math;
 
 
-function getFatBranchNaive(
-        cpNode: CpNode): FatBranch | undefined {
-
-    if (getRealProngCount(cpNode) !== 2) {
-        return undefined;
-    }
-
-    // Walk the boundary to a leaf (terminating contact).
-    const leaf = getFirstLeafFrom(cpNode)!;
-
-    // Turn around at the tip: every candidate outline is a single closed
-    // chain from the tip's far-side contact back to its arrival contact.
-    // const chains = getChainsBetween(leaf.nextOnCircle, leaf);
-    const chains = getChainsBetween(leaf.prevOnCircle, leaf);
-
-    return getFattestOfChains(chains, false);
-}
-
-
-/** A completed downward arm of a fork: a decided sector chain to a leaf. */
+/**
+ * * **Debug only**
+ * 
+ * A completed downward arm of a fork: a decided sector chain to a leaf.
+ */
 interface Arm {
     /** the arm's path region area (flesh + passed disks), capped at its fork */
     readonly salience: number;
@@ -40,7 +25,11 @@ interface Arm {
 }
 
 
-/** An open fork (or the root leaf edge) frame of the boundary tour. */
+/**
+ * * **Debug only**
+ * 
+ * An open fork (or the root leaf edge) frame of the boundary tour.
+ * */
 interface Frame {
     /** contact first arrived at from the parent side; `undefined` for root */
     readonly arrivalCp: CpNode | undefined;
@@ -61,6 +50,8 @@ interface Frame {
 
 
 /**
+ * * **Debug only**
+ * 
  * Returns the fattest (maximal round salience) tip-to-tip fat branch of the
  * entire shape.
  *
@@ -183,6 +174,9 @@ function getFatBranch(
 }
 
 
+/**
+ * * **Debug only**
+ */
 function makeFrame(
         arrivalCp: CpNode | undefined,
         startCp: CpNode): Frame {
@@ -194,7 +188,7 @@ function makeFrame(
     return {
         arrivalCp,
         returnCp: arrivalCp?.prevOnCircle,
-        diskArea: PI * radius * radius,
+        diskArea: π * radius * radius,
         decided: [startCp],
         skipped: [startCp],
         nestedSalience: 0,
@@ -205,7 +199,11 @@ function makeFrame(
 }
 
 
-/** Appends to the frame's chains without consecutive duplicates. */
+/**
+ * * **Debug only**
+ * 
+ * Appends to the frame's chains without consecutive duplicates.
+ */
 function append(
         frame: Frame,
         cp: CpNode,
@@ -219,6 +217,28 @@ function append(
         const s = frame.skipped;
         if (s[s.length - 1] !== cp) { s.push(cp); }
     }
+}
+
+
+/**
+ * * **Debug only**
+ */
+function getFatBranchNaive(
+        cpNode: CpNode): FatBranch | undefined {
+
+    if (getRealProngCount(cpNode) !== 2) {
+        return undefined;
+    }
+
+    // Walk the boundary to a leaf (terminating contact).
+    const leaf = getFirstLeafFrom(cpNode)!;
+
+    // Turn around at the tip: every candidate outline is a single closed
+    // chain from the tip's far-side contact back to its arrival contact.
+    // const chains = getChainsBetween(leaf.nextOnCircle, leaf);
+    const chains = getChainsBetween(leaf.prevOnCircle, leaf);
+
+    return getFattestOfChains(chains, false);
 }
 
 

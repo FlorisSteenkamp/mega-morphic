@@ -178,10 +178,10 @@ describe('temp sway diagnostic', () => {
                     lSway.toFixed(3)}π absΔ ${laSway.toFixed(3)}π`);
                 if (c.ops !== undefined) {
                     lines.push(`    A route: ${rA.map(s => `${
-                        vtx(gA, s.reversed ? s.seg.v1 : s.seg.v0)}`)
+                        vtx(gA, s.reversed ? s.seg.vertIdE : s.seg.vertIdS)}`)
                         .join('>')}>${vtx(gA, c.endA)}`);
                     lines.push(`    B route: ${rB.map(s => `${
-                        vtx(gB, s.reversed ? s.seg.v1 : s.seg.v0)}`)
+                        vtx(gB, s.reversed ? s.seg.vertIdE : s.seg.vertIdS)}`)
                         .join('>')}>${vtx(gB, c.endB)}`);
                     for (const op of c.ops) {
                         const ch = (x: { attachV: number; dist: number;

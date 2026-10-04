@@ -4,15 +4,13 @@
  */
 interface Segment {
     /** graph vertex index at the segment's start (first `pss` knot) */
-    readonly v0: number;
+    readonly vertIdS: number;
     /** graph vertex index at the segment's end (last `pss` knot) */
-    readonly v1: number;
-    /** skeleton beziers, v0 → v1 */
-    readonly pss: number[][][];
-    /** maximal-disk radius per bezier knot (`pss.length + 1` values) */
+    readonly vertIdE: number;
+    /** skeleton beziers, `vertIdS` → `vertIdE` */
+    readonly skelPss: (number[][])[];
+    /** maximal-disk radius per skeleton bezier knot (`pss.length + 1` values) */
     readonly radii: number[];
-    /** arc length of the segment's skeleton */
-    readonly len: number;
     /**
      * skeleton material 2·r̄·len in RAW area units (≈ region area; NOT
      * normalized - divide by unit² for a salience fraction)
@@ -22,7 +20,10 @@ interface Segment {
      * boundary pieces alongside each skeleton edge (`pss.length` entries),
      * per side, each in outline direction
      */
-    readonly sleeves: readonly { out: number[][][]; back: number[][][] }[];
+    readonly sleeves: readonly {
+        out: number[][][];
+        back: number[][][]
+    }[];
 }
 
 

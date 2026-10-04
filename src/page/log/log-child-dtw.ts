@@ -6,10 +6,11 @@ import type { PathChildOp } from '../../morph/match-paths/path-child-op.js';
 import type { Segment, RouteStep } from '../../morph/segment-graph/segment.js';
 import type { ChildLocation } from '../../morph/segment-graph/eval-child-pair.js';
 import { evalChildPair } from '../../morph/segment-graph/eval-child-pair.js';
-import { totalLength$ } from '../../morph/fs/total-length.js';
+import { length$ } from '../../morph/fs/length.js';
 import { drawBeziersAsSinglePath } from '../../draw/draw-beziers-as-single-path.js';
 import { drawAlignSteps, distToPss, svgGroup } from './align-viz.js';
 import { matchColors } from '../events/match-colors.js';
+import { lenOf$ } from '../../morph/segment-graph/len-of.js';
 
 
 /** One side's selection: a segment, or the trunk-pair route. */
@@ -66,7 +67,7 @@ function logChildDtw(
             const route = shapeIdx === 1
                 ? pair.mp.routeA : pair.mp.routeB;
             for (const st of route) {
-                const d = distToPss(p, st.seg.pss);
+                const d = distToPss(p, st.seg.skelPss);
                 if (d < bestD) {
                     bestD = d;
                     hitPair = pair;
@@ -75,7 +76,7 @@ function logChildDtw(
             }
         }
         for (const seg of graph.segments) {
-            const d = distToPss(p, seg.pss);
+            const d = distToPss(p, seg.skelPss);
             if (d < bestD) { bestD = d; hitPair = undefined; nearest = seg; }
         }
 
@@ -89,10 +90,10 @@ function logChildDtw(
             // the pair's whole matched route (covered segments only)
             const route = shapeIdx === 1
                 ? hitPair.mp.routeA : hitPair.mp.routeB;
-            highlight(g, route.flatMap(st => st.seg.pss),
+            highlight(g, route.flatMap(st => st.seg.skelPss),
                 `thin35 ${color} nofill`, showDelay);
         } else if (nearest !== undefined) {
-            highlight(g, nearest.pss, `thin20 ${color} nofill`, showDelay);
+            highlight(g, nearest.skelPss, `thin20 ${color} nofill`, showDelay);
         }
 
         const what = hitPair !== undefined
@@ -221,7 +222,7 @@ function anchorsOf(mp: MatchedPath): string[] {
 
 function totalLenOf(pss: number[][][]): number {
     let L = 0;
-    for (const ps of pss) { L += totalLength$(ps); }
+    for (const ps of pss) { L += length$(ps); }
     return L;
 }
 
@@ -230,8 +231,8 @@ function totalLenOf(pss: number[][][]): number {
 function describeRoute(route: RouteStep[]): string[] {
     return route.map(st =>
         `${st.reversed
-            ? `v${st.seg.v1}→v${st.seg.v0}`
-            : `v${st.seg.v0}→v${st.seg.v1}`} len ${st.seg.len.toFixed(0)}`);
+            ? `v${st.seg.vertIdE}→v${st.seg.vertIdS}`
+            : `v${st.seg.vertIdS}→v${st.seg.vertIdE}`} len ${lenOf$(st.seg.skelPss).toFixed(0)}`);
 }
 
 

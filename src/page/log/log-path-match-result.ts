@@ -43,10 +43,10 @@ function logPathMatchResult(
 
     // Highlight in the app's frame convention: a = red, b = green.
     if (best.type !== 'insert') {
-        highlight(g, best.a.segs.flatMap(s => s.pss), 'red', showDelay);
+        highlight(g, best.a.segs.flatMap(s => s.skelPss), 'red', showDelay);
     }
     if (best.type !== 'delete') {
-        highlight(g, best.b.segs.flatMap(s => s.pss), 'green', showDelay);
+        highlight(g, best.b.segs.flatMap(s => s.skelPss), 'green', showDelay);
     }
 
     console.log(`nearest op: ${best.type}`);
@@ -83,7 +83,7 @@ function logChild(side: 'a' | 'b', c: PooledChild): void {
 function distToChild(p: number[], c: PooledChild): number {
     let d = Infinity;
     for (const seg of c.segs) {
-        for (const ps of seg.pss) {
+        for (const ps of seg.skelPss) {
             for (const q of ps) {
                 d = Math.min(d, hypot(q[0] - p[0], q[1] - p[1]));
             }

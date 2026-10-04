@@ -115,7 +115,7 @@ function drawSegment(
         color: string) {
 
     drawBeziersAsSinglePath(
-        g, seg.pss, `thin20 ${color} nofill match-viz`);
+        g, seg.skelPss, `thin20 ${color} nofill match-viz`);
 
     if (!withBoundary) { return; }
     for (const { out, back } of seg.sleeves) {

@@ -11,6 +11,7 @@ import { productDtw } from './product-dtw.js';
 import { alignSeq } from '../match-paths/align-seq.js';
 import { wrapAngle } from '../intrinsic-skeleton/wrap-angle.js';
 import { sum } from '../../utils/sum.js';
+import { _lenOfs$, lenOf$, lenOfRoute$, lenOfSegs$ } from './len-of.js';
 
 const { abs, max, min, round, atan2, PI: π } = Math;
 
@@ -160,7 +161,10 @@ function matchSegGraphs(
     const sB = sampleSegGraph(gB, unitB, TARGET_SAMPLES);
     const pd = productDtw(sA, sB, weights, swayW);
 
-    const buildPair_ = buildPair(cheapChildCost_, gA, gB, unitA, unitB, δA, δB, weights, swayW);
+    const buildPair_ = buildPair(
+        cheapChildCost_,
+        gA, gB, unitA, unitB, δA, δB, weights, swayW
+    );
 
     // Trunk candidates re-ranked by RECURSIVE cost too: orientation ties
     // (symmetric strokes) are invisible to the single-path DTW but decide
@@ -220,8 +224,8 @@ function matchSegGraphs(
         l.cheap = cheapChildCost_(
             childrenFor('A', l.c.startA, l.c.endA),
             childrenFor('B', l.c.startB, l.c.endB),
-            routeLenOf(routeOf_(gA, 'A', l.c.startA, l.c.endA)),
-            routeLenOf(routeOf_(gB, 'B', l.c.startB, l.c.endB)));
+            lenOfRoute$(routeOf_(gA, 'A', l.c.startA, l.c.endA)),
+            lenOfRoute$(routeOf_(gB, 'B', l.c.startB, l.c.endB)));
         l.rank += l.cheap;
     }
     leaders.sort((x, y) => x.rank - y.rank);
@@ -361,8 +365,8 @@ function buildPair(
 
         const chA = childrenOf(scopeA, rA, unitA);
         const chB = childrenOf(scopeB, rB, unitB);
-        const lenRA = routeLenOf(rA);
-        const lenRB = routeLenOf(rB);
+        const lenRA = lenOfRoute$(rA);
+        const lenRB = lenOfRoute$(rB);
 
         // pinned-start sub-DTW per candidate pair, memoized (totalCost for
         // alignment decisions; graphs + candidates for recursive evaluation)
@@ -392,7 +396,7 @@ function buildPair(
                         rank: c.totalCost + c.swayCost + cheapChildCost(
                             childrenOf(a.segs, rA, unitA),
                             childrenOf(b.segs, rB, unitB),
-                            routeLenOf(rA), routeLenOf(rB)) };
+                            lenOfRoute$(rA), lenOfRoute$(rB)) };
                 });
             leaders.sort((x, y) => x.rank - y.rank);
             const limit = leaders[0].rank + CAND_MARGIN;
@@ -477,19 +481,9 @@ function targetFor(len: number, δ: number): number {
 }
 
 
-function getSegsLen(segs: Segment[]): number {
-    return sum(segs.map(s => s.len));
-}
-
-
-function routeLenOf(r: RouteStep[]): number {
-    return sum(r.map(s => s.seg.len));
-}
-
-
 /** trunk-level sample spacing of a graph */
 function getSampleSpacing(g: SegGraph): number {
-    return getSegsLen(g.segments) / TARGET_SAMPLES;
+    return lenOfSegs$(g.segments) / TARGET_SAMPLES;
 }
 
 // Quadratic in the normalized mismatch: small slides along the trunk stay
@@ -551,12 +545,12 @@ function composeRoute(route: RouteStep[]): {
     let L = 0;
     for (const { seg, reversed } of route) {
         const pss = reversed
-            ? seg.pss.map(ps => ps.toReversed()).reverse()
-            : seg.pss;
+            ? seg.skelPss.map(ps => ps.toReversed()).reverse()
+            : seg.skelPss;
         const rd = reversed ? seg.radii.toReversed() : seg.radii;
         skelPss.push(...pss);
         radii.push(...(radii.length > 0 ? rd.slice(1) : rd));
-        L += seg.len;
+        L += lenOf$(seg.skelPss);
     }
     return { skelPss, radii, L };
 }
@@ -582,24 +576,32 @@ function subDtwOf(
         a: SegChild,
         b: SegChild): SubDtw {
 
-    const subA: SegGraph = {
+    const subSegGraphA: SegGraph = {
         loop: gA.loop,
-        unit: gA.unit,
         vertices: gA.vertices,
         segments: a.segs
     };
-    const subB: SegGraph = {
+    const subSegGraphB: SegGraph = {
         loop: gB.loop,
-        unit: gB.unit,
         vertices: gB.vertices,
         segments: b.segs
     };
 
-    const smA = sampleSegGraph(subA, unitA,
-        targetFor(getSegsLen(a.segs), δA), a.attachV);
-    const smB = sampleSegGraph(subB, unitB,
-        targetFor(getSegsLen(b.segs), δB), b.attachV);
-    return { dtw: productDtw(smA, smB, weights, sway), subA, subB };
+    const ssgA = sampleSegGraph(
+        subSegGraphA, unitA,
+        targetFor(lenOfSegs$(a.segs), δA),
+        a.attachV
+    );
+
+    const ssgB = sampleSegGraph(
+        subSegGraphB, unitB,
+        targetFor(lenOfSegs$(b.segs), δB),
+        b.attachV
+    );
+
+    const dtw = productDtw(ssgA, ssgB, weights, sway);
+
+    return { dtw, subA: subSegGraphA, subB: subSegGraphB };
 }
 
 
@@ -669,7 +671,7 @@ function childrenOf(
     const adj = new Map<number, Segment[]>();
     for (const s of scope) {
         if (routeSegs.has(s)) { continue; }
-        for (const v of [s.v0, s.v1]) {
+        for (const v of [s.vertIdS, s.vertIdE]) {
             let list = adj.get(v);
             if (list === undefined) { adj.set(v, list = []); }
             list.push(s);
@@ -683,7 +685,7 @@ function childrenOf(
     let d = 0;
     for (let i = 0; i < route.length; i++) {
         const { seg, reversed } = route[i];
-        const v = reversed ? seg.v1 : seg.v0;
+        const v = reversed ? seg.vertIdE : seg.vertIdS;
         const dirOutV = chordDir(seg, reversed ? 'endRev' : 'start');
         if (i === 0) {
             verts.push(v); dists.push(d); dirs.push(dirOutV);
@@ -693,13 +695,13 @@ function childrenOf(
             const dirIn = chordDir(prev.seg, prev.reversed ? 'startRev' : 'end');
             dirs[dirs.length - 1] = meanDir(dirIn, dirOutV);
         }
-        d += seg.len;
-        verts.push(reversed ? seg.v0 : seg.v1);
+        d += lenOf$(seg.skelPss);
+        verts.push(reversed ? seg.vertIdS : seg.vertIdE);
         dists.push(d);
         dirs.push(chordDir(seg, reversed ? 'startRev' : 'end'));
     }
 
-    const out: SegChild[] = [];
+    const segChildren: SegChild[] = [];
     const claimed = new Set<Segment>();
 
     const startV = verts[0];
@@ -712,7 +714,7 @@ function childrenOf(
             const segs = collectSubtree(entry, v, scopeSet, routeSegs);
             for (const s of segs) { claimed.add(s); }
 
-            const cd = chordDir(entry, entry.v0 === v ? 'start' : 'endRev');
+            const cd = chordDir(entry, entry.vertIdS === v ? 'start' : 'endRev');
             const rd = dirs[i];
             const cross = rd[0]*cd[1] - rd[1]*cd[0];
             const dot = rd[0]*cd[0] + rd[1]*cd[1];
@@ -732,20 +734,20 @@ function childrenOf(
                 : terminal === 'start' ? θ
                 : undefined;
 
-            out.push({
+            segChildren.push({
                 attachV: v,
                 dist: dists[i],
                 side: cross >= 0 ? 1 : -1,
                 angle: θ,
                 entry,
                 segs,
-                material: sum(segs.map(s => s.material)) / (unit*unit),
+                material: sum(segs.map(s => s.material)) / (unit**2),
                 ...(terminal !== undefined ? { terminal, sweep } : {})
             });
         }
     }
 
-    return out;
+    return segChildren;
 }
 
 
@@ -759,7 +761,7 @@ function collectSubtree(
     const adj = new Map<number, Segment[]>();
     for (const s of scope) {
         if (routeSegs.has(s)) { continue; }
-        for (const v of [s.v0, s.v1]) {
+        for (const v of [s.vertIdS, s.vertIdE]) {
             let list = adj.get(v);
             if (list === undefined) { adj.set(v, list = []); }
             list.push(s);
@@ -767,7 +769,7 @@ function collectSubtree(
     }
 
     const segs = new Set([entry]);
-    const queue = [entry.v0 === block ? entry.v1 : entry.v0];
+    const queue = [entry.vertIdS === block ? entry.vertIdE : entry.vertIdS];
     const seenV = new Set([block]);
     while (queue.length > 0) {
         const v = queue.pop()!;
@@ -776,7 +778,7 @@ function collectSubtree(
         for (const s of adj.get(v) ?? []) {
             if (segs.has(s)) { continue; }
             segs.add(s);
-            queue.push(s.v0 === v ? s.v1 : s.v0);
+            queue.push(s.vertIdS === v ? s.vertIdE : s.vertIdS);
         }
     }
     return [...segs];
@@ -789,7 +791,7 @@ function chordDir(
         which: 'start' | 'end' | 'startRev' | 'endRev'): number[] {
 
     const atStart = which === 'start' || which === 'startRev';
-    const ps = atStart ? seg.pss[0] : seg.pss[seg.pss.length - 1];
+    const ps = atStart ? seg.skelPss[0] : seg.skelPss[seg.skelPss.length - 1];
     const p0 = ps[0];
     const p1 = ps[ps.length - 1];
     const rev = which === 'startRev' || which === 'endRev';

@@ -2,6 +2,8 @@ import type { CpNode } from "flo-mat";
 
 
 /**
+ * * **Debug only**
+ * 
  * * for visualization / debug purposes only
  * * not used in actual morphing algorithm
  */

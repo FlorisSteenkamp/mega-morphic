@@ -3,7 +3,6 @@ import type { MorphEntry, Glue } from "../morph-entry.js";
 import { poseCorrectionAt } from "../procrustes/pose-ramp.js";
 import { calcProcrustes } from "../procrustes/calc-procrustes.js";
 import { resolveMorphAt } from "../resolve-morph-at/resolve-morph-at.js";
-import { trunkOutlines } from "../resolve-morph-at/trunk-outlines.js";
 import { entryNetTurns } from "../resolve-morph-at/get-morphed-skeleton.js";
 import { drawBeziersAsSinglePath } from "../../draw/draw-beziers-as-single-path.js";
 import { drawLoopsAsPath } from './draw-loops-as-path.js';
@@ -33,14 +32,8 @@ function drawMorph(
     // Pin the drawn shape's MEASURED pose onto the interpolated pose path
     // (procrustes): straight centroid line, constant angular rate,
     // geometric scale - the shape blend alone wanders off the path.
-    // Trunk-only: measure from the trunk's loops (matches the ramp's
-    // endpoint metric).
     if (morphPose !== undefined && outlines.length > 0) {
-        const measureLoops = poseOptions.trunkOnlyTisserand
-            ? trunkOutlines(entries, outlines, outlineEntry)
-            : outlines;
-        const measured = calcProcrustes(
-            (measureLoops.length > 0 ? measureLoops : outlines).flat());
+        const measured = calcProcrustes(outlines.flat());
         const { tf, scale } = poseCorrectionAt(poseOptions, morphPose, t, measured);
 
         drawn = mapDeep(3, drawn, tf);
@@ -59,16 +52,11 @@ function drawMorph(
 
     if (showPose) {
         // Tisserand readout: the trunk gauge's whole-turn count + current
-        // gauge rotation, and (trunk-only mode) the trunk-frame pose that
-        // actually steers the correction. Trunk loops here are the DRAWN
-        // (corrected) ones - outlineEntry order survives mapDeep.
+        // gauge rotation.
         const trunk = entries.find(e => e.glue === undefined);
         drawPoseGizmo(g3, outlines, {
             m: trunk !== undefined ? entryNetTurns(trunk) : 0,
-            t,
-            trunk: poseOptions.trunkOnlyTisserand
-                ? trunkOutlines(entries, outlines, outlineEntry)
-                : undefined
+            t
         });
     }
 

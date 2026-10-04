@@ -1,13 +1,13 @@
 import type { CpNode } from "flo-mat";
 import type { FatBranch } from "./fat-branch.js";
 import { isOnSameCircle } from "flo-mat";
-import { getChainPss } from "./get-chain-pss.js";
-import { getArcBeziersBetween } from "../fs/get-arc-beziers-between.js";
 import { getChainsBetween } from "./get-chains-between.js";
 import { getFattestOfChains } from "./get-fattest-of-chains.js";
 
 
 /**
+ * * **Debug only**
+ * 
  * Returns the child fat branches of the given parent fat branch, i.e. one
  * maximal round salience fat branch per sector the parent skipped at a fork
  * (walked forward only - a child is a branch, not a trunk).
@@ -43,6 +43,8 @@ function getFatBranchesFrom(
 
 
 /**
+ * * **Debug only**
+ * 
  * Returns the maximal round salience fat branch of the sector from `s` to
  * `s.nextOnCircle` (forward direction only).
  */

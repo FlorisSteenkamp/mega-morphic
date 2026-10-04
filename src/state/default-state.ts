@@ -56,7 +56,7 @@ const defaultPageState: PageState = {
     showSvgs: [true, true, true],
     showWeights: true,
     morphFillOnly: false,
-    poseOptions: { applyCentroid: false, applyScale: false, trunkOnlyTisserand: false },
+    poseOptions: { applyCentroid: false, applyScale: false },
     showPose: false,
     showMatch: false,
     showMatchBoundary: false,

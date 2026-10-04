@@ -9,8 +9,6 @@ interface TisserandInfo {
     /** the trunk gauge's whole-turn count */
     readonly m: number;
     readonly t: number;
-    /** trunk-only loops (drawn frame) when trunkOnlyTisserand is on */
-    readonly trunk?: number[][][][];
 }
 
 
@@ -20,8 +18,8 @@ interface TisserandInfo {
  * the equivalent-ellipse semi-axes (major blue, minor red - for an ellipse
  * they reproduce its true semi-axes), and a text readout (anisotropy +
  * the two principal moments, normalized by area² so they're dimensionless
- * and size-invariant; plus the Tisserand gauge's turns/rotation and, in
- * trunk-only mode, the trunk-frame pose) - lets the pose be tracked
+ * and size-invariant; plus the Tisserand gauge's turns/rotation) - lets the
+ * pose be tracked
  * through the morph.
  */
 function drawPoseGizmo(
@@ -72,17 +70,11 @@ function drawPoseGizmo(
     ];
 
     if (tisserand !== undefined) {
-        const { m, t, trunk } = tisserand;
+        const { m, t } = tisserand;
         if (m !== 0) {
             lines.push([
                 `spin ${m} turn${Math.abs(m) === 1 ? '' : 's'}, ` +
                 `gauge ${(-t*m*360).toFixed(0)}°`, '#000']);
-        }
-        if (trunk !== undefined && trunk.length > 0) {
-            const tp = calcProcrustes(trunk.flat());
-            lines.push(
-                [`T·aniso ${tp.anisotropy.toFixed(3)}`, '#555'],
-                [`T·axis ${visualAxisDeg(tp.angle).toFixed(1)}°`, '#555']);
         }
     }
     lines.forEach(([text, color], i) => {

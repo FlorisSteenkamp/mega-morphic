@@ -2,16 +2,24 @@ import type { CpNode } from 'flo-mat';
 import { getBoundaryBeziersToNext } from 'flo-mat';
 
 
-/** The glyph's full outline loop (outline direction), walked from any of
- *  its CpNodes - bezier pieces split at the MAT contact points. */
-function outlineLoopOf(start: CpNode): number[][][] {
-    const out: number[][][] = [];
+/**
+ * The glyph's full outline loop (outline direction), walked from any of
+ * its CpNodes - bezier pieces split at the MAT contact points.
+ * 
+ * * **not** exactly the same as the original shape loop due to toplogically
+ *   altering hole-closers, e.g. a ring is split open at the top
+ */
+function outlineLoopOf(
+        start: CpNode): number[][][] {
+
+    const loop: (number[][])[] = [];
     let cp = start;
     do {
-        out.push(...getBoundaryBeziersToNext(cp));
+        loop.push(...getBoundaryBeziersToNext(cp));
         cp = cp.next;
     } while (cp !== start);
-    return out;
+
+    return loop;
 }
 
 

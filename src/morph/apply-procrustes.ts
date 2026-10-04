@@ -4,7 +4,6 @@ import type { PoseRamp } from './procrustes/pose-ramp.js';
 import type { PoseOptions } from './procrustes/pose-options.js';
 import { calcProcrustes } from './procrustes/calc-procrustes.js';
 import { resolveMorphAt } from './resolve-morph-at/resolve-morph-at.js';
-import { trunkOutlines } from './resolve-morph-at/trunk-outlines.js';
 
 
 /**
@@ -28,27 +27,13 @@ function applyProcrustes(
             poseRamp: PoseRamp
         } | undefined {
 
-    const { applyCentroid, applyScale, trunkOnlyTisserand } = poseOptions;
+    const { applyCentroid, applyScale } = poseOptions;
     if (!(applyCentroid || applyScale)) {
         return undefined;
     }
 
-    // Trunk-only: measure both poses from the TRUNK entry's resolved
-    // outlines (t=0 = A's trunk, t=1 = B's trunk in its true frame) - side
-    // branches and ins/dels stop dragging the frame, and the metric matches
-    // the draw-time measurement exactly (endpoint-consistent, so no extra
-    // scale re-measure is needed).
-    const trunkPoseAt = (t: number) => {
-        const { outlines, outlineEntry } = resolveMorphAt(entries, t);
-        const loops = trunkOutlines(entries, outlines, outlineEntry);
-        return loops.length > 0
-            ? calcProcrustes(loops.flat())
-            : undefined;
-    };
-    const pose1 = (trunkOnlyTisserand ? trunkPoseAt(0) : undefined)
-        ?? calcProcrustes(loopA);
-    const pose2 = (trunkOnlyTisserand ? trunkPoseAt(1) : undefined)
-        ?? calcProcrustes(loopB);
+    const pose1 = calcProcrustes(loopA);
+    const pose2 = calcProcrustes(loopB);
 
     const s = applyScale ? pose1.scale / pose2.scale : 1;
 
@@ -79,15 +64,14 @@ function applyProcrustes(
     });
 
 
-    // Whole-shape mode measures the ramp's scale endpoints in the DRAW-TIME
-    // metric (seam-overcounting per-entry soup) - see calcScaleAt. Trunk
-    // mode already measured pose1/pose2 in that metric.
+    // Measure the ramp's scale endpoints in the DRAW-TIME metric
+    // (seam-overcounting per-entry soup) - see calcScaleAt.
     const calcScaleAt_ = calcScaleAt(alignedEntries);
 
-    const s1D = applyScale && !trunkOnlyTisserand
+    const s1D = applyScale
         ? calcScaleAt_(0) ?? pose1.scale
         : pose1.scale;
-    const s2D = applyScale && !trunkOnlyTisserand
+    const s2D = applyScale
         ? (calcScaleAt_(1) ?? pose1.scale) / s
         : pose2.scale;
 

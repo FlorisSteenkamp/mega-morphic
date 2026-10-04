@@ -162,7 +162,7 @@ function DpTable(props: { dp: PooledDp }) {
 
 /** "v<entry-segment vertices> @<dist along route>" */
 function childLabel(c: PooledChild): string {
-    return `v${c.entry.v0}·${c.entry.v1} @${c.dist.toFixed(0)}`;
+    return `v${c.entry.vertIdS}·${c.entry.vertIdE} @${c.dist.toFixed(0)}`;
 }
 
 

@@ -1,9 +1,10 @@
 import type { SegGraph } from './seg-graph.js';
 import type { SampledSegGraph } from './sampled-seg-graph.js';
 import { unwrappedChordAngles } from '../intrinsic-skeleton/unwrapped-chord-angles.js';
-import { totalLength$ } from '../fs/total-length.js';
+import { length$ } from '../fs/length.js';
 import { clamp } from '../../utils/clamp.js';
 import { sum } from '../../utils/sum.js';
+import { _lenOfs$, lenOf$, lenOfs$, lenOfSegs$ } from './len-of.js';
 
 const { max, round, min, PI: π } = Math;
 
@@ -21,7 +22,8 @@ function sampleSegGraph(
         target: number,
         rootV?: number): SampledSegGraph {
 
-    const totalLen = sum(g.segments.map(s => s.len));
+    // const totalLen = sum(g.segments.map(s => s.skelLen));
+    const totalLen = lenOfSegs$(g.segments);
 
     const δ = totalLen / target;
     const step = δ / unit;
@@ -34,16 +36,17 @@ function sampleSegGraph(
     const runs: { ids: number[]; tail: number; head: number }[] = [];
 
     for (const seg of g.segments) {
-        const n = max(2, round(seg.len / δ) + 1);
+        const skelLen = lenOf$(seg.skelPss);
+        const n = max(2, round(skelLen / δ) + 1);
 
         // per-knot cumulative positions + features (shared by both runs)
         const cum = [0];
-        for (const ps of seg.pss) {
-            cum.push(cum[cum.length - 1] + totalLength$(ps));
+        for (const ps of seg.skelPss) {
+            cum.push(cum[cum.length - 1] + length$(ps));
         }
-        const knots = cum.map(c => seg.len > 0 ? c / seg.len : 0);
+        const knots = cum.map(c => skelLen > 0 ? c / skelLen : 0);
         knots[knots.length - 1] = 1;
-        const φs = padTo(unwrappedChordAngles(seg.pss), seg.radii.length);
+        const φs = padTo(unwrappedChordAngles(seg.skelPss), seg.radii.length);
 
         const us: number[] = [];
         const rs: number[] = [];
@@ -55,7 +58,7 @@ function sampleSegGraph(
             φi.push(valueAt(φs, knots, u));
         }
         // turning vs NORMALIZED arc (segment-local; fork turns not included)
-        const Ln = seg.len / unit;
+        const Ln = skelLen / unit;
         const ts: number[] = [];
         for (let i = 0; i < n; i++) {
             const i0 = max(0, i - 1);
@@ -79,8 +82,8 @@ function sampleSegGraph(
             }
             runs.push({
                 ids,
-                tail: rev ? seg.v1 : seg.v0,
-                head: rev ? seg.v0 : seg.v1
+                tail: rev ? seg.vertIdE : seg.vertIdS,
+                head: rev ? seg.vertIdS : seg.vertIdE
             });
         }
     }
@@ -101,8 +104,8 @@ function sampleSegGraph(
     // leafness LOCAL to this segment set (sub-graphs share the vertex array)
     const degree = new Map<number, number>();
     for (const s of g.segments) {
-        degree.set(s.v0, (degree.get(s.v0) ?? 0) + 1);
-        degree.set(s.v1, (degree.get(s.v1) ?? 0) + 1);
+        degree.set(s.vertIdS, (degree.get(s.vertIdS) ?? 0) + 1);
+        degree.set(s.vertIdE, (degree.get(s.vertIdE) ?? 0) + 1);
     }
     const isLeaf = (v: number): boolean => degree.get(v) === 1;
     const isFork = (v: number): boolean => (degree.get(v) ?? 0) >= 3;

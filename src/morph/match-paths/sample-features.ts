@@ -1,7 +1,7 @@
 import type { Samples } from './samples.js';
 import { unwrappedChordAngles } from '../intrinsic-skeleton/unwrapped-chord-angles.js';
 import { clamp } from '../../utils/clamp.js';
-import { totalLength$ } from '../fs/total-length.js';
+import { length$ } from '../fs/length.js';
 import { sum } from '../../utils/sum.js';
 import { memoize } from 'flo-memoize';
 
@@ -41,7 +41,7 @@ const sampleFeatures$ = memoize(function(
 
         const n = clamp(2 * pss.length, min(24, maxN), maxN);
 
-        const lens = pss.map(totalLength$);
+        const lens = pss.map(length$);
         const totalLen = sum(lens);
         const knots = [0];
         let cum = 0;

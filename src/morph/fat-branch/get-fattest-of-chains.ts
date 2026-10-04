@@ -7,6 +7,8 @@ const { abs } = Math;
 
 
 /**
+ * * **Debug only**
+ * 
  * Returns the highest round salience candidate among the given chains as a
  * childless `FatBranch` (or `undefined` if there are no chains).
  *

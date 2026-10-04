@@ -1,16 +1,13 @@
 import type { CpNode } from 'flo-mat';
-import { getMatCurveToNext, getBoundaryBeziersToNext } from 'flo-mat';
-import { getShapeArea } from 'flo-boolean';
 import type { SegVertex } from './seg-vertex.js';
 import type { Segment } from './segment.js';
 import type { SegGraph } from './seg-graph.js';
-import { getCircleId } from '../fat-branch/get-circle-id.js';
+import { getMatCurveToNext, getBoundaryBeziersToNext, getAllOnCircle } from 'flo-mat';
 import { outlineLoopOf } from './outline-loop.js';
-import { totalLength$ } from '../fs/total-length.js';
-import { sum } from '../../utils/sum.js';
 import { mean } from '../../utils/mean.js';
+import { lenOf$ } from './len-of.js';
 
-const { abs, sqrt } = Math;
+const { min } = Math;
 
 
 /** One skeleton edge's two boundary-side occurrences. */
@@ -32,7 +29,7 @@ interface MatEdge {
  * Rooting-free - no fat-branch tree is involved; segment direction is
  * walk-derived (arbitrary but fixed).
  */
-function segGraphFromMat(
+function segGraphFromCp(
         cpStart: CpNode): SegGraph {
 
     const edges = new Map<string, MatEdge>();
@@ -70,7 +67,6 @@ function segGraphFromMat(
     } while (cp !== cpStart);
 
     const loop = outlineLoopOf(cpStart);
-    const unit = sqrt(abs(getShapeArea(loop)));
 
     const vertices: SegVertex[] = [];
     const vertexOf = new Map<number, number>();
@@ -97,7 +93,7 @@ function segGraphFromMat(
 
             // walk through pass-through (degree-2) circles to the next
             // fork/leaf circle
-            const pss: number[][][] = [];
+            const skelPss: number[][][] = [];
             const radii: number[] = [];
             const sleeves: { out: number[][][]; back: number[][][] }[] = [];
             let cur = c0;
@@ -112,7 +108,7 @@ function segGraphFromMat(
                     radii.push(withCp.pointOnShape.circle.radius);
                 }
                 radii.push(withCp.next.pointOnShape.circle.radius);
-                pss.push(getMatCurveToNext(withCp));
+                skelPss.push(getMatCurveToNext(withCp));
                 sleeves.push({
                     out: getBoundaryBeziersToNext(withCp),
                     back: getBoundaryBeziersToNext(backCp)
@@ -123,22 +119,27 @@ function segGraphFromMat(
                 key = adj.get(cur)!.find(k => k !== key)!;
             }
 
-            const lastPs = pss[pss.length - 1];
-            const len = sum(pss.map(totalLength$));
+            const lastPs = skelPss[skelPss.length - 1];
+            const len = lenOf$(skelPss);
+
             segments.push({
-                v0: vertexFor(c0, pss[0][0]),
-                v1: vertexFor(cur, lastPs[lastPs.length - 1]),
-                pss,
+                vertIdS: vertexFor(c0, skelPss[0][0]),
+                vertIdE: vertexFor(cur, lastPs[lastPs.length - 1]),
+                skelPss,
                 radii,
-                len,
                 material: 2*mean(radii)*len,
                 sleeves
             });
         }
     }
 
-    return { loop, unit, vertices, segments };
+    return { loop, vertices, segments };
 }
 
 
-export { segGraphFromMat }
+function getCircleId(cp: CpNode): number {
+    return min(...getAllOnCircle(cp).map(c => c.id));
+}
+
+
+export { segGraphFromCp }
