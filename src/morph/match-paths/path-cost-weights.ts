@@ -1,7 +1,7 @@
 /**
  * Relative importance of each (dimensionless) cost term - all tunable.
  *
- * Grouped by the cost class they feed (see `productDtw` / `matchSegGraphs` /
+ * Grouped by the cost class they feed (see `productDtw` / `matchSegTrees` /
  * `alignProfiles`): profile alignment (DTW), pooled children, trunk
  * orientation.
  */

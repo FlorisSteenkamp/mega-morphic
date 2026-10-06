@@ -5,15 +5,19 @@ import { readFileSync, writeFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { findMats, getPathsFromStr, MatOptions } from 'flo-mat';
 import { defaultPathWeights } from '../../src/morph/match-paths/path-cost-weights.js';
-import { segGraphFromMat } from '../../src/morph/segment-graph/seg-graph-from-mat.js';
-import { routeSegments } from '../../src/morph/segment-graph/route-segments.js';
-import type { SegGraph } from '../../src/morph/segment-graph/seg-graph.js';
-import { matchSegGraphs, composeRoute } from '../../src/morph/segment-graph/match-seg-graphs.js';
-import type { RouteStep } from '../../src/morph/segment-graph/match-seg-graphs.js';
+import { segTreeWithLoop, loopOf } from '../helpers/seg-tree-with-loop.js';
+import type { Circle } from 'flo-mat';
+import { vertexIds } from '../../src/morph/segment-tree/vertex-ids.js';
+import { getUnit$ } from '../../src/morph/segment-tree/get-unit.js';
+import { routeSegments } from '../../src/morph/segment-tree/route-segments.js';
+import type { Segment } from '../../src/morph/segment-tree/segment.js';
+import { matchSegTrees } from '../../src/morph/segment-tree/match-seg-trees.js';
+import { composeRouteGeom } from '../../src/morph/segment-tree/compose-segs.js';
+import type { RouteStep } from '../../src/morph/segment-tree/match-seg-trees.js';
 import { calcProcrustes } from '../../src/morph/procrustes/calc-procrustes.js';
 import { unwrappedChordAngles } from '../../src/morph/intrinsic-skeleton/unwrapped-chord-angles.js';
 import { wrapAngle } from '../../src/morph/intrinsic-skeleton/wrap-angle.js';
-import { totalLength$ } from '../../src/morph/fs/total-length.js';
+import { length$ } from '../../src/morph/fs/length.js';
 import { parseSvgFont } from '../../src/load-svg/load-svg-font.js';
 
 const { sqrt, abs, PI: π } = Math;
@@ -28,20 +32,20 @@ const options: MatOptions = {
     simplifyTolerance: 2**-5
 };
 
-function loadGraph(glyphName: string): SegGraph {
+function loadGraph(glyphName: string): Segment[] {
     const font = parseSvgFont(
         readFileSync(resolve('fonts-test/achispado.svg'), 'utf-8'));
     const d = font.find(g => g.name === glyphName)!.d;
     const mats = findMats(getPathsFromStr(d), options);
-    return segGraphFromMat(mats[0].cpNode);
+    return segTreeWithLoop(mats[0].cpNode);
 }
 
 function meanAngleOf(route: RouteStep[]): number {
-    const bz = composeRoute(route).skelPss;
+    const { bz } = composeRouteGeom(route);
     const ψs = unwrappedChordAngles(bz);
     let s = 0, total = 0;
     for (let i = 0; i < bz.length; i++) {
-        const l = totalLength$(bz[i]);
+        const l = length$(bz[i]);
         s += ψs[i]*l; total += l;
     }
     return total === 0 ? 0 : s/total;
@@ -50,10 +54,10 @@ function meanAngleOf(route: RouteStep[]): number {
 /** piecewise-constant unwrapped angle by arc-length fraction */
 function angleProfile(route: RouteStep[]):
         { at: (u: number) => number; L: number } {
-    const bz = composeRoute(route).skelPss;
+    const { bz } = composeRouteGeom(route);
     const ψs = unwrappedChordAngles(bz);
     const cum = [0];
-    for (const b of bz) { cum.push(cum[cum.length - 1] + totalLength$(b)); }
+    for (const b of bz) { cum.push(cum[cum.length - 1] + length$(b)); }
     const L = cum[cum.length - 1];
     return {
         L,
@@ -86,11 +90,11 @@ function localSway(rA: RouteStep[], rB: RouteStep[]): number {
 /** radius+angle profile by arc fraction */
 function fullProfile(route: RouteStep[]):
         { ψ: (u: number) => number; r: (u: number) => number } {
-    const { skelPss, radii } = composeRoute(route);
+    const { bz: skelPss, rd: radii } = composeRouteGeom(route);
     const ψs = unwrappedChordAngles(skelPss);
     const cum = [0];
     for (const b of skelPss) {
-        cum.push(cum[cum.length - 1] + totalLength$(b));
+        cum.push(cum[cum.length - 1] + length$(b));
     }
     const L = cum[cum.length - 1];
     const idx = (u: number): number => {
@@ -130,32 +134,34 @@ describe('temp sway diagnostic', () => {
         const gB = loadGraph('N');
         // AFTER findMats - flo-boolean's debug branches crash on a bare {}
         (globalThis as any)._debug_ = {};
-        const uA = gA.unit;
-        const uB = gB.unit;
-        const aniso = (calcProcrustes(gA.loop).anisotropy +
-            calcProcrustes(gB.loop).anisotropy) / 2;
+        const uA = getUnit$(loopOf(gA));
+        const uB = getUnit$(loopOf(gB));
+        const aniso = (calcProcrustes(loopOf(gA)).anisotropy +
+            calcProcrustes(loopOf(gB)).anisotropy) / 2;
 
-        const vtx = (g: SegGraph, i: number): string => {
-            const v = g.vertices[i];
-            return `${i}${v.leaf ? 'L' : 'F'}(${v.p[0].toFixed(0)},${
-                v.p[1].toFixed(0)})`;
+        const vtx = (g: Segment[], v: Circle): string => {
+            const p = v.center;
+            const deg = g.filter(
+                s => s.vertS === v || s.vertE === v).length;
+            return `${vertexIds(g).get(v)}${deg === 1 ? 'L' : 'F'}(${
+                p[0].toFixed(0)},${p[1].toFixed(0)})`;
         };
+        const vtxs = (g: Segment[]): string =>
+            [...vertexIds(g).keys()].map(v => vtx(g, v)).join(' ');
 
         const lines: string[] = [];
         lines.push(`aniso ${aniso.toFixed(3)}  unitA ${uA.toFixed(1)} unitB ${
             uB.toFixed(1)}`);
-        lines.push(`A vertices: ${gA.vertices.map(
-            (_, i) => vtx(gA, i)).join(' ')}`);
-        lines.push(`B vertices: ${gB.vertices.map(
-            (_, i) => vtx(gB, i)).join(' ')}`);
+        lines.push(`A vertices: ${vtxs(gA)}`);
+        lines.push(`B vertices: ${vtxs(gB)}`);
 
         for (const sway of [0, 0.1, 0.5, 1, 2]) {
-            const r = matchSegGraphs(gA, gB, uA, uB,
+            const r = matchSegTrees(gA, gB, uA, uB,
                 { ...defaultPathWeights, sway }, aniso);
             lines.push('');
             lines.push(`=== sway weight ${sway} ===`);
             lines.push(`chosen: startA ${vtx(gA, r.trunkStartA)} startB ${
-                vtx(gB, r.trunkStartB)}  cost ${r.cost.toFixed(3)}`);
+                vtx(gB, r.trunkStartB)}  cost ${r.root.cost.toFixed(3)}`);
             const ops = r.root.ops.map(o =>
                 o.type === 'match' ? 'M' : o.type === 'delete' ? 'D' : 'I')
                 .join('');
@@ -178,15 +184,15 @@ describe('temp sway diagnostic', () => {
                     lSway.toFixed(3)}π absΔ ${laSway.toFixed(3)}π`);
                 if (c.ops !== undefined) {
                     lines.push(`    A route: ${rA.map(s => `${
-                        vtx(gA, s.reversed ? s.seg.vertIdE : s.seg.vertIdS)}`)
+                        vtx(gA, s.reversed ? s.seg.vertE : s.seg.vertS)}`)
                         .join('>')}>${vtx(gA, c.endA)}`);
                     lines.push(`    B route: ${rB.map(s => `${
-                        vtx(gB, s.reversed ? s.seg.vertIdE : s.seg.vertIdS)}`)
+                        vtx(gB, s.reversed ? s.seg.vertE : s.seg.vertS)}`)
                         .join('>')}>${vtx(gB, c.endB)}`);
                     for (const op of c.ops) {
-                        const ch = (x: { attachV: number; dist: number;
+                        const ch = (x: { attachV: Circle; dist: number;
                                 side: number; material: number;
-                                terminal?: string }, g: SegGraph): string =>
+                                terminal?: string }, g: Segment[]): string =>
                             `@${vtx(g, x.attachV)} d${x.dist.toFixed(0)} s${
                             x.side} m${x.material.toFixed(2)}${
                             x.terminal !== undefined ? ` T:${x.terminal}` : ''}`;

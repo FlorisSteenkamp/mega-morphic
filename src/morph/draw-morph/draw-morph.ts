@@ -1,5 +1,4 @@
 import type { PageData } from "../../page/page-data.js";
-import type { MorphEntry, Glue } from "../morph-entry.js";
 import { poseCorrectionAt } from "../procrustes/pose-ramp.js";
 import { calcProcrustes } from "../procrustes/calc-procrustes.js";
 import { resolveMorphAt } from "../resolve-morph-at/resolve-morph-at.js";
@@ -7,7 +6,6 @@ import { entryNetTurns } from "../resolve-morph-at/get-morphed-skeleton.js";
 import { drawBeziersAsSinglePath } from "../../draw/draw-beziers-as-single-path.js";
 import { drawLoopsAsPath } from './draw-loops-as-path.js';
 import { drawPoseGizmo } from './draw-pose-gizmo.js';
-import { drawMovingMarks } from './draw-moving-marks.js';
 import { mapDeep } from "../../utils/map-deep.js";
 
 
@@ -16,29 +14,28 @@ function drawMorph(
         refPageData: React.RefObject<PageData | null>,
         t: number) {
 
-    const { morphRef, morphMarksRef, svgRef3, props } = refPageData.current!;
+    const { morphRef, svgRef3, props } = refPageData.current!;
     const { stateControl } = props;
     const { state: { appState } } = stateControl;
     const { pageState } = appState;
     const { morphPose } = pageState.deduced;
-    const { morphFillOnly, showPose, showMorphBounds, poseOptions } = pageState;
+    const { morphFillOnly, showPose, showMorphBounds } = pageState;
     
 
     const entries = morphRef.current;
     if (!entries) { return; }
 
-    let { drawn, radii, outlines, outlineEntry } = resolveMorphAt(entries, t);
+    let { drawn, outlines, outlineEntry } = resolveMorphAt(entries, t);
 
     // Pin the drawn shape's MEASURED pose onto the interpolated pose path
     // (procrustes): straight centroid line, constant angular rate,
     // geometric scale - the shape blend alone wanders off the path.
-    if (morphPose !== undefined && outlines.length > 0) {
+    if (outlines.length > 0) {
         const measured = calcProcrustes(outlines.flat());
-        const { tf, scale } = poseCorrectionAt(poseOptions, morphPose, t, measured);
+        const tf = poseCorrectionAt(morphPose, t, measured);
 
         drawn = mapDeep(3, drawn, tf);
         outlines = mapDeep(3, outlines, tf);
-        radii = radii.map(rs => rs?.map(r => r * scale));
     }
 
     const g3 = svgRef3.current!.getElementsByTagName('g')[0];
@@ -78,14 +75,7 @@ function drawMorph(
 
         drawBeziersAsSinglePath(g3, pss, classes);
     }
-
-    //--------------------------------
-    // Don't delete - keep for future
-    //--------------------------------
-    // Feature marks riding the drawn skeletons (glue points slide k1 → k2).
-    // drawMovingMarks(g3, morphMarksRef.current, drawn, t);
 }
 
 
 export { drawMorph }
-export type { MorphEntry, Glue }

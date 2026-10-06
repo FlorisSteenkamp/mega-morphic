@@ -2,7 +2,7 @@ declare var _debug_: Debug;
 import type { Debug } from '../../debug/debug.js';
 import type { PathCostWeights } from './path-cost-weights.js';
 import type { Samples } from './samples.js';
-import type { TailAlign, AlignStep } from './tail-align.js';
+import type { AlignStep } from './tail-align.js';
 
 const { abs, min, PI: π } = Math;
 
@@ -15,6 +15,7 @@ const { abs, min, PI: π } = Math;
  * prices skips there - for the trunk, whose both ends are leaf tips).
  * ALL costs are integrated over normalized arc length (`stepA`/`stepB` =
  * length per sample), keeping match, gap and tail prices commensurate.
+ * Returns the full traceback, start → end.
  */
 function alignProfiles(
         fA: Samples,
@@ -22,7 +23,7 @@ function alignProfiles(
         stepA: number,
         stepB: number,
         bothEnds: boolean,
-        weights: PathCostWeights): TailAlign {
+        weights: PathCostWeights): AlignStep[] {
 
     const { gapOpen, gapExtend, tail, radius, turning } = weights;
 
@@ -87,25 +88,17 @@ function alignProfiles(
     let bj = nB - 1;
     let bState: 0|1|2 = stateAt(bi, bj);
     let bCost = valAt(bi, bj, bState);
-    let endTailA = 0;
-    let endTailB = 0;
 
     if (bothEnds) {
         for (let i = 0; i < nA - 1; i++) {
             const s = stateAt(i, nB - 1);
             const v = valAt(i, nB - 1, s) + (nA - 1 - i)*tailUnitA;
-            if (v < bCost) {
-                bCost = v; bi = i; bj = nB - 1; bState = s;
-                endTailA = nA - 1 - i; endTailB = 0;
-            }
+            if (v < bCost) { bCost = v; bi = i; bj = nB - 1; bState = s; }
         }
         for (let j = 0; j < nB - 1; j++) {
             const s = stateAt(nA - 1, j);
             const v = valAt(nA - 1, j, s) + (nB - 1 - j)*tailUnitB;
-            if (v < bCost) {
-                bCost = v; bi = nA - 1; bj = j; bState = s;
-                endTailA = 0; endTailB = nB - 1 - j;
-            }
+            if (v < bCost) { bCost = v; bi = nA - 1; bj = j; bState = s; }
         }
     }
 
@@ -131,21 +124,7 @@ function alignProfiles(
     steps.push({ i, j, state: 0, cost: cost(i, j) });
     steps.reverse();
 
-    const tailPen = 
-        i*tailUnitA +
-        j*tailUnitB +
-        endTailA*tailUnitA +
-        endTailB*tailUnitB;
-
-    return {
-        cost: bCost,
-        tailPen,
-        tailStartA: fA.u[i],
-        tailStartB: fB.u[j],
-        tailEndA: endTailA / (nA - 1),
-        tailEndB: endTailB / (nB - 1),
-        steps
-    };
+    return steps;
 
 
     function stateAt(x: number, y: number): 0|1|2 {

@@ -9,8 +9,8 @@ interface DeducedState {
     readonly mats2: Mat[];
     readonly bezierLoops1: number[][][][];
     readonly bezierLoops2: number[][][][];
-    /** the LAST morph's pose-pinning ramp (undefined = pose off) */
-    readonly morphPose: PoseRamp | undefined;
+    /** the morph's pose-pinning ramp */
+    readonly morphPose: PoseRamp;
 }
 
 

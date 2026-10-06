@@ -36,7 +36,7 @@ const defaultDeduced: DeducedState = {
     mats2: [],
     bezierLoops1: [],
     bezierLoops2: [],
-    morphPose: undefined
+    morphPose: undefined!
 }
 
 const defaultPageState: PageState = {
@@ -56,7 +56,6 @@ const defaultPageState: PageState = {
     showSvgs: [true, true, true],
     showWeights: true,
     morphFillOnly: false,
-    poseOptions: { applyCentroid: false, applyScale: false },
     showPose: false,
     showMatch: false,
     showMatchBoundary: false,

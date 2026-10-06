@@ -1,9 +1,10 @@
 import type { SleeveSide } from '../../anchored-sleeves.js';
+import { controlPointLinesLength, toCubic } from 'flo-bezier3';
 import { boundaryPoint } from '../../anchored-sleeves.js';
 import { wrapAngle } from '../../intrinsic-skeleton/wrap-angle.js';
 import { capArcBeziers } from './cap-arc-pts.js';
 
-const { cos, sin, hypot, atan2, min, PI: π } = Math;
+const { cos, sin, hypot, atan2, min } = Math;
 
 
 const MIN_LEN = 1e-6;
@@ -76,7 +77,7 @@ function reconstructSide(
             ]);
             // eps-length pieces carry no geometry, only noise directions -
             // dropping them lets the assembly weld the real neighbors
-            if (polyLen(ps) >= 1e-3) { mapped.push(ps); }
+            if (controlPointLinesLength(ps) >= 1e-3) { mapped.push(ps); }
         }
 
         // Segment-joint tangents interpolated as DATA (τ lerped short-way in
@@ -113,8 +114,7 @@ function jointDir(
         Ts: number[][],
         t: number): number[] | undefined {
 
-    if (Number.isNaN(τA) || Number.isNaN(τB) ||
-        τA === undefined || τB === undefined) { return undefined; }
+    if (Number.isNaN(τA) || Number.isNaN(τB)) { return undefined; }
 
     const τ = τA + t*wrapAngle(τB - τA);
     const T = Ts[bidx];
@@ -129,58 +129,23 @@ function jointDir(
 /** The piece with its START handle rotated onto `dir` (travel direction);
  *  lines/quads are promoted to cubics so the tangent is theirs alone. */
 function setStartTangent(ps: number[][], dir: number[]): number[][] {
-    const c = toCubicPts(ps);
-    const p0 = c[0];
-    const chord = hypot(c[3][0] - p0[0], c[3][1] - p0[1]);
-    let l = hypot(c[1][0] - p0[0], c[1][1] - p0[1]);
+    const [p0, p1, p2, p3] = toCubic(ps);
+    const chord = hypot(p3[0] - p0[0], p3[1] - p0[1]);
+    let l = hypot(p1[0] - p0[0], p1[1] - p0[1]);
     if (l < 1e-9) { l = chord/3; }
-    if (l < 1e-9) { return c; }
-    c[1] = [p0[0] + l*dir[0], p0[1] + l*dir[1]];
-    return c;
+    if (l < 1e-9) { return [p0, p1, p2, p3]; }
+    return [p0, [p0[0] + l*dir[0], p0[1] + l*dir[1]], p2, p3];
 }
 
 
 /** The piece with its END handle rotated onto `dir` (travel direction). */
 function setEndTangent(ps: number[][], dir: number[]): number[][] {
-    const c = toCubicPts(ps);
-    const p3 = c[3];
-    const chord = hypot(p3[0] - c[0][0], p3[1] - c[0][1]);
-    let l = hypot(c[2][0] - p3[0], c[2][1] - p3[1]);
+    const [p0, p1, p2, p3] = toCubic(ps);
+    const chord = hypot(p3[0] - p0[0], p3[1] - p0[1]);
+    let l = hypot(p2[0] - p3[0], p2[1] - p3[1]);
     if (l < 1e-9) { l = chord/3; }
-    if (l < 1e-9) { return c; }
-    c[2] = [p3[0] - l*dir[0], p3[1] - l*dir[1]];
-    return c;
-}
-
-
-/** Elevates a 2/3-point piece to a cubic (4 control points). */
-function toCubicPts(ps: number[][]): number[][] {
-    if (ps.length === 4) { return [ps[0], ps[1], ps[2], ps[3]]; }
-    if (ps.length === 3) {
-        const [q0, q1, q2] = ps;
-        return [
-            q0,
-            [q0[0] + (2/3)*(q1[0] - q0[0]), q0[1] + (2/3)*(q1[1] - q0[1])],
-            [q2[0] + (2/3)*(q1[0] - q2[0]), q2[1] + (2/3)*(q1[1] - q2[1])],
-            q2
-        ];
-    }
-    const [q0, q1] = [ps[0], ps[ps.length - 1]];
-    return [
-        q0,
-        [q0[0] + (q1[0] - q0[0])/3, q0[1] + (q1[1] - q0[1])/3],
-        [q1[0] - (q1[0] - q0[0])/3, q1[1] - (q1[1] - q0[1])/3],
-        q1
-    ];
-}
-
-
-function polyLen(ps: number[][]): number {
-    let L = 0;
-    for (let i = 1; i < ps.length; i++) {
-        L += hypot(ps[i][0] - ps[i-1][0], ps[i][1] - ps[i-1][1]);
-    }
-    return L;
+    if (l < 1e-9) { return [p0, p1, p2, p3]; }
+    return [p0, p1, [p3[0] - l*dir[0], p3[1] - l*dir[1]], p3];
 }
 
 
@@ -274,7 +239,7 @@ function anchorPoint(
         Ts: number[][],
         t: number): number[] {
 
-    const dθ = ((thB - thA + π) % (2*π) + 2*π) % (2*π) - π;
+    const dθ = wrapAngle(thB - thA);
     const θ = thA + t*dθ;
     const ρ = rhA*(1 - t) + rhB*t;
 
@@ -289,4 +254,4 @@ function anchorPoint(
 }
 
 
-export { reconstructSide, toCubicPts }
+export { reconstructSide }

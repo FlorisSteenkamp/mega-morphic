@@ -1,9 +1,11 @@
-import type { Glue, MutableMorphEntry } from './morph-entry.js';
-import type { Segment } from './segment-graph/segment.js';
-import type { SegGraph } from './segment-graph/seg-graph.js';
-import { composeSegs } from './segment-graph/compose-segs.js';
-import { buildSleeveSides, skeletonKnots } from './anchored-sleeves.js';
+import type { Circle } from 'flo-mat';
+import type { Glue, MorphEntry } from './morph-entry.js';
+import type { Segment } from './segment-tree/segment.js';
+import { composeSegs } from './segment-tree/compose-segs.js';
+import { buildSleeveSides } from './anchored-sleeves.js';
+import { skeletonKnots } from './fs/skeleton-knots.js';
 import { getLastP } from './fs/get-last-p.js';
+import { boundaries } from './fs/boundaries.js';
 import { nearestIdx } from './nearest-idx.js';
 
 const { min, hypot } = Math;
@@ -16,11 +18,11 @@ const { min, hypot } = Math;
  * degenerate to that point in the other frame) while its glue keeps the
  * junction riding the owning entry's drawn boundary throughout the morph.
  * Chained uncovered segments glue to the (already placed) neighbor's entry
- * the same way. `side` is the graph's own frame ('a' = shape 1 for
+ * the same way. `side` is the tree's own frame ('a' = shape 1 for
  * deleted, 'b' = shape 2 for inserted).
  */
 function placeTopology(
-        g: SegGraph,
+        g: Segment[],
         /** segments covered by some matched route (this side) */
         covered: Set<Segment>,
         /** covered segment → its entry index; gains placed segments */
@@ -28,28 +30,21 @@ function placeTopology(
         side: 'a' | 'b',
         classes: string,
         capSign: number,
-        bnds: { a?: number[][]; b?: number[][] }[],
-        entries: MutableMorphEntry[],
-        /** attachment-point dot marks (own frame) */
-        marks?: { pA?: number[]; pB?: number[]; classes: string;
-            dot?: boolean;
-            at?: { e: number; k1: number; k2: number } }[]): void {
+        entries: MorphEntry[]): void {
 
-    const adj = new Map<number, Segment[]>();
-    for (const s of g.segments) {
-        for (const v of [s.vertIdS, s.vertIdE]) {
-            let list = adj.get(v);
-            if (list === undefined) { adj.set(v, list = []); }
-            list.push(s);
+    const adj = new Map<Circle, Segment[]>();
+    for (const s of g) {
+        for (const v of [s.vertS, s.vertE]) {
+            adj.getOrInsert(v, []).push(s);
         }
     }
 
     // BFS hop distance from the covered region (matched routes form a
     // connected subtree, so every vertex is reached)
-    const dist = new Map<number, number>();
-    const queue: number[] = [];
+    const dist = new Map<Circle, number>();
+    const queue: Circle[] = [];
     for (const s of covered) {
-        for (const v of [s.vertIdS, s.vertIdE]) {
+        for (const v of [s.vertS, s.vertE]) {
             if (!dist.has(v)) { dist.set(v, 0); queue.push(v); }
         }
     }
@@ -58,30 +53,30 @@ function placeTopology(
         const d = dist.get(v)!;
         for (const s of adj.get(v) ?? []) {
             if (covered.has(s)) { continue; }
-            const w = s.vertIdS === v ? s.vertIdE : s.vertIdS;
+            const w = s.vertS === v ? s.vertE : s.vertS;
             if (!dist.has(w)) { dist.set(w, d + 1); queue.push(w); }
         }
     }
 
     const dOf = (s: Segment): number =>
-        min(dist.get(s.vertIdS) ?? Infinity, dist.get(s.vertIdE) ?? Infinity);
+        min(dist.get(s.vertS) ?? Infinity, dist.get(s.vertE) ?? Infinity);
 
     // closer-to-coverage first: a segment's coverage-side neighbors are
     // already placed when it is (chained glue)
-    const pending = g.segments
+    const pending = g
         .filter(s => !covered.has(s) && dOf(s) < Infinity)
         .sort((x, y) => dOf(x) - dOf(y));
 
     for (const seg of pending) { place(seg); }
 
     function place(seg: Segment): void {
-        const d0 = dist.get(seg.vertIdS) ?? Infinity;
-        const d1 = dist.get(seg.vertIdE) ?? Infinity;
+        const d0 = dist.get(seg.vertS) ?? Infinity;
+        const d1 = dist.get(seg.vertE) ?? Infinity;
         // junction = the coverage-side vertex (collapse target)
-        const jV = d0 <= d1 ? seg.vertIdS : seg.vertIdE;
+        const jV = d0 <= d1 ? seg.vertS : seg.vertE;
 
         // junction LAST (pushCollapsedEntry collapses onto the last point)
-        const { bz, rd: radii, edges } = composeSegs([seg], seg.vertIdS === jV);
+        const { bz, rd: radii, edges } = composeSegs([seg], seg.vertS === jV);
 
         const junction = getLastP(bz);
 
@@ -102,8 +97,10 @@ function placeTopology(
         let bestAt: { e: number; k: number } | undefined;
         let bestD = Infinity;
         for (const e of candidateEs) {
-            const bn = bnds[e][side];
-            if (bn === undefined) { continue; }
+            // candidates are always real on this side (matched entries,
+            // or topology entries of this same side)
+            const { skelPssA, skelPssB } = entries[e];
+            const bn = boundaries(side === 'a' ? skelPssA : skelPssB);
             const k = nearestIdx(bn, junction);
             const d = hypot(
                 bn[k][0] - junction[0], bn[k][1] - junction[1]);
@@ -111,22 +108,10 @@ function placeTopology(
         }
         if (bestAt === undefined) { return; }
 
-        const glue: Glue = {
-            e1: bestAt.e, k1: bestAt.k,
-            e2: bestAt.e, k2: bestAt.k
-        };
-
-        const bnAt = bnds[bestAt.e][side]![bestAt.k];
-        marks?.push({
-            [side === 'a' ? 'pA' : 'pB']: bnAt,
-            classes: `${side === 'a' ? 'red' : 'green'} nostroke`,
-            dot: true,
-            at: { e: bestAt.e, k1: bestAt.k, k2: bestAt.k }
-        });
+        const glue: Glue = { e: bestAt.e, k1: bestAt.k, k2: bestAt.k };
 
         owner.set(seg, pushCollapsedEntry(
-            bz, radii, edges, side, classes, capSign, glue,
-            bnds, entries));
+            bz, radii, edges, side, classes, capSign, glue, entries));
     }
 }
 
@@ -144,8 +129,7 @@ function pushCollapsedEntry(
         classes: string,
         capSign: number,
         glue: Glue,
-        bnds: { a?: number[][]; b?: number[][] }[],
-        entries: MutableMorphEntry[]): number {
+        entries: MorphEntry[]): number {
 
     const junction = getLastP(bz);
 
@@ -172,13 +156,11 @@ function pushCollapsedEntry(
         : buildSleeveSides(gone, real);
 
     const idx = entries.length;
-    bnds.push(side === 'a' ? { a: boundaries(bz) } : { b: boundaries(bz) });
     entries.push({
         skelPssA: side === 'a' ? bz : collapsed,
         skelPssB: side === 'a' ? collapsed : bz,
         ra: side === 'a' ? radii : rZero,
         rb: side === 'a' ? rZero : radii,
-        us,
         sleeveOut: sides.out,
         sleeveBack: sides.back,
         capSign,
@@ -191,15 +173,9 @@ function pushCollapsedEntry(
 }
 
 
-/** All resampled segment boundary points of a skeleton path. */
-function boundaries(g: number[][][]): number[][] {
-    return [...g.map(seg => seg[0]), getLastP(g)];
-}
-
-
 function collapseTo(beziers: number[][][], pt: number[]): number[][][] {
     return beziers.map(ps => ps.map(() => [pt[0], pt[1]]));
 }
 
 
-export { placeTopology, pushCollapsedEntry }
+export { placeTopology }

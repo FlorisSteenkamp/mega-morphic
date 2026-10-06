@@ -1,12 +1,13 @@
 import type { PageData } from '../page-data.js';
-import type { FeatureMark } from '../../morph/build-morph-entries/build-morph-entries.js';
+import type { PoseRamp } from '../../morph/procrustes/pose-ramp.js';
 import { buildMorphEntries } from '../../morph/build-morph-entries/build-morph-entries.js';
-import { applyProcrustes } from '../../morph/apply-procrustes.js';
+import { alignEntriesBToA } from '../../morph/procrustes/align-entries-b-to-a.js';
 import { drawMorph } from '../../morph/draw-morph/draw-morph.js';
-import { segGraphFromCp } from '../../morph/segment-graph/seg-graph-from-mat.js';
-import { XMLNS } from '../../draw/xmlns.js';
+import { segTreeFromCp } from '../../morph/segment-tree/seg-tree-from-cp.js';
 import { drawMatch } from './draw-match.js';
 import { showVertexNums } from './show-vertex-nums.js';
+import { calcPoseAt } from '../../morph/procrustes/calc-pose-at.js';
+import { outlineLoopOf } from '../../morph/segment-tree/outline-loop.js';
 
 
 function onMorphClicked(
@@ -15,92 +16,52 @@ function onMorphClicked(
     //-------------
     // Gather data
     //-------------
-    const { props, morphRef, morphMarksRef } = refPageData.current!;
+    const { props, morphRef } = refPageData.current!;
 
     const { stateControl } = props;
     const { upd, state: { appState } } = stateControl;
     const { pageState } = appState;
-    const { deduced, morphT, poseOptions, pathWeights } = pageState;
+    const {
+        deduced, morphT, pathWeights, showMatchBoundary, showBranchNums,
+        showMatch
+    } = pageState;
     const { mats1, mats2 } = deduced;
 
     //----------------------------------------------
-    // Cut the segment graphs directly off the MATs
+    // Cut the segment trees directly off the MATs
     //----------------------------------------------
-    const sgA = segGraphFromCp(mats1[0].cpNode);
-    const sgB = segGraphFromCp(mats2[0].cpNode);
+    const cpA = mats1[0].cpNode;
+    const cpB = mats2[0].cpNode;
+    const sgA = segTreeFromCp(cpA);
+    const sgB = segTreeFromCp(cpB);
+
+    const loopA = outlineLoopOf(cpA);
+    const loopB = outlineLoopOf(cpB);
 
     //--------------------------------------------
-    // Match the graphs and build morph entries
+    // Match the trees and build morph entries
     //--------------------------------------------
-    const marks: FeatureMark[] = [];
-    const morphEntries = buildMorphEntries(sgA, sgB, marks, pathWeights);
+    const morphEntries = buildMorphEntries(sgA, sgB, loopA, loopB, pathWeights);
 
-    //--------------------------------------------------------
-    // Pose-align shape 2's frame onto shape 1 (when enabled)
-    //--------------------------------------------------------
-    const posed = applyProcrustes(sgA.loop, sgB.loop, morphEntries, poseOptions);
+    //----------------------------------------
+    // Pose-align shape B's frame onto shape A
+    //----------------------------------------
+    // Both poses in the DRAW-TIME metric (see calcPoseAt), so the frame
+    // alignment, the ramp endpoints and the live correction all agree.
+    const poseA = calcPoseAt(morphEntries, 0);
+    const poseB = calcPoseAt(morphEntries, 1);
+    const poseRamp: PoseRamp = { poseA, poseB };
+    const entries = alignEntriesBToA(morphEntries, poseA, poseB);
 
-    morphRef.current = posed?.entries ?? morphEntries;
-    morphMarksRef.current = marks;
-    // Derived per-morph data (also CLEARS a stale pose when the pose
-    // checkboxes are off).
-    upd(deduced, { morphPose: posed?.poseRamp });
-
-    //--------------------------------
-    // Don't delete - keep for future
-    //--------------------------------
-    // drawFeatureMarks(svgRef1.current,
-    //     marks
-    //     .filter(m => m.pA !== undefined)
-    //     .map(m => ({ p: m.pA!, classes: m.classes, dot: m.dot })));
-    // drawFeatureMarks(svgRef2.current,
-    //     marks
-    //     .filter(m => m.pB !== undefined)
-    //     .map(m => ({ p: m.pB!, classes: m.classes, dot: m.dot })));
-    //--------------------------------
+    morphRef.current = entries;
+    upd(deduced, { morphPose: poseRamp });
 
     drawMorph(refPageData, morphT / 100);
 
     // Refresh the overlay for the newly built match.
-    if (pageState.showMatch) { drawMatch(refPageData, true, pageState.showMatchBoundary); }
-    if (pageState.showBranchNums) { showVertexNums(refPageData, true); }
+    if (showMatch) { drawMatch(refPageData, true, showMatchBoundary); }
+    if (showBranchNums) { showVertexNums(refPageData, true); }
 }
-
-
-/**
- * Temp commented - keep for possible future use
- * 
- * Little crosses (anchors) / dots (plain attachments) at matched feature
- * positions (replaces previous ones).
- */
-// function drawFeatureMarks(
-//         svg$: SVGSVGElement | null,
-//         marks: { p: number[]; classes: string; dot?: boolean }[]) {
-
-//     if (svg$ === null) { return; }
-//     const g = svg$.getElementsByTagName('g')[0];
-
-//     g.querySelectorAll('.feature-mark').forEach($ => $.remove());
-
-//     const size = 12;
-//     for (const { p, classes, dot } of marks) {
-//         if (dot) {
-//             const $c = document.createElementNS(XMLNS, 'circle');
-//             $c.setAttributeNS(null, 'cx', `${p[0]}`);
-//             $c.setAttributeNS(null, 'cy', `${p[1]}`);
-//             $c.setAttributeNS(null, 'r', '3');
-//             $c.setAttributeNS(null, 'class', `${classes} feature-mark`);
-//             g.appendChild($c);
-//             continue;
-//         }
-//         const $path = document.createElementNS(XMLNS, 'path');
-//         $path.setAttributeNS(null, 'd',
-//             `M${p[0] - size} ${p[1]} L${p[0] + size} ${p[1]} ` +
-//             `M${p[0]} ${p[1] - size} L${p[0]} ${p[1] + size}`);
-//         $path.setAttributeNS(null, 'class', `${classes} feature-mark`);
-//         g.appendChild($path);
-//     }
-// }
 
 
 export { onMorphClicked }

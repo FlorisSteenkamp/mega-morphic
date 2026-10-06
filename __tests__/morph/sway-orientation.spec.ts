@@ -5,15 +5,17 @@ import { describe, test, expect } from '@jest/globals';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { findMats, getPathsFromStr, MatOptions } from 'flo-mat';
-import type { SegGraph } from '../../src/morph/segment-graph/seg-graph.js';
+import type { Segment } from '../../src/morph/segment-tree/segment.js';
 import { defaultPathWeights } from '../../src/morph/match-paths/path-cost-weights.js';
-import { segGraphFromMat } from '../../src/morph/segment-graph/seg-graph-from-mat.js';
-import { matchSegGraphs, composeRoute } from '../../src/morph/segment-graph/match-seg-graphs.js';
-import type { RouteStep } from '../../src/morph/segment-graph/match-seg-graphs.js';
+import { segTreeWithLoop, loopOf } from '../helpers/seg-tree-with-loop.js';
+import { getUnit$ } from '../../src/morph/segment-tree/get-unit.js';
+import { matchSegTrees } from '../../src/morph/segment-tree/match-seg-trees.js';
+import { composeRouteGeom } from '../../src/morph/segment-tree/compose-segs.js';
+import type { RouteStep } from '../../src/morph/segment-tree/match-seg-trees.js';
 import { calcProcrustes } from '../../src/morph/procrustes/calc-procrustes.js';
 import { unwrappedChordAngles } from '../../src/morph/intrinsic-skeleton/unwrapped-chord-angles.js';
 import { wrapAngle } from '../../src/morph/intrinsic-skeleton/wrap-angle.js';
-import { totalLength$ } from '../../src/morph/fs/total-length.js';
+import { length$ } from '../../src/morph/fs/length.js';
 import { parseSvgFont } from '../../src/load-svg/load-svg-font.js';
 
 const { sqrt, abs, PI: π } = Math;
@@ -30,20 +32,20 @@ const options: MatOptions = {
 
 let SAT = false;
 
-function loadGraph(glyphName: string): SegGraph {
+function loadGraph(glyphName: string): Segment[] {
     const font = parseSvgFont(
         readFileSync(resolve('fonts-test/achispado.svg'), 'utf-8'));
     const d = font.find(g => g.name === glyphName)!.d;
     const mats = findMats(getPathsFromStr(d), { ...options, applySat: SAT });
-    return segGraphFromMat(mats[0].cpNode);
+    return segTreeWithLoop(mats[0].cpNode);
 }
 
 function meanAngleOf(route: RouteStep[]): number {
-    const bz = composeRoute(route).skelPss;
+    const { bz } = composeRouteGeom(route);
     const ψs = unwrappedChordAngles(bz);
     let s = 0, total = 0;
     for (let i = 0; i < bz.length; i++) {
-        const l = totalLength$(bz[i]);
+        const l = length$(bz[i]);
         s += ψs[i]*l; total += l;
     }
     return total === 0 ? 0 : s/total;
@@ -52,8 +54,8 @@ function meanAngleOf(route: RouteStep[]): number {
 function swing(nameA: string, nameB: string, aniso: number): number {
     const gA = loadGraph(nameA);
     const gB = loadGraph(nameB);
-    const r = matchSegGraphs(
-        gA, gB, gA.unit, gB.unit,
+    const r = matchSegTrees(
+        gA, gB, getUnit$(loopOf(gA)), getUnit$(loopOf(gB)),
         defaultPathWeights, aniso);
     return abs(wrapAngle(
         meanAngleOf(r.root.routeB) - meanAngleOf(r.root.routeA)));
@@ -67,8 +69,8 @@ describe('sway orientation tie-break', () => {
                     ['hyphen', 'hyphen-2'], ['hyphen-2', 'hyphen']] as const) {
                 const gA = loadGraph(a);
                 const gB = loadGraph(b);
-                const aniso = (calcProcrustes(gA.loop).anisotropy +
-                    calcProcrustes(gB.loop).anisotropy) / 2;
+                const aniso = (calcProcrustes(loopOf(gA)).anisotropy +
+                    calcProcrustes(loopOf(gB)).anisotropy) / 2;
 
                 const withSway = swing(a, b, aniso);
                 const noSway = swing(a, b, 0);

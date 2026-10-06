@@ -15,14 +15,21 @@ npm account name: floris / florissteenkamp
 
 TODO
 ----
-* shapes to recheck: seven/three, M/N, hyphen-2/hyphen, Q/H, parenleft
+* shapes to recheck:
+  - testO -> plus (branches move too far along trunk)
+  - seven -> three
+  - M -> N
+  - hyphen-2 -> hyphen
+  - Q/H -> parenleft
+
 * better retract/grow logic of dropped branches
 
 FUTURE
 ------
 * In `Segment` material is calculated as `2*mean(r)*l` thus dropping half of
   the for circle - is this optimal? We could store size of for circle of segment
-  with Segment and do a Green's Theorem instead so trunk don't lose its salience
+  with Segment and do a Green's Theorem instead so trunk don't lose its salience.
+  There is definitely a better way to calculate this
 * Better boundary lerping - currently jagged / intersecting
   - currently fixed by adding more 2-prongs by making maxLength === 10 (instead of 40)
 

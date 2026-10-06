@@ -1,9 +1,8 @@
 import { wrapAngle } from './wrap-angle.js';
 import { chords } from './chords.js';
+import { toChordFrame } from '../fs/to-chord-frame.js';
 
 const { cos, sin } = Math;
-
-const EPS = 1e-9;
 
 
 /**
@@ -44,8 +43,11 @@ function intrinsicSkeletonLerp(
         const bx = L*cos(phis[k]);
         const by = L*sin(phis[k]);
 
-        const qA = chordNormalize(a[k]);
-        const qB = chordNormalize(b[k]);
+        // control points in the segment's own chord frame
+        const psA = a[k];
+        const psB = b[k];
+        const qA = toChordFrame(psA, psA[0], psA[psA.length - 1]);
+        const qB = toChordFrame(psB, psB[0], psB[psB.length - 1]);
 
         out.push(qA.map((q, j) => {
             const qx = q[0]*(1 - t) + qB[j][0]*t;
@@ -58,24 +60,6 @@ function intrinsicSkeletonLerp(
     }
 
     return out;
-}
-
-
-/** Control points in the segment's own chord frame (chord ↦ (0,0)→(1,0)). */
-function chordNormalize(ps: number[][]): number[][] {
-    const e0 = ps[0];
-    const e1 = ps[ps.length - 1];
-    let bx = e1[0] - e0[0];
-    let by = e1[1] - e0[1];
-    let den = bx*bx + by*by;
-    // Degenerate chord: translation only (mirrored at reconstruction).
-    if (den < EPS*EPS) { bx = 1; by = 0; den = 1; }
-
-    return ps.map(p => {
-        const ux = p[0] - e0[0];
-        const uy = p[1] - e0[1];
-        return [(bx*ux + by*uy) / den, (-by*ux + bx*uy) / den];
-    });
 }
 
 

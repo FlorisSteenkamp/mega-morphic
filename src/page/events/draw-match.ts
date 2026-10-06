@@ -1,8 +1,8 @@
 declare var _debug_: Debug;
 import type { Debug } from '../../debug/debug.js';
 import type { PageData } from '../page-data.js';
-import type { MatchedPath } from '../../morph/match-paths/matched-path.js';
-import type { Segment } from '../../morph/segment-graph/segment.js';
+import type { SegMatchedPair } from '../../morph/segment-tree/match-seg-trees.js';
+import type { Segment } from '../../morph/segment-tree/segment.js';
 import { matchColors } from './match-colors.js';
 import { coveredSegsOf } from '../../morph/build-morph-entries/build-morph-entries.js';
 import { drawBeziersAsSinglePath } from '../../draw/draw-beziers-as-single-path.js';
@@ -48,17 +48,17 @@ function drawMatch(
 
     // Everything no matched route covers retracts/grows - red/green like
     // the morph view.
-    for (const seg of pm.gA.segments) {
+    for (const seg of pm.gA) {
         if (!covered1.has(seg)) { drawSegment(g1, seg, 'red'); }
     }
-    for (const seg of pm.gB.segments) {
+    for (const seg of pm.gB) {
         if (!covered2.has(seg)) { drawSegment(g2, seg, 'green'); }
     }
 
     console.log(
         `matched ${pairIdx} route pairs,`,
         `${delCount} deleted, ${insCount} inserted subtrees,`,
-        `flipped ${pm.flipped}, cost ${pm.cost.toFixed(3)}`
+        `cost ${pm.cost.toFixed(3)}`
     );
 }
 
@@ -71,7 +71,7 @@ function drawMatch(
  * pair index and delete/insert counts.
  */
 function walk(
-        mp: MatchedPath,
+        mp: SegMatchedPair,
         g1: SVGGElement,
         g2: SVGGElement,
         pairIdx0 = 0) {
@@ -87,7 +87,7 @@ function walk(
     let pairIdx = pairIdx0 + 1;
     let delCount = 0;
     let insCount = 0;
-    for (const op of mp.children) {
+    for (const op of mp.ops) {
         if (op.type === 'match') {
             const r = walk(op.sub, g1, g2, pairIdx);
             pairIdx = r.pairIdx;

@@ -3,7 +3,9 @@ import { distributeBezierListsEvenly } from './distribute-beziers-evenly.js';
 import { clamp } from '../utils/clamp.js';
 import { length$ } from './fs/length.js';
 import { sum } from '../utils/sum.js';
-import { lenOf$ } from './segment-graph/len-of.js';
+import { lenOf$ } from './segment-tree/len-of.js';
+import { knotIdxAt } from './fs/knot-idx-at.js';
+import { toChordFrame } from './fs/to-chord-frame.js';
 
 const { atan2, hypot, PI: π } = Math;
 
@@ -46,26 +48,6 @@ interface SleeveFrame {
     readonly bz: number[][][];
     /** maximal-disk radius per resampled segment boundary */
     readonly radii: number[];
-}
-
-
-/** Normalized cumulative arc-length knots of a skeleton bezier list. */
-function skeletonKnots(
-        pss: number[][][]): number[] {
-
-    const lens = pss.map(length$);
-    const total = sum(lens);
-
-    const knots = [0];
-    let cum = 0;
-    for (const l of lens) {
-        cum += l;
-        knots.push(total > 0 ? cum/total : 0);
-    }
-
-    knots[knots.length - 1] = 1;
-
-    return knots;
 }
 
 
@@ -141,8 +123,9 @@ function buildSide(
             tangentAngle(dirAtEnd(pB[pB.length - 1]), TsB[bidxTo])
         ]);
 
-        piecesA.push(normalizeSeg(pA, sA.from, sA.to));
-        piecesB.push(normalizeSeg(pB, sB.from, sB.to));
+        // pieces in their anchors' chord frame
+        piecesA.push(pA.map(ps => toChordFrame(ps, sA.from, sA.to)));
+        piecesB.push(pB.map(ps => toChordFrame(ps, sB.from, sB.to)));
     }
 
     fillDegenerateThetas(anchorsA, isOut);
@@ -212,9 +195,7 @@ function cutSide(
         const uB = us[k + 1];
 
         // The midpoint uniquely identifies the original edge containing [uA,uB].
-        const mid = (uA + uB) / 2;
-        let j = 0;
-        while (j < knots.length - 2 && knots[j + 1] <= mid) { j++; }
+        const j = knotIdxAt(knots, (uA + uB) / 2);
 
         const span = knots[j + 1] - knots[j];
         const fA = span <= 0 ? 0 : clamp((uA - knots[j]) / span, 0, 1);
@@ -339,27 +320,6 @@ function tangentAngle(v: number[], T: number[]): number {
 }
 
 
-/** Pieces expressed in the chord frame of `e0` → `e1` (chord maps to (0,0)→(1,0)). */
-function normalizeSeg(
-        pieces: number[][][],
-        e0: number[],
-        e1: number[]): number[][][] {
-
-    const dx = e1[0] - e0[0];
-    const dy = e1[1] - e0[1];
-    let den = dx*dx + dy*dy;
-    // Degenerate chord: translation only (mirrored at reconstruction).
-    let bx = dx; let by = dy;
-    if (den < EPS_LEN*EPS_LEN) { bx = 1; by = 0; den = 1; }
-
-    return pieces.map(ps => ps.map(p => {
-        const ux = p[0] - e0[0];
-        const uy = p[1] - e0[1];
-        return [(bx*ux + by*uy) / den, (-by*ux + bx*uy) / den];
-    }));
-}
-
-
 /**
  * Unit tangent of the skeleton at each segment boundary (same rule at build
  * and reconstruction time so t=0/1 are exact). Degenerate (zero-length)
@@ -420,7 +380,6 @@ function dirAtEnd(ps: number[][]): number[] {
 export type { SleeveSide, SleeveFrame }
 export {
     buildSleeveSides,
-    skeletonKnots,
     boundaryTangents,
     boundaryPoint
 }

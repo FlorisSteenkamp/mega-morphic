@@ -34,17 +34,19 @@ module.exports = {
         },
     },
     module: {
-        // rules: [
-        //     {
-        //         test: /\.([cm]?ts|tsx)$/,
-        //         loader: "ts-loader",
-        //         exclude: /^(node_modules)$/
-        //     }
-        // ]
+        // swc only transpiles (no type checking) - run `npm run typecheck`
         rules: [{
             test: /\.tsx?$/,
-            loader: 'ts-loader',
-            options: { silent: true },
+            loader: 'swc-loader',
+            options: {
+                jsc: {
+                    parser: { syntax: 'typescript', tsx: true },
+                    // tsconfig `"jsx": "react"` (React.createElement)
+                    transform: { react: { runtime: 'classic' } },
+                    target: 'esnext'
+                },
+                sourceMaps: true
+            },
             exclude: /node_modules/,
             sideEffects: false
         }]

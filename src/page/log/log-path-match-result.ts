@@ -1,9 +1,7 @@
 declare var _debug_: Debug; 
 import type { Debug } from '../../debug/debug.js';
 import type { PathMatchResult } from '../../morph/match-paths/path-match-result.js';
-import type { MatchedPath } from '../../morph/match-paths/matched-path.js';
-import type { PathChildOp } from '../../morph/match-paths/path-child-op.js';
-import type { PooledChild } from '../../morph/match-paths/pooled-child.js';
+import type { SegMatchedPair, SegOp, SegChild } from '../../morph/segment-tree/match-seg-trees.js';
 import { drawBeziersAsSinglePath } from '../../draw/draw-beziers-as-single-path.js';
 
 const { hypot, PI: π } = Math;
@@ -20,7 +18,7 @@ function logPathMatchResult(
     const pm: PathMatchResult | undefined = _debug_.elems.pathMatchResult[0];
     if (pm === undefined) { return; }
 
-    const ops: PathChildOp[] = [];
+    const ops: SegOp[] = [];
     collect(pm.trunk);
 
     if (ops.length === 0) {
@@ -53,12 +51,12 @@ function logPathMatchResult(
     if (best.type !== 'insert') { logChild('a', best.a); }
     if (best.type !== 'delete') { logChild('b', best.b); }
     if (best.type === 'match') {
-        console.log('  sub-match cost:', best.sub.cost.totalCost);
+        console.log('  sub-match cost:', best.sub.cost);
     }
 
 
-    function collect(mp: MatchedPath): void {
-        for (const op of mp.children) {
+    function collect(mp: SegMatchedPair): void {
+        for (const op of mp.ops) {
             ops.push(op);
             if (op.type === 'match') { collect(op.sub); }
         }
@@ -66,7 +64,7 @@ function logPathMatchResult(
 }
 
 
-function logChild(side: 'a' | 'b', c: PooledChild): void {
+function logChild(side: 'a' | 'b', c: SegChild): void {
     console.log(`  ${side}:`, {
         angleFromParent: `${c.angle.toFixed(3)} rad (${
             (c.angle * 180 / π).toFixed(1)}°)`,
@@ -80,7 +78,7 @@ function logChild(side: 'a' | 'b', c: PooledChild): void {
 
 
 /** Min distance from `p` to the subtree's skeleton control points. */
-function distToChild(p: number[], c: PooledChild): number {
+function distToChild(p: number[], c: SegChild): number {
     let d = Infinity;
     for (const seg of c.segs) {
         for (const ps of seg.skelPss) {

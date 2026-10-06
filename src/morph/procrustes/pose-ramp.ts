@@ -1,4 +1,3 @@
-import type { PoseOptions } from './pose-options.js';
 import type { Pose } from './pose.js';
 
 
@@ -9,10 +8,10 @@ import type { Pose } from './pose.js';
  * no-net-rotation gauge (getMorphedSkeleton).
  */
 interface PoseRamp {
-    readonly c1: number[];
-    readonly c2: number[];
-    readonly s1: number;
-    readonly s2: number;
+    /** the measured pose at t=0 */
+    readonly poseA: Pose;
+    /** the measured pose at t=1 */
+    readonly poseB: Pose;
 }
 
 
@@ -23,31 +22,28 @@ interface PoseRamp {
  * endpoints).
  */
 function poseCorrectionAt(
-        poseOptions: PoseOptions,
         r: PoseRamp,
         t: number,
-        measured: Pose): { tf: (p: number[]) => number[]; scale: number } {
+        measured: Pose): (p: number[]) => number[] {
 
-    const { applyCentroid, applyScale } = poseOptions;
-
-    // disabled components pin to the MEASURED value = no correction
-    const cD = applyCentroid
-        ? [(1 - t)*r.c1[0] + t*r.c2[0], (1 - t)*r.c1[1] + t*r.c2[1]]
-        : measured.centroid;
-    const sD = applyScale
-        ? Math.pow(r.s1, 1 - t) * Math.pow(r.s2, t)
-        : measured.scale;
-
-    const s = sD / measured.scale;
+    const { poseA, poseB } = r;
+    const [cAx, cAy] = poseA.centroid;
+    const [cBx, cBy] = poseB.centroid;
+    const { scale: sA } = poseA;
+    const { scale: sB } = poseB;
     const [mx, my] = measured.centroid;
 
-    return {
-        tf: ([x, y]) => [
-            cD[0] + s*(x - mx),
-            cD[1] + s*(y - my)
-        ],
-        scale: s
-    };
+    // desired centroid (straight line) and scale (geometric)
+    const cDx = (1 - t)*cAx + t*cBx;
+    const cDy = (1 - t)*cAy + t*cBy;
+    const sD = Math.pow(sA, 1 - t) * Math.pow(sB, t);
+
+    const s = sD / measured.scale;
+
+    return ([x, y]) => [
+        cDx + s*(x - mx),
+        cDy + s*(y - my)
+    ];
 }
 
 

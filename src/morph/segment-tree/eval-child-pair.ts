@@ -1,9 +1,12 @@
 import type { PathCostWeights } from '../match-paths/path-cost-weights.js';
-import type { PathAlignDebug } from '../match-paths/matched-path.js';
+import type { PathAlignDebug } from '../match-paths/path-align-debug.js';
 import type { Segment } from './segment.js';
-import type { SegGraph } from './seg-graph.js';
-import type { SegMatchedPair, SegOp, SegChild, ChildPairPrice, RouteStep } from './match-seg-graphs.js';
-import { matchSegGraphs, priceChildPair, reverseRoute } from './match-seg-graphs.js';
+import type { SegMatchedPair, SegOp, SegChild, RouteStep } from './match-seg-trees.js';
+import type { ProductDtwResult } from './product-dtw.js';
+import {
+    matchSegTrees, reverseRoute, subDtwOf, getSampleSpacing, terminalGated,
+    posCostOf, angleCostOf, dropCostOf
+} from './match-seg-trees.js';
 import { routeSegments } from './route-segments.js';
 import { alignOfRoutes } from './match-paths-via-segments.js';
 import { calcProcrustes } from '../procrustes/calc-procrustes.js';
@@ -50,27 +53,29 @@ interface ChildPairEval {
  * * **Debug only**
  * 
  * Prices a clicked child-segment pair with the segment matcher's actual
- * economics: a fresh `matchSegGraphs` run on the SAME graphs (current
- * weights - graph construction is weight-independent) locates the segments
+ * economics: a fresh `matchSegTrees` run on the SAME trees (current
+ * weights - tree construction is weight-independent) locates the segments
  * as pooled children of the winning match, then the pair is priced exactly
  * as the matcher's relabel-vs-drop decision would price it.
  */
 function evalChildPair(
-        gA: SegGraph,
-        gB: SegGraph,
+        gA: Segment[],
+        gB: Segment[],
         segA: Segment,
         segB: Segment,
+        loopA: number[][][],
+        loopB: number[][][],
         weights: PathCostWeights): ChildPairEval {
 
-    const unitA = getUnit$(gA.loop);
-    const unitB = getUnit$(gB.loop);
+    const unitA = getUnit$(loopA);
+    const unitB = getUnit$(loopB);
     const aniso = (
-        calcProcrustes(gA.loop).anisotropy +
-        calcProcrustes(gB.loop).anisotropy
+        calcProcrustes(loopA).anisotropy +
+        calcProcrustes(loopB).anisotropy
     ) / 2;
 
     const root =
-        matchSegGraphs(gA, gB, unitA, unitB, weights, aniso).root;
+        matchSegTrees(gA, gB, unitA, unitB, weights, aniso).root;
 
     const a = locate(root, segA, 'a');
     const b = locate(root, segB, 'b');
@@ -121,6 +126,62 @@ function evalChildPair(
             : ' (in isolation; sequence order can override)');
 
     return { a, b, sameParent, sameSequence, price, align, verdict, root };
+}
+
+
+/** One child pair priced by the matcher's actual economics. */
+interface ChildPairPrice {
+    /** terminal↔regular gate fired: `matchCost` = Infinity */
+    readonly gated: boolean;
+    readonly positionCost: number;
+    readonly angleCost: number;
+    /** pinned-start sub-DTW total incl. measured warp sway */
+    readonly dtwCost: number;
+    /** position + angle + dtw (the DP's relabel price; Infinity when gated) */
+    readonly matchCost: number;
+    readonly deleteCost: number;
+    readonly insertCost: number;
+    readonly dtw: ProductDtwResult;
+    readonly subA: Segment[];
+    readonly subB: Segment[];
+}
+
+
+/**
+ * Prices one child pair exactly as the matcher's `matchCost` / `delCost` /
+ * `insCost` would (fresh, unmemoized) - the authoritative relabel-vs-drop
+ * economics for the pair. Route lengths are the PARENT routes the children
+ * are pooled on (position is a route fraction).
+ */
+function priceChildPair(
+        gA: Segment[], gB: Segment[],
+        unitA: number, unitB: number,
+        routeLenA: number, routeLenB: number,
+        weights: PathCostWeights,
+        sway: number,
+        a: SegChild, b: SegChild): ChildPairPrice {
+
+    const { dtw, subA, subB } = subDtwOf(
+        gA, gB,
+        unitA, unitB,
+        getSampleSpacing(gA), getSampleSpacing(gB),
+        weights, sway, a, b
+    );
+
+    const gated = terminalGated(a, b);
+    const positionCost = posCostOf(
+        a, b, routeLenA, routeLenB, unitA, unitB, weights);
+    const angleCost = angleCostOf(a, b, weights);
+    return {
+        gated, positionCost, angleCost,
+        dtwCost: dtw.totalCost + dtw.swayCost,
+        matchCost: gated
+            ? Infinity
+            : positionCost + angleCost + dtw.totalCost + dtw.swayCost,
+        deleteCost: dropCostOf(a, weights),
+        insertCost: dropCostOf(b, weights),
+        dtw, subA, subB
+    };
 }
 
 
@@ -180,5 +241,5 @@ function locate(
 }
 
 
-export type { ChildPairEval, ChildLocation }
+export type { ChildPairEval, ChildLocation, ChildPairPrice }
 export { evalChildPair }

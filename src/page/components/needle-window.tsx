@@ -1,8 +1,9 @@
 declare var _debug_: Debug;
 import * as React from 'react';
 import type { Debug } from '../../debug/debug.js';
-import type { PooledDp } from '../../morph/match-paths/matched-path.js';
-import type { PooledChild } from '../../morph/match-paths/pooled-child.js';
+import type { Circle } from 'flo-mat';
+import type { SegDp, SegChild } from '../../morph/segment-tree/match-seg-trees.js';
+import { vertexIds } from '../../morph/segment-tree/vertex-ids.js';
 
 
 const windowStyle: React.CSSProperties = {
@@ -42,7 +43,7 @@ const opColors = {
 
 
 /**
- * Overlay window showing the TRUNK pair's pooled-children Needleman-Wunsch
+ * Overlay window showing the TRUNK pair's children Needleman-Wunsch
  * scoring matrices (one per side), traceback cells tinted by op type.
  * Data comes from the last morph's `pathMatchResult` (debug-only).
  */
@@ -82,28 +83,34 @@ function needleContent() {
         return <div style={windowStyle}>debug mode is off</div>;
     }
     const pm = _debug_.elems.pathMatchResult.at(-1);
-    if (pm?.trunk.pooledDp === undefined) {
+    if (pm?.trunk.dp === undefined) {
         return <div style={windowStyle}>
             no match data - click morph first (then re-toggle)
         </div>;
     }
 
+    const { cost, shapeCost, dp } = pm.trunk;
+    const childCost = cost - shapeCost;
+
     return <div style={windowStyle}>
-        <b>Trunk pooled-children DP</b> (cost {pm.trunk.cost.childCost.toFixed(3)},
-        &nbsp;flipped {`${pm.flipped}`}) — traceback:
+        <b>Trunk children DP</b> (cost {childCost.toFixed(3)}) — traceback:
         <span style={{ background: opColors.match }}> match </span>
         <span style={{ background: opColors.delete }}> delete </span>
         <span style={{ background: opColors.insert }}> insert </span>
-        {pm.trunk.pooledDp.map(dp => (
-            <DpTable key={dp.side} dp={dp} />
+        {dp.map(dp => (
+            <DpTable key={dp.side} dp={dp}
+                idsA={vertexIds(pm.gA)} idsB={vertexIds(pm.gB)} />
         ))}
     </div>;
 }
 
 
-function DpTable(props: { dp: PooledDp }) {
+function DpTable(props: {
+        dp: SegDp;
+        idsA: Map<Circle, number>;
+        idsB: Map<Circle, number> }) {
 
-    const { dp } = props;
+    const { dp, idsA, idsB } = props;
     const { D, as, bs, ops } = dp;
 
     // Traceback cells: walk ops from (0,0), tint the ARRIVED-AT cell.
@@ -129,7 +136,7 @@ function DpTable(props: { dp: PooledDp }) {
                     <th style={headStyle}>A \ B</th>
                     <th style={headStyle}>∅</th>
                     {bs.map((b, k) => (
-                        <th key={k} style={headStyle}>{childLabel(b)}</th>
+                        <th key={k} style={headStyle}>{childLabel(b, idsB)}</th>
                     ))}
                 </tr>
             </thead>
@@ -137,7 +144,7 @@ function DpTable(props: { dp: PooledDp }) {
                 {D.map((row, r) => (
                     <tr key={r}>
                         <th style={headStyle}>
-                            {r === 0 ? '∅' : childLabel(as[r - 1])}
+                            {r === 0 ? '∅' : childLabel(as[r - 1], idsA)}
                         </th>
                         {row.map((v, c) => (
                             <td
@@ -160,9 +167,10 @@ function DpTable(props: { dp: PooledDp }) {
 }
 
 
-/** "v<entry-segment vertices> @<dist along route>" */
-function childLabel(c: PooledChild): string {
-    return `v${c.entry.vertIdS}·${c.entry.vertIdE} @${c.dist.toFixed(0)}`;
+/** "v<entry-segment vertex ids> @<dist along route>" (ids as `showVertexNums`) */
+function childLabel(c: SegChild, ids: Map<Circle, number>): string {
+    const { vertS, vertE } = c.entry;
+    return `v${ids.get(vertS)}·${ids.get(vertE)} @${c.dist.toFixed(0)}`;
 }
 
 

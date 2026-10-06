@@ -17,9 +17,10 @@ const { min, max, floor, cos, sin, hypot, round, PI: π } = Math;
  * skeleton AND rotated about that junction by the parent's local frame
  * rotation there (beyond the naive angle lerp) - so the child's angle
  * RELATIVE to its parent interpolates linearly. All angles are tracked
- * UNWRAPPED and continuously in t (`alphas` carries each entry's continuous
- * anchor angle), so the rotation never jumps by 2π mid-morph. Parents are
- * resolved recursively on demand; results are cached in `drawn`.
+ * UNWRAPPED and continuously in t (the returned `alpha` is the entry's
+ * continuous anchor angle), so the rotation never jumps by 2π mid-morph.
+ * Parents are resolved recursively on demand; results are memoized per
+ * (entries, t, entry index).
  */
 const getMorphedSkeleton = memoize(function(
         entries: MorphEntry[],
@@ -68,37 +69,17 @@ const getMorphedSkeleton = memoize(function(
     }
 
 
-    let target: number[];
-    let dψ: number;  // parent frame rotation beyond its naive lerp
+    const { e, k1, k2 } = glue;
 
-    const { e1, e2, k1, k2 } = glue;
+    // Junction slides along the parent from k1 to k2.
+    const kf = (1 - t)*k1 + t*k2;
+    const target = pAtIndex(getMorphedSkeleton(entries, t, e).pss, kf);
 
-    if (e1 === e2) {
-        // Junction slides along the one parent from k1 to k2.
-        const kf = (1 - t)*k1 + t*k2;
-        const { pss } = getMorphedSkeleton(entries, t, e1);
-        target = pAtIndex(pss, kf);
-
-        const ψ = parentPsi_(e1, kf);
-        dψ = (1 - t)*(ψ - staticPsiA_(e1, k1)) +
-             t*(ψ - staticPsiB_(e1, k2));
-    } else {
-        // Attached to different branches per frame: blend between
-        // the two attachment points' drawn positions.
-        const { pss: pss1 } = getMorphedSkeleton(entries, t, e1);
-        const p1 = pAtIndex(pss1, k1);
-        const { pss: pss2 } = getMorphedSkeleton(entries, t, e2);
-        const p2 = pAtIndex(pss2, k2);
-        target = [
-            (1 - t)*p1[0] + t*p2[0],
-            (1 - t)*p1[1] + t*p2[1]
-        ];
-
-        dψ = (1 - t)*(parentPsi_(e1, k1) -
-             staticPsiA_(e1, k1)) +
-             t*(parentPsi_(e2, k2) -
-             staticPsiB_(e2, k2));
-    }
+    // parent frame rotation beyond its naive lerp
+    const ψ = parentPsi_(e, kf);
+    const ψA = staticPsiA_(e, k1);
+    const ψB = staticPsiB_(e, k2);
+    let dψ = (1 - t)*(ψ - ψA) + t*(ψ - ψB);
 
     // Take the shortest rotation RELATIVE to the parent, not in
     // absolute terms - so children follow their parent's rotation
@@ -115,9 +96,7 @@ const getMorphedSkeleton = memoize(function(
         (ψsBe[ψsBe.length - 1] - φ0B) -
         (ψsAe[ψsAe.length - 1] - φ0A);
 
-    const relΔ = junctionRot -
-        (staticPsiB_(glue.e2, glue.k2) -
-         staticPsiA_(glue.e1, glue.k1));
+    const relΔ = junctionRot - (ψB - ψA);
 
     const { collapsed } = entries[i];
     dψ += collapsed === 'b' ? -t*relΔ

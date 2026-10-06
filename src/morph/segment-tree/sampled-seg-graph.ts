@@ -1,6 +1,8 @@
+import type { Circle } from 'flo-mat';
+
 
 /**
- * The segment graph resampled into a DAG of directed feature samples for
+ * The segment tree resampled into a DAG of directed feature samples for
  * product DTW: every segment yields two directed runs (v0→v1 and v1→v0) of
  * uniformly spaced (radius, turning) samples
  * 
@@ -20,8 +22,8 @@ interface SampledSegGraph {
     readonly starts: number[];
     /** exit samples (runs arriving at a leaf vertex) */
     readonly ends: number[];
-    /** leaf vertex id of each start/end sample (keyed by sample id) */
-    readonly leafOf: Map<number, number>;
+    /** leaf vertex of each start/end sample (keyed by sample id) */
+    readonly leafOf: Map<number, Circle>;
     /** sample id in topological order */
     readonly topo: number[];
     /** normalized arc spacing (cost integration step) */

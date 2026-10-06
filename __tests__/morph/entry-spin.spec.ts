@@ -6,8 +6,8 @@ import { describe, test, expect } from '@jest/globals';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { findMats, getPathsFromStr, MatOptions } from 'flo-mat';
-import type { SegGraph } from '../../src/morph/segment-graph/seg-graph.js';
-import { segGraphFromMat } from '../../src/morph/segment-graph/seg-graph-from-mat.js';
+import type { Segment } from '../../src/morph/segment-tree/segment.js';
+import { segTreeWithLoop, loopOf } from '../helpers/seg-tree-with-loop.js';
 import { buildMorphEntries } from '../../src/morph/build-morph-entries/build-morph-entries.js';
 import { resolveMorphAt } from '../../src/morph/resolve-morph-at/resolve-morph-at.js';
 import { parseSvgFont } from '../../src/load-svg/load-svg-font.js';
@@ -24,13 +24,13 @@ const options: MatOptions = {
     simplifyTolerance: 2**-5
 };
 
-function loadGraph(glyphName: string): SegGraph {
+function loadGraph(glyphName: string): Segment[] {
     const font = parseSvgFont(
         readFileSync(resolve('fonts-test/achispado.svg'), 'utf-8'));
     const d = font.find(g => g.name === glyphName)!.d;
     const loops = getPathsFromStr(d);
     const mats = findMats(loops, options);
-    return segGraphFromMat(mats[0].cpNode);
+    return segTreeWithLoop(mats[0].cpNode);
 }
 
 // mean material direction: length-weighted sum of per-bezier chords
@@ -47,7 +47,7 @@ describe('morph entry spin (M→N, full MAT)', () => {
     test('no non-collapsed entry winds a full turn', () => {
         const gA = loadGraph('M');
         const gB = loadGraph('N');
-        const entries = buildMorphEntries(gA, gB, []);
+        const entries = buildMorphEntries(gA, gB, loopOf(gA), loopOf(gB));
 
         const N = 64;
         const wind = entries.map(() => 0);

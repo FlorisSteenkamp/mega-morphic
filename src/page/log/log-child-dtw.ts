@@ -1,16 +1,18 @@
 declare var _debug_: Debug;
 import type { Debug } from '../../debug/debug.js';
 import type { PathCostWeights } from '../../morph/match-paths/path-cost-weights.js';
-import type { MatchedPath } from '../../morph/match-paths/matched-path.js';
-import type { PathChildOp } from '../../morph/match-paths/path-child-op.js';
-import type { Segment, RouteStep } from '../../morph/segment-graph/segment.js';
-import type { ChildLocation } from '../../morph/segment-graph/eval-child-pair.js';
-import { evalChildPair } from '../../morph/segment-graph/eval-child-pair.js';
+import type { SegMatchedPair, SegOp } from '../../morph/segment-tree/match-seg-trees.js';
+import type { PathAlignDebug } from '../../morph/match-paths/path-align-debug.js';
+import type { Circle } from 'flo-mat';
+import type { Segment, RouteStep } from '../../morph/segment-tree/segment.js';
+import { vertexIds } from '../../morph/segment-tree/vertex-ids.js';
+import type { ChildLocation } from '../../morph/segment-tree/eval-child-pair.js';
+import { evalChildPair } from '../../morph/segment-tree/eval-child-pair.js';
 import { length$ } from '../../morph/fs/length.js';
 import { drawBeziersAsSinglePath } from '../../draw/draw-beziers-as-single-path.js';
 import { drawAlignSteps, distToPss, svgGroup } from './align-viz.js';
 import { matchColors } from '../events/match-colors.js';
-import { lenOf$ } from '../../morph/segment-graph/len-of.js';
+import { lenOf$ } from '../../morph/segment-tree/len-of.js';
 
 
 /** One side's selection: a segment, or the trunk-pair route. */
@@ -22,10 +24,10 @@ let selB: Sel | undefined;
 
 
 /** A matched pair as a click target: its per-side selection identity
- *  (the pooled child's entry segment; undefined for the trunk pair) +
+ *  (the child's entry segment; undefined for the trunk pair) +
  *  its DFS-preorder index (= the match view's color index). */
 interface PairSel {
-    readonly mp: MatchedPath;
+    readonly mp: SegMatchedPair;
     readonly segA?: Segment;
     readonly segB?: Segment;
     readonly idx: number;
@@ -54,7 +56,9 @@ function logChildDtw(
             return;
         }
 
-        const graph = shapeIdx === 1 ? pm.gA : pm.gB;
+        const { gA, gB, loopA, loopB } = pm;
+
+        const tree = shapeIdx === 1 ? gA : gB;
         const pairs = pairsOf(pm.trunk);
 
         // matched route segments first (they are what the match view
@@ -75,7 +79,7 @@ function logChildDtw(
                 }
             }
         }
-        for (const seg of graph.segments) {
+        for (const seg of tree) {
             const d = distToPss(p, seg.skelPss);
             if (d < bestD) { bestD = d; hitPair = undefined; nearest = seg; }
         }
@@ -120,7 +124,7 @@ function logChildDtw(
             return;
         }
 
-        evaluate(selA.seg, selB.seg, weights, showDelay);
+        evaluate(selA.seg, selB.seg, loopA, loopB, weights, showDelay);
     };
 }
 
@@ -147,30 +151,30 @@ function logTrunkPair(showDelay?: number): void {
         console.log('trunk align data unavailable', mp);
     }
 
+    const { cost, shapeCost } = mp;
+
     console.log('trunk pair dtw:', {
         cost: {
-            total: mp.cost.totalCost,
-            shapeCost: mp.cost.shapeCost,
-            childCost: mp.cost.childCost
+            total: cost,
+            shapeCost,
+            childCost: cost - shapeCost
         },
-        routeA: describeRoute(mp.routeA),
-        routeB: describeRoute(mp.routeB),
-        tailA: mp.tailA,
-        tailB: mp.tailB,
+        routeA: describeRoute(mp.routeA, vertexIds(pm.gA)),
+        routeB: describeRoute(mp.routeB, vertexIds(pm.gB)),
         // long gap runs collapse material to a point on the other side
         // (grow/retract despite full coverage) - u ranges of runs > 3 samples
         gapRuns: mp.align === undefined ? undefined : gapRuns(mp.align),
         // the DRAWN warp is alignBranches pinned at these anchors - a pair
         // with wildly different u values squeezes the material next to it
         anchors: anchorsOf(mp),
-        childOps: summarize(mp.children),
+        childOps: summarize(mp.ops),
         trunk: mp
     });
 }
 
 
 /** Maximal gap runs (> 3 samples) of the trunk alignment, with u ranges. */
-function gapRuns(al: NonNullable<MatchedPath['align']>): string[] {
+function gapRuns(al: PathAlignDebug): string[] {
     const out: string[] = [];
     let runStart = -1;
     let runState: 0 | 1 | 2 = 0;
@@ -201,17 +205,17 @@ function gapRuns(al: NonNullable<MatchedPath['align']>): string[] {
 
 
 /** The pair's matched child-fork anchors: normalized positions per side. */
-function anchorsOf(mp: MatchedPath): string[] {
+function anchorsOf(mp: SegMatchedPair): string[] {
     const LA = mp.align === undefined
         ? undefined : totalLenOf(mp.align.skelPssA);
     const LB = mp.align === undefined
         ? undefined : totalLenOf(mp.align.skelPssB);
     if (LA === undefined || LB === undefined) { return []; }
 
-    return mp.children
+    return mp.ops
         .filter(op => op.type === 'match')
         .map(op => {
-            const o = op as Extract<PathChildOp, { type: 'match' }>;
+            const o = op as Extract<SegOp, { type: 'match' }>;
             const uA = o.a.dist / LA;
             const uB = o.b.dist / LB;
             return `uA ${uA.toFixed(3)} ↔ uB ${uB.toFixed(3)} ` +
@@ -227,12 +231,18 @@ function totalLenOf(pss: number[][][]): number {
 }
 
 
-/** Route steps in travel order: vertex hops + segment lengths. */
-function describeRoute(route: RouteStep[]): string[] {
-    return route.map(st =>
-        `${st.reversed
-            ? `v${st.seg.vertIdE}→v${st.seg.vertIdS}`
-            : `v${st.seg.vertIdS}→v${st.seg.vertIdE}`} len ${lenOf$(st.seg.skelPss).toFixed(0)}`);
+/** Route steps in travel order: vertex hops (ids as `showVertexNums`) +
+ *  segment lengths. */
+function describeRoute(
+        route: RouteStep[],
+        ids: Map<Circle, number>): string[] {
+
+    return route.map(({ seg, reversed }) => {
+        const s = ids.get(seg.vertS);
+        const e = ids.get(seg.vertE);
+        return `${reversed ? `v${e}→v${s}` : `v${s}→v${e}`} len ${
+            lenOf$(seg.skelPss).toFixed(0)}`;
+    });
 }
 
 
@@ -240,13 +250,15 @@ function describeRoute(route: RouteStep[]): string[] {
 function evaluate(
         segA: Segment,
         segB: Segment,
+        loopA: number[][][],
+        loopB: number[][][],
         weights: PathCostWeights,
         showDelay?: number): void {
 
     const pm = _debug_.elems.pathMatchResult[0];
     if (pm === undefined) { return; }
 
-    const r = evalChildPair(pm.gA, pm.gB, segA, segB, weights);
+    const r = evalChildPair(pm.gA, pm.gB, segA, segB, loopA, loopB, weights);
 
     if (r.align !== undefined) {
         const g1 = svgGroup('svg');
@@ -310,7 +322,7 @@ function describeLoc(loc: ChildLocation | undefined): unknown {
 
 
 /** Op counts of the pair's recursive child alignment. */
-function summarize(ops: PathChildOp[]): Record<PathChildOp['type'], number> {
+function summarize(ops: SegOp[]): Record<SegOp['type'], number> {
     const out = { match: 0, delete: 0, insert: 0 };
     for (const op of ops) { out[op.type]++; }
     return out;
@@ -320,14 +332,14 @@ function summarize(ops: PathChildOp[]): Record<PathChildOp['type'], number> {
 /**
  * All matched pairs in the same DFS preorder as `buildMorphEntries` (idx =
  * match-view color index) with their per-side selection identity: the
- * matched pooled child's entry segment (undefined for the trunk pair -
+ * matched child's entry segment (undefined for the trunk pair -
  * both-trunk selection routes to `logTrunkPair`).
  */
-function pairsOf(trunk: MatchedPath): PairSel[] {
+function pairsOf(trunk: SegMatchedPair): PairSel[] {
     const out: PairSel[] = [];
-    const walk = (mp: MatchedPath, segA?: Segment, segB?: Segment): void => {
+    const walk = (mp: SegMatchedPair, segA?: Segment, segB?: Segment): void => {
         out.push({ mp, segA, segB, idx: out.length });
-        for (const op of mp.children) {
+        for (const op of mp.ops) {
             if (op.type === 'match') {
                 walk(op.sub, op.a.entry, op.b.entry);
             }

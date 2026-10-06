@@ -4,12 +4,15 @@ import { describe, test, expect } from '@jest/globals';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { findMats, getPathsFromStr, MatOptions } from 'flo-mat';
-import type { SegGraph } from '../../src/morph/segment-graph/seg-graph.js';
+import type { Segment } from '../../src/morph/segment-tree/segment.js';
 import { defaultPathWeights } from '../../src/morph/match-paths/path-cost-weights.js';
-import { segGraphFromMat } from '../../src/morph/segment-graph/seg-graph-from-mat.js';
-import { sampleSegGraph } from '../../src/morph/segment-graph/sample-seg-graph.js';
-import { productDtw } from '../../src/morph/segment-graph/product-dtw.js';
-import { matchSegGraphs } from '../../src/morph/segment-graph/match-seg-graphs.js';
+import { segTreeWithLoop, loopOf } from '../helpers/seg-tree-with-loop.js';
+import type { Circle } from 'flo-mat';
+import { vertexIds } from '../../src/morph/segment-tree/vertex-ids.js';
+import { getUnit$ } from '../../src/morph/segment-tree/get-unit.js';
+import { sampleSegTree } from '../../src/morph/segment-tree/sample-seg-tree.js';
+import { productDtw } from '../../src/morph/segment-tree/product-dtw.js';
+import { matchSegTrees } from '../../src/morph/segment-tree/match-seg-trees.js';
 import { buildMorphEntries } from '../../src/morph/build-morph-entries/build-morph-entries.js';
 import { resolveMorphAt } from '../../src/morph/resolve-morph-at/resolve-morph-at.js';
 import { parseSvgFont } from '../../src/load-svg/load-svg-font.js';
@@ -28,19 +31,19 @@ const options: MatOptions = {
 
 const TARGET_SAMPLES = 200;
 
-function loadGraph(glyphName: string): SegGraph {
+function loadGraph(glyphName: string): Segment[] {
     return loadGlyph(glyphName).g;
 }
 
 function loadGlyph(glyphName: string): {
-        g: SegGraph; loops: number[][][][] } {
+        g: Segment[]; loops: number[][][][] } {
     const font = parseSvgFont(
         readFileSync(resolve('fonts-test/achispado.svg'), 'utf-8'));
     const d = font.find(g => g.name === glyphName)!.d;
     const loops = getPathsFromStr(d);
     const mats = findMats(loops, options);
     return {
-        g: segGraphFromMat(mats[0].cpNode),
+        g: segTreeWithLoop(mats[0].cpNode),
         loops
     };
 }
@@ -150,22 +153,22 @@ function comparePair(nameA: string, nameB: string) {
     const gA = loadGraph(nameA);
     const gB = loadGraph(nameB);
 
-    const sA = sampleSegGraph(gA, gA.unit, TARGET_SAMPLES);
-    const sB = sampleSegGraph(gB, gB.unit, TARGET_SAMPLES);
+    const sA = sampleSegTree(gA, getUnit$(loopOf(gA)), TARGET_SAMPLES);
+    const sB = sampleSegTree(gB, getUnit$(loopOf(gB)), TARGET_SAMPLES);
     const t2 = performance.now();
     const pd = productDtw(sA, sB, defaultPathWeights);
     const t3 = performance.now();
 
-    const fmtLeaf = (g: SegGraph, v: number) => {
-        const p = g.vertices[v].p;
-        return `#${v}(${p[0].toFixed(0)},${p[1].toFixed(0)})`;
+    const fmtLeaf = (g: Segment[], v: Circle) => {
+        const p = v.center;
+        return `#${vertexIds(g).get(v)}(${p[0].toFixed(0)},${p[1].toFixed(0)})`;
     };
 
     console.log(
         `=== ${nameA} → ${nameB} ===\n` +
         `product : shape ${pd.shapeCost.toFixed(4)} total ${
         pd.totalCost.toFixed(4)} covered ${(100*pd.covered).toFixed(1)}% ` +
-        `(${pd.states} states, ${gA.segments.length}/${gB.segments.length} segs) ` +
+        `(${pd.states} states, ${gA.length}/${gB.length} segs) ` +
         `[${(t3 - t2).toFixed(0)}ms]\n` +
         `  route A ${fmtLeaf(gA, pd.startA)}→${fmtLeaf(gA, pd.endA)} ` +
         `B ${fmtLeaf(gB, pd.startB)}→${fmtLeaf(gB, pd.endB)}`);
@@ -195,29 +198,29 @@ describe('product-graph DTW vs current matcher (score-only)', () => {
         const gA = loadGraph('v');
         const gB = loadGraph('Q_V');
         const t0 = performance.now();
-        const r = matchSegGraphs(
-            gA, gB, gA.unit, gB.unit,
+        const r = matchSegTrees(
+            gA, gB, getUnit$(loopOf(gA)), getUnit$(loopOf(gB)),
             defaultPathWeights);
         const t1 = performance.now();
         const stats = countOps(r.root);
         console.log(
             `hierarchical v→Q_V: ${stats.pairs} route pairs, ` +
             `${stats.dels} del / ${stats.inss} ins subtrees, ` +
-            `cost ${r.cost.toFixed(4)}, ${(t1 - t0).toFixed(0)}ms`);
+            `cost ${r.root.cost.toFixed(4)}, ${(t1 - t0).toFixed(0)}ms`);
         expect(stats.pairs).toBeGreaterThan(0);
-        expect(Number.isFinite(r.cost)).toBe(true);
+        expect(Number.isFinite(r.root.cost)).toBe(true);
 
         // identity: v → v matches every real subtree; only leftover
         // subtrees of rerouted sub-paths drop, symmetrically on both sides
         const gA2 = loadGraph('v');
         const gB2 = loadGraph('v');
-        const r2 = matchSegGraphs(
-            gA2, gB2, gA2.unit, gB2.unit,
+        const r2 = matchSegTrees(
+            gA2, gB2, getUnit$(loopOf(gA2)), getUnit$(loopOf(gB2)),
             defaultPathWeights);
         const stats2 = countOps(r2.root);
         console.log(`hierarchical v→v: ${stats2.pairs} pairs, ` +
             `${stats2.dels} del / ${stats2.inss} ins, ` +
-            `cost ${r2.cost.toFixed(4)}`);
+            `cost ${r2.root.cost.toFixed(4)}`);
         expect(stats2.dels).toBe(stats2.inss);
     }, 120_000);
 
@@ -231,7 +234,7 @@ describe('product-graph DTW vs current matcher (score-only)', () => {
             const { g: gA, loops: loopsA } = loadGlyph(nA);
             const { g: gB, loops: loopsB } = loadGlyph(nB);
 
-            const entries = buildMorphEntries(gA, gB, []);
+            const entries = buildMorphEntries(gA, gB, loopOf(gA), loopOf(gB));
             // Union SIGNED area double-counts coincident per-segment seams
             // at the endpoints (documented flo-boolean degeneracy) - use
             // sampled containment instead: no spill, no interior holes.
@@ -255,11 +258,11 @@ describe('product-graph DTW vs current matcher (score-only)', () => {
         // remainders unplaced (children glued 90 units away)
         const gA = loadGraph('v');
         const gB = loadGraph('Q_V');
-        const entries = buildMorphEntries(gA, gB, [], { delFloor: 0 });
+        const entries = buildMorphEntries(gA, gB, loopOf(gA), loopOf(gB), { delFloor: 0 });
         const pts: number[][] = resolveMorphAt(entries, 0).drawn.flat(2);
 
         const missing: string[] = [];
-        for (const seg of gA.segments) {
+        for (const seg of gA) {
             const tip = seg.skelPss[0][0];
             let best = Infinity;
             for (const p of pts) {
@@ -278,7 +281,7 @@ describe('product-graph DTW vs current matcher (score-only)', () => {
 
 
 function countOps(pair: import(
-        '../../src/morph/segment-graph/match-seg-graphs.js').SegMatchedPair):
+        '../../src/morph/segment-tree/match-seg-trees.js').SegMatchedPair):
         { pairs: number; dels: number; inss: number } {
     let pairs = 1;
     let dels = 0;

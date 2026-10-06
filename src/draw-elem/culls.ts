@@ -2,7 +2,7 @@ import type { Circle } from 'flo-mat';
 
 
 /** @internal */
-function culls(g: SVGGElement, culls: Circle[]) {    
+function culls(g: SVGGElement, culls: Circle[]) {
     const $elems: SVGElement[] = [];
 
     for (const circle of culls) {
@@ -22,7 +22,7 @@ function drawCircle(
         radiusPercent: number, 
         classes: string) {
 
-    const XMLNS = 'http://www.w3.org/2000/svg';            
+    const XMLNS = 'http://www.w3.org/2000/svg';
 
     const $circle = document.createElementNS(XMLNS, 'circle');
     $circle.setAttributeNS(null, "cx", center[0].toString());

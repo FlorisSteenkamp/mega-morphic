@@ -1,8 +1,11 @@
 import { evalDeCasteljau, fromTo, getTAtLength, toCubic } from 'flo-bezier3';
 import { unwrappedChordAngles } from './intrinsic-skeleton/unwrapped-chord-angles.js';
 import { clamp } from '../utils/clamp.js';
+import type { Samples } from './match-paths/samples.js';
 import { length$ } from './fs/length.js';
-import { sum } from '../utils/sum.js';
+import { skeletonKnots } from './fs/skeleton-knots.js';
+import { knotIdxAt } from './fs/knot-idx-at.js';
+import { valueAt } from './fs/value-at.js';
 
 const { abs, max, min, round } = Math;
 
@@ -67,8 +70,8 @@ function alignBranches(
         unitA: number,
         unitB: number): BranchAlignment {
 
-    const knotsA = arcKnots(bzA);
-    const knotsB = arcKnots(bzB);
+    const knotsA = skeletonKnots(bzA);
+    const knotsB = skeletonKnots(bzB);
 
     const nA = sampleCount(bzA);
     const nB = sampleCount(bzB);
@@ -123,27 +126,8 @@ function alignBranches(
 
 // ---- Feature sampling -------------------------------------------------------
 
-interface Samples {
-    readonly u: number[];
-    readonly r: number[];
-    readonly turn: number[];
-}
-
 function sampleCount(bz: number[][][]): number {
     return clamp(2 * bz.length, 24, 160);
-}
-
-/** Normalized cumulative arc-length knots. */
-function arcKnots(bz: number[][][]): number[] {
-    const lens = bz.map(length$);
-    const total = sum(lens);
-
-    const knots = [0];
-    let cum = 0;
-    for (const l of lens) { cum += l; knots.push(total > 0 ? cum/total : 0); }
-    knots[knots.length - 1] = 1;
-
-    return knots;
 }
 
 function sampleFeatures(
@@ -178,24 +162,13 @@ function sampleFeatures(
     return { u, r, turn };
 }
 
-/** Piecewise-linear value over `knots` at normalized position `u`. */
-function valueAt(vals: number[], knots: number[], u: number): number {
-    let j = 0;
-    while (j < knots.length - 2 && knots[j + 1] <= u) { j++; }
-    const span = knots[j + 1] - knots[j];
-    const f = span <= 0 ? 0 : clamp((u - knots[j]) / span, 0, 1);
-
-    return vals[j]*(1 - f) + vals[j + 1]*f;
-}
-
 /** The unwrapped angle profile (per segment, at midpoints) at position `u`. */
 function angleAt(φs: number[], knots: number[], u: number): number {
     const n = φs.length;
     if (n === 1) { return φs[0]; }
 
     // Segment k's angle sits at its arc midpoint.
-    let j = 0;
-    while (j < knots.length - 2 && knots[j + 1] <= u) { j++; }
+    const j = knotIdxAt(knots, u);
     const mid = (knots[j] + knots[j + 1]) / 2;
 
     if (u <= mid) {
@@ -347,7 +320,7 @@ function resampleAt(
         rd: number[],
         us: number[]): { beziers: number[][][]; radii: number[] } {
 
-    const knots = arcKnots(bz);
+    const knots = skeletonKnots(bz);
     const lens = bz.map(length$);
 
     const beziers: number[][][] = [];
@@ -356,9 +329,7 @@ function resampleAt(
         const uB = us[s + 1];
 
         // The midpoint identifies the original segment containing [uA,uB].
-        const mid = (uA + uB) / 2;
-        let j = 0;
-        while (j < knots.length - 2 && knots[j + 1] <= mid) { j++; }
+        const j = knotIdxAt(knots, (uA + uB) / 2);
 
         const span = knots[j + 1] - knots[j];
         const sA = span <= 0 ? 0 : (uA - knots[j]) / span * lens[j];
@@ -382,4 +353,4 @@ function resampleAt(
 
 
 export { alignBranches, resampleAt }
-export type { BranchAlignment, AnchorPair }
+export type { AnchorPair }

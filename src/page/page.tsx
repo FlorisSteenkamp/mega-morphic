@@ -5,8 +5,7 @@ import type { ToDraw } from '../state/to-draw.js';
 import type { ClickFor } from '../state/click-for.js';
 import type { Props } from './props.js';
 import type { PageData } from './page-data.js';
-import type { MorphEntry } from '../morph/draw-morph/draw-morph.js';
-import type { FeatureMark } from '../morph/build-morph-entries/build-morph-entries.js';
+import type { MorphEntry } from '../morph/morph-entry.js';
 import type { PoseRamp } from '../morph/procrustes/pose-ramp.js';
 import type { PathCostWeights } from '../morph/match-paths/path-cost-weights.js';
 import { defaultPathWeights } from '../morph/match-paths/path-cost-weights.js';
@@ -109,7 +108,7 @@ function Page(props: Props) {
     const {
         toDraw, viewbox1, viewbox2, viewbox3, deduced, showSvgs, flipH, flipV,
         showWeights, glyph1Name, glyph2Name, clickFor,
-        simplify, viewMat, morphFillOnly, poseOptions,
+        simplify, viewMat, morphFillOnly,
         showPose, satScale, showDelay, pathWeights,
         morphT,
     } = pageState;
@@ -129,12 +128,11 @@ function Page(props: Props) {
     // of its attachment point (a is collapsed). Entries may be glued to a
     // parent entry so their junction stays attached throughout the morph.
     const morphRef = useRef<MorphEntry[] | null>(null);
-    const morphMarksRef = useRef<FeatureMark[] | null>(null);
     const [showNeedle, setShowNeedle] = React.useState(false);
 
     const refPageData = useRef<PageData>(null);
     refPageData.current = {
-        props, svgRef1, svgRef2, svgRef3, morphRef, morphMarksRef,
+        props, svgRef1, svgRef2, svgRef3, morphRef,
     };
 
     useEffect(function() { lazyLoadDeduced(refPageData, false) }, []); // run only once
@@ -222,16 +220,6 @@ function Page(props: Props) {
     function onShowMorphBoundsChanged(showMorphBounds: boolean) {
         upd(pageState, { showMorphBounds });
         drawMorph(refPageData, morphT / 100);
-    }
-
-    function onPoseCentroidChanged(applyCentroid: boolean) {
-        upd(poseOptions, { applyCentroid });
-        lazyLoadDeduced(refPageData, false);
-    }
-
-    function onPoseScaleChanged(applyScale: boolean) {
-        upd(poseOptions, { applyScale });
-        lazyLoadDeduced(refPageData, false);
     }
 
     function onShowPoseChanged(showPose: boolean) {
@@ -376,8 +364,6 @@ function Page(props: Props) {
                 <Checkbox checked={viewMat} styles={showChangedStyles} text="mat/sat" onChanged={onViewMatChanged} />
                 <Checkbox checked={morphFillOnly} styles={showChangedStyles} text="fill only" onChanged={onMorphFillOnlyChanged} />
                 <Checkbox checked={pageState.showMorphBounds} styles={showChangedStyles} text="bounds" onChanged={onShowMorphBoundsChanged} />
-                <Checkbox checked={poseOptions.applyCentroid} styles={showChangedStyles} text="centroid" onChanged={onPoseCentroidChanged} />
-                <Checkbox checked={poseOptions.applyScale} styles={showChangedStyles} text="scale" onChanged={onPoseScaleChanged} />
                 <Checkbox checked={showPose} styles={showChangedStyles} text="pose" onChanged={onShowPoseChanged} />
             </div>
             <div style={{ display: 'flex', gap: '16px', alignItems: 'flex-end', paddingBottom: '8px' }}>

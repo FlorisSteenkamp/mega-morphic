@@ -1,6 +1,6 @@
 declare var _debug_: Debug;
 import type { Debug } from '../../debug/debug.js';
-import type { MatchedPath } from '../../morph/match-paths/matched-path.js';
+import type { SegMatchedPair } from '../../morph/segment-tree/match-seg-trees.js';
 import { drawAlignSteps, distToPss, svgGroup } from './align-viz.js';
 
 const { min } = Math;
@@ -18,10 +18,10 @@ function logProfileAlignment(
     const pm = _debug_.elems.pathMatchResult[0];
     if (pm === undefined) { return; }
 
-    const paths: MatchedPath[] = [];
-    (function walk(mp: MatchedPath): void {
+    const paths: SegMatchedPair[] = [];
+    (function walk(mp: SegMatchedPair): void {
         if (mp.align !== undefined) { paths.push(mp); }
-        for (const op of mp.children) {
+        for (const op of mp.ops) {
             if (op.type === 'match') { walk(op.sub); }
         }
     })(pm.trunk);
@@ -50,9 +50,7 @@ function logProfileAlignment(
     }
 
     console.log('profile alignment:', {
-        shapeCost: best.cost.shapeCost,
-        tailA: best.tailA,
-        tailB: best.tailB,
+        shapeCost: best.shapeCost,
         align: al
     });
 }

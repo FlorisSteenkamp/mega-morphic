@@ -24,7 +24,7 @@ function logMorphBezier(
         const { morphRef, props } = refPageData.current!;
         const { stateControl } = props;
         const { state: { appState } } = stateControl;
-        const { morphT, poseOptions } = appState.pageState;
+        const { morphT } = appState.pageState;
         const { morphPose } = appState.pageState.deduced;
         const entries = morphRef.current;
         
@@ -36,11 +36,10 @@ function logMorphBezier(
         const t = morphT / 100;
         let { outlines } = resolveMorphAt(entries, t);
 
-        // Match the DRAWN shape exactly - it may be pose-corrected.
-        // const ramp = morphPoseRef.current;
-        if (morphPose !== undefined && outlines.length > 0) {
+        // Match the DRAWN shape exactly - it is pose-corrected.
+        if (outlines.length > 0) {
             const measured = calcProcrustes(outlines.flat());
-            const { tf } = poseCorrectionAt(poseOptions, morphPose, t, measured);
+            const tf = poseCorrectionAt(morphPose, t, measured);
             outlines = outlines.map(loop => loop.map(ps => ps.map(tf)));
         }
 

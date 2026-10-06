@@ -4,7 +4,7 @@ import { describe, test, expect } from '@jest/globals';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { findMats, getPathsFromStr, MatOptions } from 'flo-mat';
-import { segGraphFromMat } from '../../src/morph/segment-graph/seg-graph-from-mat.js';
+import { segTreeWithLoop, loopOf } from '../helpers/seg-tree-with-loop.js';
 import { buildMorphEntries } from '../../src/morph/build-morph-entries/build-morph-entries.js';
 import { resolveMorphAt } from '../../src/morph/resolve-morph-at/resolve-morph-at.js';
 import { parseSvgFont } from '../../src/load-svg/load-svg-font.js';
@@ -21,7 +21,7 @@ function loadGraph(glyphName: string) {
         readFileSync(resolve('fonts-test/achispado.svg'), 'utf-8'));
     const d = font.find(g => g.name === glyphName)!.d;
     const mats = findMats(getPathsFromStr(d), options);
-    return segGraphFromMat(mats[0].cpNode);
+    return segTreeWithLoop(mats[0].cpNode);
 }
 
 function dirAtStart(ps: number[][]): number[] {
@@ -51,7 +51,7 @@ describe('TEMP kink anatomy', () => {
     test('positional wobble + short-way θ flips', () => {
         const tA = loadGraph('v');
         const tB = loadGraph('Q_V');
-        const entries = buildMorphEntries(tA, tB, []);
+        const entries = buildMorphEntries(tA, tB, loopOf(tA), loopOf(tB));
 
         // zigzag amplitude: deviation of each piece-joint from the local
         // chord of its neighbors, on the largest loop
@@ -111,7 +111,7 @@ describe('TEMP kink anatomy', () => {
     test('what pieces meet at the big kinks (t=0.5)', () => {
         const tA = loadGraph('v');
         const tB = loadGraph('Q_V');
-        const entries = buildMorphEntries(tA, tB, []);
+        const entries = buildMorphEntries(tA, tB, loopOf(tA), loopOf(tB));
 
         for (const t of [0, 0.5]) {
             const { outlines } = resolveMorphAt(entries, t);

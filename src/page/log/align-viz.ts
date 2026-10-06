@@ -1,4 +1,4 @@
-import type { PathAlignDebug } from '../../morph/match-paths/matched-path.js';
+import type { PathAlignDebug } from '../../morph/match-paths/path-align-debug.js';
 import { drawFs } from 'flo-draw';
 import { resampleAt } from '../../morph/align-branches.js';
 

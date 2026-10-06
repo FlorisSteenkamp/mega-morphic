@@ -9,21 +9,4 @@ interface AlignStep {
 }
 
 
-interface TailAlign {
-    /** total alignment cost including tail penalties */
-    readonly cost: number;
-    /** summed tail penalties */
-    readonly tailPen: number;
-    /** unmatched u fractions at the leaf (start) ends */
-    readonly tailStartA: number;
-    readonly tailStartB: number;
-    /** full traceback, start → end */
-    readonly steps: AlignStep[];
-    /** [TRUNK ONLY (else === 0)] - unmatched u fractions at the junction (end) ends */
-    readonly tailEndA: number;
-    /** [TRUNK ONLY (else === 0)] - unmatched u fractions at the junction (end) ends */
-    readonly tailEndB: number;
-}
-
-
-export type { TailAlign, AlignStep }
+export type { AlignStep }

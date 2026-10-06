@@ -1,19 +1,16 @@
-import type { FatBranch } from "../../morph/fat-branch/fat-branch.js";
+import type { FatBranch } from "./fat-branch/fat-branch.js";
 import { drawFs } from 'flo-draw';
 import { drawBeziersAsSinglePath } from '../../draw/draw-beziers-as-single-path.js';
-import { getChainMatCurves } from '../../morph/fat-branch/get-chain-mat-curves.js';
+import { getChainMatCurves } from './fat-branch/get-chain-mat-curves.js';
 
 
 function drawFatBranchTree(
         g: SVGGElement,
         showDelay = 0,
         fatBranch: FatBranch,
-        fullTree: boolean,
-        logit = false) {
+        fullTree: boolean) {
 
     if (fatBranch === undefined) { return; }
-
-    if (logit) { console.log(fatBranch); }
 
     const { cpChain, pss } = fatBranch;
 
@@ -34,13 +31,6 @@ function drawFatBranchTree(
         for (const branch of children) {
             drawOutline(g, branch.pss, color, showDelay);
             drawMatCurves(g, branch.cpChain, color, showDelay);
-
-            if (logit) {
-                console.log(
-                    `level ${depth + 1} (${color}):`,
-                    'roundSalience', branch.roundSalience
-                );
-            }
         }
 
         level = children;

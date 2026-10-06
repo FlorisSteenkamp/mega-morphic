@@ -9,16 +9,25 @@ function drawBeziersAsSinglePath(
 
     if (beziers.length === 0) { return []; }
 
-    const x0 = beziers[0][0][0];
-    const y0 = beziers[0][0][1];
-    let d = `M${x0} ${y0} `;
+    let d = '';
+    /** the current subpath's end (undefined before the first move) */
+    let last: number[] | undefined;
 
     for (let i=0; i<beziers.length; i++) {
         const ps = beziers[i];
 
         if (ps.length <= 1) { continue; }
 
-        const [,p1,p2,p3] = ps;
+        const [p0,p1,p2,p3] = ps;
+
+        // non-contiguous beziers (e.g. a reversed route step, or a whole
+        // subtree) start a new subpath instead of being joined to the last
+        if (last === undefined ||
+            Math.hypot(last[0] - p0[0], last[1] - p0[1]) > 1e-6) {
+            d += `M${p0[0]} ${p0[1]} `;
+        }
+        last = ps[ps.length - 1];
+
         d += 
               ps.length === 2
             ? `L ${p1[0]} ${p1[1]} `

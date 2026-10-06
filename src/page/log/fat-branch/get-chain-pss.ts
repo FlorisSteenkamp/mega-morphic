@@ -1,6 +1,6 @@
 import type { CpNode } from "flo-mat";
 import { getBoundaryBeziersToNext, isOnSameCircle } from "flo-mat";
-import { getArcBeziersBetween } from '../fs/get-arc-beziers-between.js';
+import { getArcBeziersBetween } from './get-arc-beziers-between.js';
 
 
 /**

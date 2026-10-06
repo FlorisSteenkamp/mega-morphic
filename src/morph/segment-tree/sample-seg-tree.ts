@@ -1,29 +1,30 @@
-import type { SegGraph } from './seg-graph.js';
+import type { Circle } from 'flo-mat';
+import type { Segment } from './segment.js';
 import type { SampledSegGraph } from './sampled-seg-graph.js';
 import { unwrappedChordAngles } from '../intrinsic-skeleton/unwrapped-chord-angles.js';
-import { length$ } from '../fs/length.js';
-import { clamp } from '../../utils/clamp.js';
-import { sum } from '../../utils/sum.js';
-import { _lenOfs$, lenOf$, lenOfs$, lenOfSegs$ } from './len-of.js';
+import { skeletonKnots } from '../fs/skeleton-knots.js';
+import { valueAt } from '../fs/value-at.js';
+import { padTo } from '../fs/pad-to.js';
+import { _lenOfs$, lenOf$, lenOfSegs$ } from './len-of.js';
 
 const { max, round, min, PI: π } = Math;
 
 
 /**
- * @param g the glyph's segment graph (or a segment subset sharing vertices)
+ * @param g the glyph's segment tree (or a segment subset sharing vertices)
  * @param unit length normalization (√ tree round salience, as the matcher)
  * @param target approximate total sample count over the whole skeleton
  * @param rootV pin routes to START at this vertex (junction-to-leaf paths
  * for subtree matching) instead of leaf-to-leaf
  */
-function sampleSegGraph(
-        g: SegGraph,
+function sampleSegTree(
+        g: Segment[],
         unit: number,
         target: number,
-        rootV?: number): SampledSegGraph {
+        rootV?: Circle): SampledSegGraph {
 
-    // const totalLen = sum(g.segments.map(s => s.skelLen));
-    const totalLen = lenOfSegs$(g.segments);
+    // const totalLen = sum(g.map(s => s.skelLen));
+    const totalLen = lenOfSegs$(g);
 
     const δ = totalLen / target;
     const step = δ / unit;
@@ -33,19 +34,14 @@ function sampleSegGraph(
     const φ: number[] = [];
     const succ: number[][] = [];
     /** per segment per direction: its sample ids in travel order */
-    const runs: { ids: number[]; tail: number; head: number }[] = [];
+    const runs: { ids: number[]; tail: Circle; head: Circle }[] = [];
 
-    for (const seg of g.segments) {
+    for (const seg of g) {
         const skelLen = lenOf$(seg.skelPss);
         const n = max(2, round(skelLen / δ) + 1);
 
-        // per-knot cumulative positions + features (shared by both runs)
-        const cum = [0];
-        for (const ps of seg.skelPss) {
-            cum.push(cum[cum.length - 1] + length$(ps));
-        }
-        const knots = cum.map(c => skelLen > 0 ? c / skelLen : 0);
-        knots[knots.length - 1] = 1;
+        // per-knot positions + features (shared by both runs)
+        const knots = skeletonKnots(seg.skelPss);
         const φs = padTo(unwrappedChordAngles(seg.skelPss), seg.radii.length);
 
         const us: number[] = [];
@@ -82,8 +78,8 @@ function sampleSegGraph(
             }
             runs.push({
                 ids,
-                tail: rev ? seg.vertIdE : seg.vertIdS,
-                head: rev ? seg.vertIdS : seg.vertIdE
+                tail: rev ? seg.vertE : seg.vertS,
+                head: rev ? seg.vertS : seg.vertE
             });
         }
     }
@@ -101,22 +97,22 @@ function sampleSegGraph(
         }
     }
 
-    // leafness LOCAL to this segment set (sub-graphs share the vertex array)
-    const degree = new Map<number, number>();
-    for (const s of g.segments) {
-        degree.set(s.vertIdS, (degree.get(s.vertIdS) ?? 0) + 1);
-        degree.set(s.vertIdE, (degree.get(s.vertIdE) ?? 0) + 1);
+    // leafness LOCAL to this segment set (sub-trees share vertices)
+    const degree = new Map<Circle, number>();
+    for (const s of g) {
+        degree.set(s.vertS, (degree.get(s.vertS) ?? 0) + 1);
+        degree.set(s.vertE, (degree.get(s.vertE) ?? 0) + 1);
     }
-    const isLeaf = (v: number): boolean => degree.get(v) === 1;
-    const isFork = (v: number): boolean => (degree.get(v) ?? 0) >= 3;
+    const isLeaf = (v: Circle): boolean => degree.get(v) === 1;
+    const isFork = (v: Circle): boolean => (degree.get(v) ?? 0) >= 3;
 
     // Routes may start/end at leaves OR STOP at a fork (the terminal
     // stretch beyond it then competes as an ordinary child).
-    const isEnd = (v: number): boolean => isLeaf(v) || isFork(v);
+    const isEnd = (v: Circle): boolean => isLeaf(v) || isFork(v);
 
     const starts: number[] = [];
     const ends: number[] = [];
-    const leafOf = new Map<number, number>();
+    const leafOf = new Map<number, Circle>();
     for (const run of runs) {
         if (rootV !== undefined ? run.tail === rootV : isEnd(run.tail)) {
             const id = run.ids[0];
@@ -171,21 +167,4 @@ function topoOrder(succ: number[][]): number[] {
 }
 
 
-function padTo(vals: number[], m: number): number[] {
-    const out = vals.slice();
-    while (out.length < m) { out.push(out[out.length - 1] ?? 0); }
-    return out;
-}
-
-
-/** Piecewise-linear value over `knots` at normalized position `u`. */
-function valueAt(vals: number[], knots: number[], u: number): number {
-    let j = 0;
-    while (j < knots.length - 2 && knots[j + 1] <= u) { j++; }
-    const span = knots[j + 1] - knots[j];
-    const f = span <= 0 ? 0 : clamp((u - knots[j]) / span, 0, 1);
-    return vals[j]*(1 - f) + vals[min(j + 1, vals.length - 1)]*f;
-}
-
-
-export { sampleSegGraph }
+export { sampleSegTree }

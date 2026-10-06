@@ -6,13 +6,16 @@ import { describe, test, expect } from '@jest/globals';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { findMats, getPathsFromStr, MatOptions } from 'flo-mat';
-import type { SegGraph } from '../../src/morph/segment-graph/seg-graph.js';
-import type { SegOp } from '../../src/morph/segment-graph/match-seg-graphs.js';
+import type { Segment } from '../../src/morph/segment-tree/segment.js';
+import type { SegOp } from '../../src/morph/segment-tree/match-seg-trees.js';
 import { defaultPathWeights } from '../../src/morph/match-paths/path-cost-weights.js';
-import { segGraphFromMat } from '../../src/morph/segment-graph/seg-graph-from-mat.js';
-import { sampleSegGraph } from '../../src/morph/segment-graph/sample-seg-graph.js';
-import { productDtw } from '../../src/morph/segment-graph/product-dtw.js';
-import { matchSegGraphs } from '../../src/morph/segment-graph/match-seg-graphs.js';
+import { segTreeWithLoop, loopOf } from '../helpers/seg-tree-with-loop.js';
+import type { Circle } from 'flo-mat';
+import { vertexIds } from '../../src/morph/segment-tree/vertex-ids.js';
+import { getUnit$ } from '../../src/morph/segment-tree/get-unit.js';
+import { sampleSegTree } from '../../src/morph/segment-tree/sample-seg-tree.js';
+import { productDtw } from '../../src/morph/segment-tree/product-dtw.js';
+import { matchSegTrees } from '../../src/morph/segment-tree/match-seg-trees.js';
 import { calcProcrustes } from '../../src/morph/procrustes/calc-procrustes.js';
 import { parseSvgFont } from '../../src/load-svg/load-svg-font.js';
 
@@ -38,7 +41,7 @@ function flipBoth(loops: number[][][][]): number[][][][] {
         ps.map(([x, y]) => [2*cx - x, 2*cy - y])));
 }
 
-function graphOf(loops: number[][][][], applySat: boolean): SegGraph {
+function graphOf(loops: number[][][][], applySat: boolean): Segment[] {
     const options: MatOptions = {
         applySat,
         simplify: false,
@@ -49,14 +52,14 @@ function graphOf(loops: number[][][][], applySat: boolean): SegGraph {
         simplifyTolerance: 2**-5
     };
     const mats = findMats(loops, options);
-    return segGraphFromMat(mats[0].cpNode);
+    return segTreeWithLoop(mats[0].cpNode);
 }
 
-function vLabel(g: SegGraph, v: number): string {
+function vLabel(g: Segment[], v: Circle): string {
     let deg = 0;
-    for (const s of g.segments) { if (s.vertIdS === v || s.vertIdE === v) { deg++; } }
-    const p = g.vertices[v].p;
-    return `#${v}${deg === 1 ? 'leaf' : deg >= 3 ? 'FORK' : ''}` +
+    for (const s of g) { if (s.vertS === v || s.vertE === v) { deg++; } }
+    const p = v.center;
+    return `#${vertexIds(g).get(v)}${deg === 1 ? 'leaf' : deg >= 3 ? 'FORK' : ''}` +
         `(${p[0].toFixed(0)},${p[1].toFixed(0)})`;
 }
 
@@ -77,18 +80,18 @@ function probe(applySat: boolean): { pairs: number; drops: number } {
     const loopsB = loadLoops('hyphen');
     const gA = graphOf(loopsA, applySat);
     const gB = graphOf(loopsB, applySat);
-    const uA = gA.unit;
-    const uB = gB.unit;
-    const aniso = (calcProcrustes(gA.loop).anisotropy +
-        calcProcrustes(gB.loop).anisotropy) / 2;
+    const uA = getUnit$(loopOf(gA));
+    const uB = getUnit$(loopOf(gB));
+    const aniso = (calcProcrustes(loopOf(gA)).anisotropy +
+        calcProcrustes(loopOf(gB)).anisotropy) / 2;
 
     const pd = productDtw(
-        sampleSegGraph(gA, uA, 200), sampleSegGraph(gB, uB, 200),
+        sampleSegTree(gA, uA, 200), sampleSegTree(gB, uB, 200),
         defaultPathWeights);
 
     console.log(`\n===== applySat ${applySat}: hyphen-2(flipped) → hyphen ` +
-        `(aniso ${aniso.toFixed(3)}, ${gA.segments.length}/${
-        gB.segments.length} segs) =====`);
+        `(aniso ${aniso.toFixed(3)}, ${gA.length}/${
+        gB.length} segs) =====`);
     console.log(`-- DP beam (${pd.candidates.length} candidates):`);
     for (const c of pd.candidates) {
         console.log(`  dp ${c.totalCost.toFixed(4)}  ` +
@@ -99,7 +102,7 @@ function probe(applySat: boolean): { pairs: number; drops: number } {
     const dbgSave = (globalThis as { _debug_?: unknown })._debug_;
     (globalThis as { _debug_?: unknown })._debug_ = {};
     try {
-        const r = matchSegGraphs(gA, gB, uA, uB, defaultPathWeights, aniso);
+        const r = matchSegTrees(gA, gB, uA, uB, defaultPathWeights, aniso);
         console.log(`-- re-rank leaders (${r.trunkCands!.length}):`);
         for (const tc of r.trunkCands!) {
             if (tc.sel === undefined) { continue; }  // not fully evaluated

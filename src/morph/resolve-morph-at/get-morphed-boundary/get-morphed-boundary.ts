@@ -1,9 +1,11 @@
 import type { MorphEntry } from '../../morph-entry.js';
 import { getLastP } from '../../fs/get-last-p.js';
+import { wrapAngle } from '../../intrinsic-skeleton/wrap-angle.js';
 import { boundaryTangents } from '../../anchored-sleeves.js';
 import { capArcBeziers } from './cap-arc-pts.js';
 import { assembleLoop } from './assemble-loop.js';
-import { reconstructSide, toCubicPts } from './reconstruct-side.js';
+import { toCubic } from 'flo-bezier3';
+import { reconstructSide } from './reconstruct-side.js';
 
 const { atan2, hypot, cos, sin, abs, min, PI: π } = Math;
 
@@ -35,7 +37,6 @@ function getMorphedBoundary(
 
     const { sleeveOut, sleeveBack, capSign } = entry;
 
-    if (sleeveOut === undefined || sleeveBack === undefined) { return undefined; }
     if (sleeveOut.piecesA.length === 0) { return undefined; }
 
     const Ts = boundaryTangents(skelPss);
@@ -102,8 +103,8 @@ function smoothLoopG1(loop: number[][][], strength: number): void {
         const j = (i + 1) % n;
         if (dirs[i] < 1e-6 || dirs[j] < 1e-6) { continue; }
 
-        let prev = toCubicPts(loop[i]);
-        let next = toCubicPts(loop[j]);
+        let prev = toCubic(loop[i]);
+        let next = toCubic(loop[j]);
 
         const hIn = [prev[3][0] - prev[2][0], prev[3][1] - prev[2][1]];
         const hOut = [next[1][0] - next[0][0], next[1][1] - next[0][1]];
@@ -113,7 +114,7 @@ function smoothLoopG1(loop: number[][][], strength: number): void {
 
         const θIn = atan2(hIn[1], hIn[0]);
         const θOut = atan2(hOut[1], hOut[0]);
-        const kink = wrap(θOut - θIn);
+        const kink = wrapAngle(θOut - θIn);
         if (abs(kink) > SMOOTH_MAX_KINK) { continue; }  // a real corner
 
         // rotate both handles toward the joint bisector
@@ -132,11 +133,6 @@ function smoothLoopG1(loop: number[][][], strength: number): void {
         loop[i] = prev;
         loop[j] = next;
     }
-}
-
-
-function wrap(x: number): number {
-    return ((x + π) % (2*π) + 2*π) % (2*π) - π;
 }
 
 

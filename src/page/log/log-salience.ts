@@ -5,7 +5,7 @@ import { sum } from '../../utils/sum.js';
 import { getBoundaryBeziersBetween } from '../../../../mat/src/cp-node/fs/get-boundary-beziers-between.js';
 import { getNearestCpNode } from '../get-nearest/get-nearest-cp-node.js';
 import { length$ } from '../../morph/fs/length.js';
-import { lenOf$ } from '../../morph/segment-graph/len-of.js';
+import { lenOf$ } from '../../morph/segment-tree/len-of.js';
 
 
 function logSalience(mats: Mat[]) {

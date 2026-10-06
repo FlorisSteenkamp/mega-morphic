@@ -5,7 +5,7 @@ import { getShapeArea } from "flo-boolean";
 import { getChainsBetween } from './get-chains-between.js';
 import { getFattestOfChains } from './get-fattest-of-chains.js';
 import { getChainPss } from './get-chain-pss.js';
-import { getFirstLeafFrom } from '../fs/get-first-leaf-from.js';
+import { getFirstLeafFrom } from './get-first-leaf-from.js';
 
 const { abs, PI: π } = Math;
 
@@ -168,7 +168,6 @@ function getFatBranch(
     return {
         cpChain: bestChain,
         pss: getChainPss(bestChain, false),
-        roundSalience: bestSalience,
         children: []
     };
 }

@@ -1,44 +1,28 @@
 declare var _debug_: Debug; 
 import type { Debug } from '../../debug/debug.js';
-import type { MorphEntry, MutableMorphEntry } from '../morph-entry.js';
+import type { MorphEntry, Glue } from '../morph-entry.js';
 import type { AnchorPair } from '../align-branches.js';
-import type { MatchedPath } from '../match-paths/matched-path.js';
+import type { SegMatchedPair } from '../segment-tree/match-seg-trees.js';
 import type { PathCostWeights } from '../match-paths/path-cost-weights.js';
-import type { Segment } from '../segment-graph/segment.js';
-import type { SegGraph } from '../segment-graph/seg-graph.js';
+import type { Segment } from '../segment-tree/segment.js';
 import { getShapeArea } from 'flo-boolean';
-import { matchPathsViaSegments } from '../segment-graph/match-paths-via-segments.js';
-import { composeRouteGeom } from '../segment-graph/compose-segs.js';
+import { matchPathsViaSegments } from '../segment-tree/match-paths-via-segments.js';
+import { composeRouteGeom } from '../segment-tree/compose-segs.js';
 import { alignBranches, resampleAt } from '../align-branches.js';
-import { buildSleeveSides, skeletonKnots } from '../anchored-sleeves.js';
+import { buildSleeveSides } from '../anchored-sleeves.js';
+import { skeletonKnots } from '../fs/skeleton-knots.js';
 import { getLastP } from '../fs/get-last-p.js';
+import { boundaries } from '../fs/boundaries.js';
 import { clamp } from '../../utils/clamp.js';
 import { matchColors } from '../../page/events/match-colors.js';
 import { nearestIdx } from '../nearest-idx.js';
 import { placeTopology } from '../place-topology.js';
-import { getUnit$ } from '../segment-graph/get-unit.js';
-import { lenOf$ } from '../segment-graph/len-of.js';
+import { getUnit$ } from '../segment-tree/get-unit.js';
+import { lenOf$ } from '../segment-tree/len-of.js';
 
 
 /**
- * A matched feature (fork) position in both frames, for visualization.
- * 
- * * Crosses = aligned fork anchors;
- * * dots = plain attachment points (fallback-glued matched children, topo/stub retraction targets)
- */
-interface FeatureMark {
-    readonly pA?: number[];
-    readonly pB?: number[];
-    readonly classes: string;
-    readonly dot?: boolean;
-    /** the mark's home on the DRAWN entries: boundary indices k1 (t=0) to
-     *  k2 (t=1) of entry `e` - lets the mark ride the morph */
-    readonly at?: { e: number; k1: number; k2: number };
-}
-
-
-/**
- * Matches the two segment graphs route-wise (DTW alignability as the
+ * Matches the two segment trees route-wise (DTW alignability as the
  * matching metric) and builds the full set of morph entries: each matched
  * route pair becomes one feature-aligned entry, matched child forks along
  * the whole route are alignment anchors and glue points, and every
@@ -46,35 +30,33 @@ interface FeatureMark {
  * entry owning that boundary.
  */
 function buildMorphEntries(
-        gA: SegGraph,
-        gB: SegGraph,
-        marks: FeatureMark[],
+        gA: Segment[],
+        gB: Segment[],
+        loopA: number[][][],
+        loopB: number[][][],
         weights?: Partial<PathCostWeights>):
         MorphEntry[] {
 
-    const pm = matchPathsViaSegments(gA, gB, { weights });
+    const pm = matchPathsViaSegments(gA, gB, loopA, loopB, { weights });
 
     // The morph arrays only exist when morph debugging is enabled (other
     // debug configs, e.g. flo-boolean-only in tests, lack them).
     if (typeof _debug_ !== 'undefined' &&
         _debug_.elems?.pathMatchResult !== undefined) {
         // Keep only the LATEST result - readers use [0]/at(-1) and stale
-        // entries (whole graphs) would otherwise accumulate.
+        // entries (whole trees) would otherwise accumulate.
         _debug_.elems.pathMatchResult.length = 0;
         _debug_.elems.pathMatchResult.push(pm);
     }
 
     // The sleeves walk the outline in its global direction - the glyph
     // loop gives a reliable winding for the cap arcs.
-    const capSign = getShapeArea(gA.loop) < 0 ? -1 : 1;
+    const capSign = getShapeArea(loopA) < 0 ? -1 : 1;
 
-    const unitA = getUnit$(gA.loop);
-    const unitB = getUnit$(gB.loop);
+    const unitA = getUnit$(loopA);
+    const unitB = getUnit$(loopB);
 
-    const entries: MutableMorphEntry[] = [];
-
-    /** per entry: its resampled segment boundary points, per side */
-    const bnds: { a?: number[][]; b?: number[][] }[] = [];
+    const entries: MorphEntry[] = [];
 
     /**
      * covered segment → owning entry index (per side; placeTopology adds
@@ -95,18 +77,24 @@ function buildMorphEntries(
     // Whatever no matched route covers collapses onto its coverage-side
     // vertex, closest-to-coverage first.
     placeTopology(gA, covered1, owner1, 'a',
-        'red thin35 nofill', capSign, bnds, entries, marks);
+        'red thin35 nofill', capSign, entries);
     placeTopology(gB, covered2, owner2, 'b',
-        'green thin35 nofill', capSign, bnds, entries, marks);
+        'green thin35 nofill', capSign, entries);
 
-    return entries as MorphEntry[];
+    return entries;
 
 
     /**
      * Builds the entry for one matched path pair, then recursively its
      * matched children's entries (glued onto this one). Returns the index.
+     *
+     * @param glueOf for a child pair: its glue onto the parent, given the
+     * child's own (resampled) skeletons
      */
-    function buildPair(mp: MatchedPath): number {
+    function buildPair(
+            mp: SegMatchedPair,
+            glueOf?: (skelPssA: number[][][], skelPssB: number[][][]) => Glue
+            ): number {
 
         const i = pairIdx++;
         const idx = entries.length;
@@ -122,7 +110,7 @@ function buildMorphEntries(
         const LA = lenOf$(gA.bz);
         const LB = lenOf$(gB.bz);
 
-        const matchOps = mp.children.filter(
+        const matchOps = mp.ops.filter(
             op => op.type === 'match');
         const anchors: AnchorPair[] = matchOps.map(op => ({
             uA: clamp(op.a.dist / LA, 0, 1),
@@ -147,50 +135,35 @@ function buildMorphEntries(
 
         const bndA = boundaries(mA.beziers);
         const bndB = boundaries(mB.beziers);
-        bnds.push({ a: bndA, b: bndB });
 
         entries.push({
             skelPssA: mA.beziers,
             skelPssB: mB.beziers,
             ra: mA.radii,
             rb: mB.radii,
-            us: al.usA,
             sleeveOut: sides.out,
             sleeveBack: sides.back,
             capSign,
             classes: `${matchColors[i % matchColors.length]} thin35 nofill`,
+            ...(glueOf !== undefined
+                ? { glue: glueOf(mA.beziers, mB.beziers) }
+                : {}
+            )
         });
 
-        // Children: build each matched sub-pair and glue it to this entry -
-        // at the aligned fork anchor when kept, else at the per-frame
-        // nearest boundary.
+        // Children: build each matched sub-pair glued to this entry - at the
+        // aligned fork anchor when kept, else at the per-frame nearest
+        // boundary to the child's junction.
         matchOps.forEach((op, n) => {
-            const childIdx = buildPair(op.sub);
-
             const k = al.anchorIdx[n];
-            if (k >= 0) {
-                entries[childIdx].glue = { e1: idx, k1: k, e2: idx, k2: k };
-                if (marks !== undefined) {
-                    marks.push({
-                        pA: bndA[k],
-                        pB: bndB[k],
-                        classes: `${matchColors[
-                            childIdx % matchColors.length]} thin20 nofill`,
-                        at: { e: idx, k1: k, k2: k }
-                    });
+            buildPair(op.sub, (skelPssA, skelPssB) => k >= 0
+                ? { e: idx, k1: k, k2: k }
+                : {
+                    e: idx,
+                    k1: nearestIdx(bndA, getLastP(skelPssA)),
+                    k2: nearestIdx(bndB, getLastP(skelPssB))
                 }
-            } else {
-                const k1 = nearestIdx(bndA, getLastP(entries[childIdx].skelPssA));
-                const k2 = nearestIdx(bndB, getLastP(entries[childIdx].skelPssB));
-                entries[childIdx].glue = { e1: idx, k1, e2: idx, k2 };
-                marks?.push({
-                    pA: bndA[k1],
-                    pB: bndB[k2],
-                    classes: 'gray nostroke',
-                    dot: true,
-                    at: { e: idx, k1, k2 }
-                });
-            }
+            );
         });
 
         return idx;
@@ -200,15 +173,15 @@ function buildMorphEntries(
 
 /** Every segment covered by some matched route, one tree's side. */
 function coveredSegsOf(
-        trunk: MatchedPath,
+        trunk: SegMatchedPair,
         side: 'a' | 'b'): Set<Segment> {
 
     const out = new Set<Segment>();
-    const walk = (mp: MatchedPath): void => {
+    const walk = (mp: SegMatchedPair): void => {
         for (const st of side === 'a' ? mp.routeA : mp.routeB) {
             out.add(st.seg);
         }
-        for (const op of mp.children) {
+        for (const op of mp.ops) {
             if (op.type === 'match') { walk(op.sub); }
         }
     };
@@ -217,11 +190,4 @@ function coveredSegsOf(
 }
 
 
-/** All resampled segment boundary points of a skeleton path. */
-function boundaries(g: number[][][]) {
-    return [...g.map(seg => seg[0]), getLastP(g)];
-}
-
-
 export { buildMorphEntries, coveredSegsOf }
-export type { FeatureMark }

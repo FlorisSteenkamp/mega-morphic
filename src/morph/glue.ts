@@ -1,19 +1,15 @@
-
 /**
  * Where a morph entry's junction end (the last point of its beziers) is
- * attached.
- * 
- * In frame 1 (t=0) it sits at boundary `k1` of entry `e1`;
- * in frame 2 (t=1) at boundary `k2` of entry `e2`.
- * 
+ * attached: on parent entry `e`, at boundary `k1` in frame A (t=0) and at
+ * boundary `k2` in frame B (t=1) - the junction slides from `k1` to `k2`.
+ *
  * At draw time the whole
  * entry is translated so its junction rides the parent's *drawn* skeleton
  * throughout the morph (the translation vanishes at t=0 and t=1).
  */
 interface Glue {
-    readonly e1: number;
+    readonly e: number;
     readonly k1: number;
-    readonly e2: number;
     readonly k2: number;
 }
 

@@ -1,17 +1,19 @@
 declare var _debug_: Debug;
 import type { Debug } from '../../debug/debug.js';
-import type { SegGraph } from './seg-graph.js';
+import type { Circle } from 'flo-mat';
 import type { Segment, RouteStep } from './segment.js';
 import type { PathCostWeights } from '../match-paths/path-cost-weights.js';
 import type { SeqOp } from '../match-paths/align-seq.js';
+import type { PathAlignDebug } from '../match-paths/path-align-debug.js';
 import type { ProductDtwResult, ProductDtwResult_Candidate } from './product-dtw.js';
 import { routeSegments } from './route-segments.js';
-import { sampleSegGraph } from './sample-seg-graph.js';
+import { sampleSegTree } from './sample-seg-tree.js';
 import { productDtw } from './product-dtw.js';
 import { alignSeq } from '../match-paths/align-seq.js';
 import { wrapAngle } from '../intrinsic-skeleton/wrap-angle.js';
 import { sum } from '../../utils/sum.js';
 import { _lenOfs$, lenOf$, lenOfRoute$, lenOfSegs$ } from './len-of.js';
+import { vertexIds } from './vertex-ids.js';
 
 const { abs, max, min, round, atan2, PI: π } = Math;
 
@@ -22,23 +24,26 @@ const TARGET_SAMPLES = 200;
  *  DP-optimal) - a straight route + matched children can beat a zig-zag
  *  that merely covers more single-path material */
 const MAX_RECURSE_CANDS = 4;
-const CAND_MARGIN = 0.5;
+/** the cheap child-consistency estimate mis-ranks by up to ~0.5, and the
+ *  DP keeps every tied route start (symmetric shapes), so the margin is
+ *  wide enough that near-duplicates can't crowd the true winner out */
+const CAND_MARGIN = 1.0;
 
 /** trunk candidates given a full recursive evaluation (beam width) */
-const TRUNK_RECURSE_CANDS = 8;
+const TRUNK_RECURSE_CANDS = 16;
 
 /** DP leaders given the cheap child-consistency re-rank, per level */
 const TRUNK_CHEAP_CANDS = 64;
 const SUB_CHEAP_CANDS = 16;
 
 
-/** A subtree hanging off a route (the segment-graph analog of PooledChild). */
+/** A subtree hanging off a route. */
 interface SegChild {
     /**
-     * the graph vertex (fork - or route end) where the subtree attaches
+     * the tree vertex (fork - or route end) where the subtree attaches
      * to the route; sub-DTWs pin their route starts here
      */
-    readonly attachV: number;
+    readonly attachV: Circle;
     /** arc distance from the route's start to the attach vertex */
     readonly dist: number;
     readonly side: 1 | -1;
@@ -82,15 +87,20 @@ interface SegMatchedPair {
     readonly ops: SegOp[];
     /** set only when `_debug_` is active: per-side child-alignment DP */
     readonly dp?: SegDp[];
+    /**
+     * set only when `_debug_` is active: full-resolution profile alignment
+     * of the routes (attached by `matchPathsViaSegments`)
+     */
+    readonly align?: PathAlignDebug;
 }
 
 /** Debug-only: one leader of the trunk re-rank (recursion fields set only
  *  for candidates that got a full evaluation). */
 interface TrunkCandDebug {
-    readonly startA: number;
-    readonly startB: number;
-    readonly endA: number;
-    readonly endB: number;
+    readonly startA: Circle;
+    readonly startB: Circle;
+    readonly endA: Circle;
+    readonly endB: Circle;
     readonly dpTotal: number;
     /** cheap child-consistency estimate used in the ranking */
     readonly cheap: number;
@@ -108,10 +118,8 @@ interface TrunkCandDebug {
 interface SegMatchResult {
     readonly root: SegMatchedPair;
     /** trunk route start vertices (orientation display) */
-    readonly trunkStartA: number;
-    readonly trunkStartB: number;
-    /** = root.cost (no tails - diagnostic-grade) */
-    readonly cost: number;
+    readonly trunkStartA: Circle;
+    readonly trunkStartB: Circle;
     /** set only when `_debug_` is active: the evaluated re-rank table */
     readonly trunkCands?: TrunkCandDebug[];
 }
@@ -119,7 +127,6 @@ interface SegMatchResult {
 
 interface Ranked {
     c: ProductDtwResult_Candidate;
-    sway: number;
     rank: number;
     cheap: number;
 }
@@ -139,9 +146,9 @@ interface Ranked {
  * @param aniso mean shape anisotropy of the two glyphs (|c₂₀|/(Ixx+Iyy)):
  * scales the sway tie-break of the trunk orientation (0 = pose-blind)
  */
-function matchSegGraphs(
-        gA: SegGraph,
-        gB: SegGraph,
+function matchSegTrees(
+        gA: Segment[],
+        gB: Segment[],
         unitA: number,
         unitB: number,
         weights: PathCostWeights,
@@ -157,8 +164,8 @@ function matchSegGraphs(
     // local-sway measurement factor (rides every DTW, objective-neutral)
     const swayW = sway*aniso;
 
-    const sA = sampleSegGraph(gA, unitA, TARGET_SAMPLES);
-    const sB = sampleSegGraph(gB, unitB, TARGET_SAMPLES);
+    const sA = sampleSegTree(gA, unitA, TARGET_SAMPLES);
+    const sB = sampleSegTree(gB, unitB, TARGET_SAMPLES);
     const pd = productDtw(sA, sB, weights, swayW);
 
     const buildPair_ = buildPair(
@@ -178,8 +185,14 @@ function matchSegGraphs(
     // sway INSIDE the DP objective lets the warp dodge it instead (gaps
     // around rotating material) - measurement must stay objective-neutral.
     // Sway stays out of the reported cost (children/shape stay intrinsic).
+
+    // vertices are objects - dense per-tree ids make the string keys below
+    const ids = { A: vertexIds(gA), B: vertexIds(gB) };
+    const idA = (v: Circle): number => ids.A.get(v)!;
+    const idB = (v: Circle): number => ids.B.get(v)!;
+
     const routes = new Map<string, RouteStep[]>();
-    const routeOf_ = routeOf(routes);
+    const routeOf_ = routeOf(routes, ids);
 
     const seen = new Set<string>();
 
@@ -190,14 +203,13 @@ function matchSegGraphs(
         // (costs differ only via the posCost start/end asymmetry; the slot
         // is worth more than that tie-break. Sway is invariant under double
         // reversal: both φ's shift by π.)
-        const fwd = `${c.startA},${c.endA},${c.startB},${c.endB}`;
-        const rev = `${c.endA},${c.startA},${c.endB},${c.startB}`;
+        const fwd = `${idA(c.startA)},${idA(c.endA)},${idB(c.startB)},${idB(c.endB)}`;
+        const rev = `${idA(c.endA)},${idA(c.startA)},${idB(c.endB)},${idB(c.startB)}`;
         const key = fwd < rev ? fwd : rev;
         if (seen.has(key)) { continue; }
         seen.add(key);
         ranked.push({
             c,
-            sway: c.swayCost,
             rank: c.totalCost + c.swayCost,
             cheap: 0
         });
@@ -206,15 +218,15 @@ function matchSegGraphs(
 
     //-------------------------------------------------------------------
     // Stage 2: cheap child-consistency re-rank of the leaders (children
-    // cached per unique route - the whole-graph scope is shared).
+    // cached per unique route - the whole-tree scope is shared).
     //-------------------------------------------------------------------
     const childCache = new Map<string, SegChild[]>();
-    const childrenFor = (tag: 'A' | 'B', s: number, e: number): SegChild[] => {
-        const k = `${tag}:${s}:${e}`;
+    const childrenFor = (tag: 'A' | 'B', s: Circle, e: Circle): SegChild[] => {
+        const k = `${tag}:${ids[tag].get(s)}:${ids[tag].get(e)}`;
         let ch = childCache.get(k);
         if (ch === undefined) {
             const g = tag === 'A' ? gA : gB;
-            childCache.set(k, ch = childrenOf(g.segments,
+            childCache.set(k, ch = childrenOf(g,
                 routeOf_(g, tag, s, e), tag === 'A' ? unitA : unitB));
         }
         return ch;
@@ -240,14 +252,14 @@ function matchSegGraphs(
     const limit = leaders[0].rank + CAND_MARGIN;
     let evals = 0;
     for (const l of leaders) {
-        const { c, sway, rank } = l;
+        const { c, rank } = l;
         if (rank > limit || evals >= TRUNK_RECURSE_CANDS) { break; }
         evals++;
         const pair = buildPair_(
-            gA.segments, routeOf_(gA, 'A', c.startA, c.endA),
-            gB.segments, routeOf_(gB, 'B', c.startB, c.endB),
+            gA, routeOf_(gA, 'A', c.startA, c.endA),
+            gB, routeOf_(gB, 'B', c.startB, c.endB),
             c.shapeCost);
-        const sel = pair.cost + sway;
+        const sel = pair.cost + c.swayCost;
         evaluated.set(l, { recCost: pair.cost, sel, ops: pair.ops });
         if (sel < rootSel) {
             rootSel = sel;
@@ -263,19 +275,13 @@ function matchSegGraphs(
         root: root!,
         trunkStartA: startA,
         trunkStartB: startB,
-        cost: root!.cost,
         ...(trunkCands !== undefined ? { trunkCands } : {})
     };
 }
 
 
 function addDebugInfo(
-        leaders: {
-            c: ProductDtwResult_Candidate;
-            sway: number;
-            rank: number;
-            cheap: number;
-        }[],
+        leaders: Ranked[],
         evaluated: Map<Ranked, { recCost: number; sel: number; ops: SegOp[] }>) {
 
     return typeof _debug_ !== 'undefined'
@@ -283,7 +289,7 @@ function addDebugInfo(
                 startA: l.c.startA, startB: l.c.startB,
                 endA: l.c.endA, endB: l.c.endB,
                 dpTotal: l.c.totalCost, cheap: l.cheap,
-                sway: l.sway, rank: l.rank,
+                sway: l.c.swayCost, rank: l.rank,
                 ...(evaluated.get(l) ?? {})
             }))
             : undefined;
@@ -326,12 +332,13 @@ function cheapChildCost(
 
 
 function routeOf(
-       routes: Map<string, RouteStep[]>) {
+       routes: Map<string, RouteStep[]>,
+       ids: Record<'A' | 'B', Map<Circle, number>>) {
 
     return function(
-            g: SegGraph, tag: string, s: number, e: number): RouteStep[] {
+            g: Segment[], tag: 'A' | 'B', s: Circle, e: Circle): RouteStep[] {
 
-        const k = `${tag}:${s}:${e}`;
+        const k = `${tag}:${ids[tag].get(s)}:${ids[tag].get(e)}`;
         let r = routes.get(k);
         if (r === undefined) {
             routes.set(k, r = routeSegments(g, s, e));
@@ -345,8 +352,8 @@ function routeOf(
 /** builds the pair node for a matched route pair, recursively */
 function buildPair(
         cheapChildCost: (chA: SegChild[], chB: SegChild[], lenRA: number, lenRB: number) => number,
-        gA: SegGraph,
-        gB: SegGraph,
+        gA: Segment[],
+        gB: Segment[],
         unitA: number,
         unitB: number,
         δA: number,
@@ -369,17 +376,12 @@ function buildPair(
         const lenRB = lenOfRoute$(rB);
 
         // pinned-start sub-DTW per candidate pair, memoized (totalCost for
-        // alignment decisions; graphs + candidates for recursive evaluation)
+        // alignment decisions; trees + candidates for recursive evaluation)
         const subs = new Map<SegChild, Map<SegChild, SubDtw>>();
-        const subOf = (a: SegChild, b: SegChild) => {
-            let m = subs.get(a);
-            if (m === undefined) { subs.set(a, m = new Map()); }
-            let r = m.get(b);
-            if (r === undefined) {
-                m.set(b, r = subDtwOf(gA, gB, unitA, unitB, δA, δB, weights, swayW, a, b));
-            }
-            return r;
-        };
+        const subOf = (a: SegChild, b: SegChild) =>
+            subs.getOrInsertComputed(a, () => new Map())
+                .getOrInsertComputed(b, () =>
+                    subDtwOf(gA, gB, unitA, unitB, δA, δB, weights, swayW, a, b));
 
         /** best sub-pair over the DTW's route candidates by RECURSIVE cost
          *  (DP leaders first re-ranked by the cheap child estimate;
@@ -481,9 +483,9 @@ function targetFor(len: number, δ: number): number {
 }
 
 
-/** trunk-level sample spacing of a graph */
-function getSampleSpacing(g: SegGraph): number {
-    return lenOfSegs$(g.segments) / TARGET_SAMPLES;
+/** trunk-level sample spacing of a tree */
+function getSampleSpacing(g: Segment[]): number {
+    return lenOfSegs$(g) / TARGET_SAMPLES;
 }
 
 // Quadratic in the normalized mismatch: small slides along the trunk stay
@@ -536,37 +538,17 @@ const seqOf = (ch: SegChild[], side: 1 | -1): SegChild[] => [
 ];
 
 
-/** Route steps → composed skeleton geometry (as composePieces). */
-function composeRoute(route: RouteStep[]): {
-        skelPss: number[][][]; radii: number[]; L: number } {
-
-    const skelPss: number[][][] = [];
-    const radii: number[] = [];
-    let L = 0;
-    for (const { seg, reversed } of route) {
-        const pss = reversed
-            ? seg.skelPss.map(ps => ps.toReversed()).reverse()
-            : seg.skelPss;
-        const rd = reversed ? seg.radii.toReversed() : seg.radii;
-        skelPss.push(...pss);
-        radii.push(...(radii.length > 0 ? rd.slice(1) : rd));
-        L += lenOf$(seg.skelPss);
-    }
-    return { skelPss, radii, L };
-}
-
-
 interface SubDtw {
     readonly dtw: ProductDtwResult;
-    readonly subA: SegGraph;
-    readonly subB: SegGraph;
+    readonly subA: Segment[];
+    readonly subB: Segment[];
 }
 
 
 /** Pinned-start sub-DTW of a child pair - the relabel core of `matchCost`. */
 function subDtwOf(
-        gA: SegGraph,
-        gB: SegGraph,
+        gA: Segment[],
+        gB: Segment[],
         unitA: number,
         unitB: number,
         δA: number,
@@ -576,83 +558,21 @@ function subDtwOf(
         a: SegChild,
         b: SegChild): SubDtw {
 
-    const subSegGraphA: SegGraph = {
-        loop: gA.loop,
-        vertices: gA.vertices,
-        segments: a.segs
-    };
-    const subSegGraphB: SegGraph = {
-        loop: gB.loop,
-        vertices: gB.vertices,
-        segments: b.segs
-    };
-
-    const ssgA = sampleSegGraph(
-        subSegGraphA, unitA,
+    const ssgA = sampleSegTree(
+        a.segs, unitA,
         targetFor(lenOfSegs$(a.segs), δA),
         a.attachV
     );
 
-    const ssgB = sampleSegGraph(
-        subSegGraphB, unitB,
+    const ssgB = sampleSegTree(
+        b.segs, unitB,
         targetFor(lenOfSegs$(b.segs), δB),
         b.attachV
     );
 
     const dtw = productDtw(ssgA, ssgB, weights, sway);
 
-    return { dtw, subA: subSegGraphA, subB: subSegGraphB };
-}
-
-
-/** One child pair priced by the matcher's actual economics. */
-interface ChildPairPrice {
-    /** terminal↔regular gate fired: `matchCost` = Infinity */
-    readonly gated: boolean;
-    readonly positionCost: number;
-    readonly angleCost: number;
-    /** pinned-start sub-DTW total incl. measured warp sway */
-    readonly dtwCost: number;
-    /** position + angle + dtw (the DP's relabel price; Infinity when gated) */
-    readonly matchCost: number;
-    readonly deleteCost: number;
-    readonly insertCost: number;
-    readonly dtw: ProductDtwResult;
-    readonly subA: SegGraph;
-    readonly subB: SegGraph;
-}
-
-
-/**
- * Debug: prices one child pair exactly as the matcher's `matchCost` /
- * `delCost` / `insCost` would (fresh, unmemoized) - the authoritative
- * relabel-vs-drop economics for the pair. Route lengths are the PARENT
- * routes the children are pooled on (position is a route fraction).
- */
-function priceChildPair(
-        gA: SegGraph, gB: SegGraph,
-        unitA: number, unitB: number,
-        routeLenA: number, routeLenB: number,
-        weights: PathCostWeights,
-        sway: number,
-        a: SegChild, b: SegChild): ChildPairPrice {
-
-    const { dtw, subA, subB } = subDtwOf(gA, gB, unitA, unitB,
-        getSampleSpacing(gA), getSampleSpacing(gB), weights, sway, a, b);
-    const gated = terminalGated(a, b);
-    const positionCost = posCostOf(
-        a, b, routeLenA, routeLenB, unitA, unitB, weights);
-    const angleCost = angleCostOf(a, b, weights);
-    return {
-        gated, positionCost, angleCost,
-        dtwCost: dtw.totalCost + dtw.swayCost,
-        matchCost: gated
-            ? Infinity
-            : positionCost + angleCost + dtw.totalCost + dtw.swayCost,
-        deleteCost: dropCostOf(a, weights),
-        insertCost: dropCostOf(b, weights),
-        dtw, subA, subB
-    };
+    return { dtw, subA: a.segs, subB: b.segs };
 }
 
 
@@ -668,24 +588,22 @@ function childrenOf(
     const routeSegs = new Set(route.map(r => r.seg));
     const scopeSet = new Set(scope);
 
-    const adj = new Map<number, Segment[]>();
+    const adj = new Map<Circle, Segment[]>();
     for (const s of scope) {
         if (routeSegs.has(s)) { continue; }
-        for (const v of [s.vertIdS, s.vertIdE]) {
-            let list = adj.get(v);
-            if (list === undefined) { adj.set(v, list = []); }
-            list.push(s);
+        for (const v of [s.vertS, s.vertE]) {
+            adj.getOrInsert(v, []).push(s);
         }
     }
 
     // route vertex sequence + cumulative dist + local travel direction
-    const verts: number[] = [];
+    const verts: Circle[] = [];
     const dists: number[] = [];
     const dirs: number[][] = [];
     let d = 0;
     for (let i = 0; i < route.length; i++) {
         const { seg, reversed } = route[i];
-        const v = reversed ? seg.vertIdE : seg.vertIdS;
+        const v = reversed ? seg.vertE : seg.vertS;
         const dirOutV = chordDir(seg, reversed ? 'endRev' : 'start');
         if (i === 0) {
             verts.push(v); dists.push(d); dirs.push(dirOutV);
@@ -696,7 +614,7 @@ function childrenOf(
             dirs[dirs.length - 1] = meanDir(dirIn, dirOutV);
         }
         d += lenOf$(seg.skelPss);
-        verts.push(reversed ? seg.vertIdS : seg.vertIdE);
+        verts.push(reversed ? seg.vertS : seg.vertE);
         dists.push(d);
         dirs.push(chordDir(seg, reversed ? 'startRev' : 'end'));
     }
@@ -714,7 +632,7 @@ function childrenOf(
             const segs = collectSubtree(entry, v, scopeSet, routeSegs);
             for (const s of segs) { claimed.add(s); }
 
-            const cd = chordDir(entry, entry.vertIdS === v ? 'start' : 'endRev');
+            const cd = chordDir(entry, entry.vertS === v ? 'start' : 'endRev');
             const rd = dirs[i];
             const cross = rd[0]*cd[1] - rd[1]*cd[0];
             const dot = rd[0]*cd[0] + rd[1]*cd[1];
@@ -754,22 +672,20 @@ function childrenOf(
 /** All scope segments reachable from `entry` without passing through `block`. */
 function collectSubtree(
         entry: Segment,
-        block: number,
+        block: Circle,
         scope: Set<Segment>,
         routeSegs: Set<Segment>): Segment[] {
 
-    const adj = new Map<number, Segment[]>();
+    const adj = new Map<Circle, Segment[]>();
     for (const s of scope) {
         if (routeSegs.has(s)) { continue; }
-        for (const v of [s.vertIdS, s.vertIdE]) {
-            let list = adj.get(v);
-            if (list === undefined) { adj.set(v, list = []); }
-            list.push(s);
+        for (const v of [s.vertS, s.vertE]) {
+            adj.getOrInsert(v, []).push(s);
         }
     }
 
     const segs = new Set([entry]);
-    const queue = [entry.vertIdS === block ? entry.vertIdE : entry.vertIdS];
+    const queue = [entry.vertS === block ? entry.vertE : entry.vertS];
     const seenV = new Set([block]);
     while (queue.length > 0) {
         const v = queue.pop()!;
@@ -778,7 +694,7 @@ function collectSubtree(
         for (const s of adj.get(v) ?? []) {
             if (segs.has(s)) { continue; }
             segs.add(s);
-            queue.push(s.vertIdS === v ? s.vertIdE : s.vertIdS);
+            queue.push(s.vertS === v ? s.vertE : s.vertS);
         }
     }
     return [...segs];
@@ -812,6 +728,11 @@ function meanDir(d1: number[], d2: number[]): number[] {
 }
 
 
-export { matchSegGraphs, priceChildPair, reverseRoute, composeRoute }
+export { matchSegTrees, reverseRoute }
+// the matcher's pricing pieces (for the debug pricer `priceChildPair`)
+export {
+    subDtwOf, getSampleSpacing, terminalGated, posCostOf, angleCostOf,
+    dropCostOf
+}
 export type { SegMatchResult, SegMatchedPair, SegOp, SegChild, SegDp,
-    RouteStep, ChildPairPrice, TrunkCandDebug }
+    RouteStep, TrunkCandDebug }

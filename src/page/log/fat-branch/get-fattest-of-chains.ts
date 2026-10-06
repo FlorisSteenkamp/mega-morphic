@@ -43,7 +43,6 @@ function getFattestOfChains(
     return {
         cpChain: bestChain,
         pss: bestPss!,
-        roundSalience: bestSalience,
         children: []
     };
 }
