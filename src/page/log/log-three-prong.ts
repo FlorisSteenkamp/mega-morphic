@@ -16,7 +16,7 @@ function logThreeProng(
 
         console.log(threeProng);
 
-        drawThreeProng(g, threeProng, undefined, showDelay);
+        drawThreeProng(g, threeProng, showDelay);
     }
 }
 

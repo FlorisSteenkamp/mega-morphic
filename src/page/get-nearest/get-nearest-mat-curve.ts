@@ -10,7 +10,8 @@ function getNearestCpNodeByMatCurve(
     const cpNodes = mats.flatMap(mat => CpNodeFs.getAllOnLoop(mat.cpNode));
     
     return getNearest(
-        (p, t) => closestPointOnBezier(CpNodeFs.getMatCurveToNext(t), p).d,
+        (p, t) => Math.min(...CpNodeFs.getMatCurveToNext(t)
+            .map(ps => closestPointOnBezier(ps, p).d)),
         cpNodes,
         p
     );

@@ -6,7 +6,6 @@ import type { ClickFor } from '../state/click-for.js';
 import type { Props } from './props.js';
 import type { PageData } from './page-data.js';
 import type { MorphEntry } from '../morph/morph-entry.js';
-import type { PoseRamp } from '../morph/procrustes/pose-ramp.js';
 import type { PathCostWeights } from '../morph/match-paths/path-cost-weights.js';
 import { defaultPathWeights } from '../morph/match-paths/path-cost-weights.js';
 import { useRef, useEffect } from 'react';
@@ -31,7 +30,6 @@ import { NeedleWindow } from './components/needle-window.js';
 import { onMorphClicked } from './events/on-morph-clicked.js';
 import { drawMorph } from '../morph/draw-morph/draw-morph.js';
 import { beziersToSvgPathStr } from 'flo-boolean';
-import { StateControl } from '../state-control/state-control.js';
 
 
 const toDrawCheckboxStyles: CheckboxStyles = { 
@@ -576,7 +574,7 @@ function Page(props: Props) {
                     panMouseDown(stateControl, svgRef3)(e);
                     mouseDown(stateControl, svgRef3, viewbox3)(e);
                 }}
-                onMouseUp={mouseUp(stateControl, svgRef3, viewbox1, 3)}
+                onMouseUp={mouseUp(stateControl, svgRef3, 3)}
                 onMouseMove={mouseMove(stateControl, svgRef3, refX, refY, 3)}
                 onClick={onClick(stateControl, svgRef3, 3, refPageData)}
             >
@@ -589,7 +587,7 @@ function Page(props: Props) {
                 viewBox={toViewBoxStr(viewbox1)}
                 style={{ width: '100%', height: '100%', minWidth: 0, border: '1px solid #ccc', display: showSvgs[0] ? undefined : 'none' }}
                 onMouseDown={mouseDown(stateControl, svgRef1, viewbox1)}
-                onMouseUp={mouseUp(stateControl, svgRef1, viewbox1, 1)}
+                onMouseUp={mouseUp(stateControl, svgRef1, 1)}
                 onMouseMove={mouseMove(stateControl, svgRef1, refX, refY, 1)}
                 onClick={onClick(stateControl, svgRef1, 1)}
             >
@@ -608,7 +606,7 @@ function Page(props: Props) {
                 viewBox={toViewBoxStr(viewbox2)}
                 style={{ width: '100%', height: '100%', minWidth: 0, border: '1px solid #ccc', display: showSvgs[1] ? undefined : 'none' }}
                 onMouseDown={mouseDown(stateControl, svgRef2, viewbox2)}
-                onMouseUp={mouseUp(stateControl, svgRef2, viewbox2, 2)}
+                onMouseUp={mouseUp(stateControl, svgRef2, 2)}
                 onMouseMove={mouseMove(stateControl, svgRef2, refX, refY, 2)}
                 onClick={onClick(stateControl, svgRef2, 2)}
             >

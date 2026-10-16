@@ -2,8 +2,10 @@ declare var _debug_: Debug;
 import * as React from 'react';
 import type { Debug } from '../../debug/debug.js';
 import type { Circle } from 'flo-mat';
-import type { SegDp, SegChild } from '../../morph/segment-tree/match-seg-trees.js';
-import { vertexIds } from '../../morph/segment-tree/vertex-ids.js';
+import type { SegDp } from '../../morph/segment-tree/match-seg-trees/seg-dp.js';
+import type { SegChild } from '../../morph/segment-tree/match-seg-trees/seg-child.js';
+import { vertexIds$ } from '../../morph/segment-tree/vertex-ids.js';
+import { geomOf$ } from '../../morph/segment-tree/geom-of.js';
 
 
 const windowStyle: React.CSSProperties = {
@@ -99,7 +101,7 @@ function needleContent() {
         <span style={{ background: opColors.insert }}> insert </span>
         {dp.map(dp => (
             <DpTable key={dp.side} dp={dp}
-                idsA={vertexIds(pm.gA)} idsB={vertexIds(pm.gB)} />
+                idsA={vertexIds$(pm.gA)} idsB={vertexIds$(pm.gB)} />
         ))}
     </div>;
 }
@@ -169,7 +171,7 @@ function DpTable(props: {
 
 /** "v<entry-segment vertex ids> @<dist along route>" (ids as `showVertexNums`) */
 function childLabel(c: SegChild, ids: Map<Circle, number>): string {
-    const { vertS, vertE } = c.entry;
+    const { vertS, vertE } = geomOf$(c.entry);
     return `v${ids.get(vertS)}·${ids.get(vertE)} @${c.dist.toFixed(0)}`;
 }
 

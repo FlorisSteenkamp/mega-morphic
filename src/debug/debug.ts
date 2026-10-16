@@ -2,7 +2,8 @@ import type { CpNode, Mat } from 'flo-mat';
 import type { DebugElems as DebugElemsBoolean } from 'flo-boolean';
 import type { Debug as DebugMat } from 'flo-mat';
 import type { Debug as DebugBooleanOp } from 'flo-boolean';
-import type { PathMatchResult } from '../morph/match-paths/path-match-result';
+import type { PathMatchResult } from './path-match-result.js';
+import type { TrunkCandDebug } from './record-trunk-cands.js';
 
 
 type DebugElemsMat = {
@@ -25,6 +26,8 @@ type DebugElemsMat = {
 
 type DebugElemsMorph = {
     pathMatchResult: PathMatchResult[];
+    /** the trunk re-rank table of the latest match */
+    trunkCands: TrunkCandDebug[];
 }
 
 

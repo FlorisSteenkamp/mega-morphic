@@ -8,6 +8,8 @@ import { segTreeWithLoop, loopOf } from '../helpers/seg-tree-with-loop.js';
 import { buildMorphEntries } from '../../src/morph/build-morph-entries/build-morph-entries.js';
 import { resolveMorphAt } from '../../src/morph/resolve-morph-at/resolve-morph-at.js';
 import { parseSvgFont } from '../../src/load-svg/load-svg-font.js';
+import { dirAtStart } from '../../src/morph/fs/dir-at-start.js';
+import { dirAtEnd } from '../../src/morph/fs/dir-at-end.js';
 
 const { atan2, hypot, abs, PI: π } = Math;
 
@@ -24,21 +26,6 @@ function loadGraph(glyphName: string) {
     return segTreeWithLoop(mats[0].cpNode);
 }
 
-function dirAtStart(ps: number[][]): number[] {
-    for (let i = 1; i < ps.length; i++) {
-        const d = [ps[i][0] - ps[0][0], ps[i][1] - ps[0][1]];
-        if (d[0] !== 0 || d[1] !== 0) { return d; }
-    }
-    return [0, 0];
-}
-function dirAtEnd(ps: number[][]): number[] {
-    const pE = ps[ps.length - 1];
-    for (let i = ps.length - 2; i >= 0; i--) {
-        const d = [pE[0] - ps[i][0], pE[1] - ps[i][1]];
-        if (d[0] !== 0 || d[1] !== 0) { return d; }
-    }
-    return [0, 0];
-}
 function len(ps: number[][]): number {
     let L = 0;
     for (let i = 1; i < ps.length; i++) {

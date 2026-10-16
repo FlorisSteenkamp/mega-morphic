@@ -1,4 +1,5 @@
 import type { Segment, RouteStep } from './segment.js';
+import { geomOf$ } from './geom-of.js';
 
 
 type SleevePair = { out: number[][][]; back: number[][][] };
@@ -25,9 +26,10 @@ function composeSegs(
     let edges: SleevePair[] = [];
 
     for (const seg of segs) {
-        bz = [...bz, ...seg.skelPss];
-        rd = rd.length === 0 ? [...seg.radii] : [...rd, ...seg.radii.slice(1)];
-        edges = [...edges, ...seg.sleeves];
+        const { skelPss, radii, sleeves } = geomOf$(seg);
+        bz = [...bz, ...skelPss];
+        rd = rd.length === 0 ? [...radii] : [...rd, ...radii.slice(1)];
+        edges = [...edges, ...sleeves];
     }
 
     if (reversed) {

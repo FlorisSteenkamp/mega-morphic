@@ -24,8 +24,6 @@ function segmentArea(
         vertE: Circle,
         sleeves: readonly { out: number[][][]; back: number[][][] }[]): number {
 
-    const n = sleeves.length;
-
     // `out` runs S → E along one side, `back` runs E → S along the other
     const out = sleeves.flatMap(e => e.out);
     const back = sleeves.toReversed().flatMap(e => e.back);

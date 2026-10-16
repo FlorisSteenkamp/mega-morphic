@@ -11,10 +11,7 @@ const altClasses = [
 /** @internal */
 function drawMat(
         g: SVGGElement,
-        mat: Mat,
-        classes_?: string,
-        delay = 0,
-        scaleFactor = 1): SVGElement[] {
+        mat: Mat): SVGElement[] {
 
     let cpNode = mat.cpNode;
     if (!cpNode) { return []; }
@@ -27,10 +24,12 @@ function drawMat(
     traverseEdges(cpNode, cpNode => {
         if (isTerminating(cpNode)) { return; }
 
-        const bezier = getMatCurveToNext(cpNode);
-        if (!bezier) { return; }
+        const beziers = getMatCurveToNext(cpNode);
+        if (!beziers) { return; }
 
-        $svgs.push( ...drawFs.bezier(g, bezier, altClasses[i%2], delay));
+        for (const bezier of beziers) {
+            $svgs.push( ...drawFs.bezier(g, bezier, altClasses[i%2]));
+        }
         i++;
     });
 

@@ -1,5 +1,6 @@
 import type { Circle } from 'flo-mat';
 import type { Segment } from './segment.js';
+import { geomOf$ } from './geom-of.js';
 
 
 /**
@@ -19,8 +20,9 @@ function routeSegments(
     };
 
     for (const seg of g) {
-        link(seg.vertS, seg, seg.vertE);
-        link(seg.vertE, seg, seg.vertS);
+        const { vertS, vertE } = geomOf$(seg);
+        link(vertS, seg, vertE);
+        link(vertE, seg, vertS);
     }
 
     const prev = new Map<Circle, { seg: Segment; from: Circle }>();
@@ -44,7 +46,7 @@ function routeSegments(
     while (u !== v0) {
         const p = prev.get(u);
         if (p === undefined) { return []; }  // disconnected (shouldn't happen)
-        out.push({ seg: p.seg, reversed: p.seg.vertE !== u });
+        out.push({ seg: p.seg, reversed: geomOf$(p.seg).vertE !== u });
         u = p.from;
     }
     return out.reverse();

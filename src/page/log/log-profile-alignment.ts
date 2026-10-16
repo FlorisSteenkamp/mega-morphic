@@ -1,6 +1,6 @@
 declare var _debug_: Debug;
 import type { Debug } from '../../debug/debug.js';
-import type { SegMatchedPair } from '../../morph/segment-tree/match-seg-trees.js';
+import { pairsOf } from '../../morph/segment-tree/match-seg-trees/pairs-of.js';
 import { drawAlignSteps, distToPss, svgGroup } from './align-viz.js';
 
 const { min } = Math;
@@ -18,13 +18,9 @@ function logProfileAlignment(
     const pm = _debug_.elems.pathMatchResult[0];
     if (pm === undefined) { return; }
 
-    const paths: SegMatchedPair[] = [];
-    (function walk(mp: SegMatchedPair): void {
-        if (mp.align !== undefined) { paths.push(mp); }
-        for (const op of mp.ops) {
-            if (op.type === 'match') { walk(op.sub); }
-        }
-    })(pm.trunk);
+    const paths = pairsOf(pm.trunk)
+        .map(({ mp }) => mp)
+        .filter(mp => mp.align !== undefined);
 
     if (paths.length === 0) {
         console.log('no alignment debug data', pm);

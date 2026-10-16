@@ -1,5 +1,5 @@
 import { XMLNS } from "../../draw/xmlns.js";
-import { calcProcrustes } from "../procrustes/calc-procrustes.js";
+import { calcProcrustes$ } from "../procrustes/calc-procrustes.js";
 
 const { cos, sin, sqrt, hypot, PI: π } = Math;
 
@@ -29,7 +29,7 @@ function drawPoseGizmo(
     if (outlines.length === 0) { return; }
 
     const { centroid, scale, angle, anisotropy, momMajor, momMinor } =
-        calcProcrustes(outlines.flat());
+        calcProcrustes$(outlines.flat());
     const [cx, cy] = centroid;
 
     const $ring = document.createElementNS(XMLNS, 'circle');

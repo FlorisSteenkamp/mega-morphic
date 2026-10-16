@@ -8,11 +8,12 @@ import type { Segment } from '../../src/morph/segment-tree/segment.js';
 import { defaultPathWeights } from '../../src/morph/match-paths/path-cost-weights.js';
 import { segTreeWithLoop, loopOf } from '../helpers/seg-tree-with-loop.js';
 import type { Circle } from 'flo-mat';
-import { vertexIds } from '../../src/morph/segment-tree/vertex-ids.js';
+import { vertexIds$ } from '../../src/morph/segment-tree/vertex-ids.js';
+import { geomOf$ } from '../../src/morph/segment-tree/geom-of.js';
 import { getUnit$ } from '../../src/morph/segment-tree/get-unit.js';
 import { sampleSegTree } from '../../src/morph/segment-tree/sample-seg-tree.js';
 import { productDtw } from '../../src/morph/segment-tree/product-dtw.js';
-import { matchSegTrees } from '../../src/morph/segment-tree/match-seg-trees.js';
+import { matchSegTrees } from '../../src/morph/segment-tree/match-seg-trees/match-seg-trees.js';
 import { buildMorphEntries } from '../../src/morph/build-morph-entries/build-morph-entries.js';
 import { resolveMorphAt } from '../../src/morph/resolve-morph-at/resolve-morph-at.js';
 import { parseSvgFont } from '../../src/load-svg/load-svg-font.js';
@@ -153,15 +154,15 @@ function comparePair(nameA: string, nameB: string) {
     const gA = loadGraph(nameA);
     const gB = loadGraph(nameB);
 
-    const sA = sampleSegTree(gA, getUnit$(loopOf(gA)), TARGET_SAMPLES);
-    const sB = sampleSegTree(gB, getUnit$(loopOf(gB)), TARGET_SAMPLES);
+    const sA = sampleSegTree(gA, getUnit$(loopOf(gA)), TARGET_SAMPLES, undefined);
+    const sB = sampleSegTree(gB, getUnit$(loopOf(gB)), TARGET_SAMPLES, undefined);
     const t2 = performance.now();
     const pd = productDtw(sA, sB, defaultPathWeights);
     const t3 = performance.now();
 
     const fmtLeaf = (g: Segment[], v: Circle) => {
         const p = v.center;
-        return `#${vertexIds(g).get(v)}(${p[0].toFixed(0)},${p[1].toFixed(0)})`;
+        return `#${vertexIds$(g).get(v)}(${p[0].toFixed(0)},${p[1].toFixed(0)})`;
     };
 
     console.log(
@@ -199,28 +200,26 @@ describe('product-graph DTW vs current matcher (score-only)', () => {
         const gB = loadGraph('Q_V');
         const t0 = performance.now();
         const r = matchSegTrees(
-            gA, gB, getUnit$(loopOf(gA)), getUnit$(loopOf(gB)),
-            defaultPathWeights);
+            gA, gB, loopOf(gA), loopOf(gB), defaultPathWeights);
         const t1 = performance.now();
-        const stats = countOps(r.root);
+        const stats = countOps(r);
         console.log(
             `hierarchical v→Q_V: ${stats.pairs} route pairs, ` +
             `${stats.dels} del / ${stats.inss} ins subtrees, ` +
-            `cost ${r.root.cost.toFixed(4)}, ${(t1 - t0).toFixed(0)}ms`);
+            `cost ${r.cost.toFixed(4)}, ${(t1 - t0).toFixed(0)}ms`);
         expect(stats.pairs).toBeGreaterThan(0);
-        expect(Number.isFinite(r.root.cost)).toBe(true);
+        expect(Number.isFinite(r.cost)).toBe(true);
 
         // identity: v → v matches every real subtree; only leftover
         // subtrees of rerouted sub-paths drop, symmetrically on both sides
         const gA2 = loadGraph('v');
         const gB2 = loadGraph('v');
         const r2 = matchSegTrees(
-            gA2, gB2, getUnit$(loopOf(gA2)), getUnit$(loopOf(gB2)),
-            defaultPathWeights);
-        const stats2 = countOps(r2.root);
+            gA2, gB2, loopOf(gA2), loopOf(gB2), defaultPathWeights);
+        const stats2 = countOps(r2);
         console.log(`hierarchical v→v: ${stats2.pairs} pairs, ` +
             `${stats2.dels} del / ${stats2.inss} ins, ` +
-            `cost ${r2.root.cost.toFixed(4)}`);
+            `cost ${r2.cost.toFixed(4)}`);
         expect(stats2.dels).toBe(stats2.inss);
     }, 120_000);
 
@@ -263,7 +262,7 @@ describe('product-graph DTW vs current matcher (score-only)', () => {
 
         const missing: string[] = [];
         for (const seg of gA) {
-            const tip = seg.skelPss[0][0];
+            const tip = geomOf$(seg).skelPss[0][0];
             let best = Infinity;
             for (const p of pts) {
                 const d = Math.hypot(p[0] - tip[0], p[1] - tip[1]);
@@ -281,7 +280,7 @@ describe('product-graph DTW vs current matcher (score-only)', () => {
 
 
 function countOps(pair: import(
-        '../../src/morph/segment-tree/match-seg-trees.js').SegMatchedPair):
+        '../../src/morph/segment-tree/match-seg-trees/seg-matched-pair.js').SegMatchedPair):
         { pairs: number; dels: number; inss: number } {
     let pairs = 1;
     let dels = 0;

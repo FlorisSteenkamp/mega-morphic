@@ -7,24 +7,17 @@ import { drawBeziersAsSinglePath } from '../draw/draw-beziers-as-single-path.js'
 function drawBranch(
         g: SVGGElement,
         branch: CpNode[],
-        classes = 'thin5 purple nofill',
-        delay = 0,
-        scaleFactor = 1) {
-
-
-    const $svgs: SVGElement[] = [];
+        classes = 'thin5 purple nofill') {
 
     const pss: number[][][] = [];
     for (const cpNode of branch) {
         if (isTerminating(cpNode)) { continue; }
-        const bezier = getMatCurveToNext(cpNode);
-        if (!bezier) { continue; }
-        pss.push(bezier);
+        const beziers = getMatCurveToNext(cpNode);
+        if (!beziers) { continue; }
+        pss.push(...beziers);
     }
-    
-    $svgs.push(...drawBeziersAsSinglePath(g, pss, classes, delay));
 
-    return $svgs;
+    return drawBeziersAsSinglePath(g, pss, classes);
 }
 
 

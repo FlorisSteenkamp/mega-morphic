@@ -1,12 +1,13 @@
 import type { MorphEntry } from "../morph-entry.js";
 import { memoize } from 'flo-memoize';
+import { rotateAbout, translate } from 'flo-bezier3';
 import { getLastP } from '../fs/get-last-p.js';
 import { pAtIndex } from '../fs/p-at-idx.js';
 import { intrinsicSkeletonLerp } from '../intrinsic-skeleton/intrinsic-skeleton.js';
 import { unwrappedChordAngles } from '../intrinsic-skeleton/unwrapped-chord-angles.js';
 import { wrapAngle } from '../intrinsic-skeleton/wrap-angle.js';
 
-const { min, max, floor, cos, sin, hypot, round, PI: π } = Math;
+const { min, max, floor, hypot, round, PI: π } = Math;
 
 
 /**
@@ -62,7 +63,8 @@ const getMorphedSkeleton = memoize(function(
             : netTurns(ψsAe, ψsBe, skelPssA, skelPssB);
         if (m !== 0) {
             const ρ = -t*2*π*m;
-            pss = rotateAbout(pss, meanPoint(pss), ρ);
+            const c = meanPoint(pss);
+            pss = pss.map(ps => rotateAbout(ps, ρ, c));
             α += ρ;
         }
         return { alpha: α, pss };
@@ -108,19 +110,9 @@ const getMorphedSkeleton = memoize(function(
     // Rotate about the junction by dψ, then move it onto the parent
     // (both vanish at t=0 and t=1).
     const base = getLastP(pss);
-    const dx = target[0] - base[0];
-    const dy = target[1] - base[1];
-    const c = cos(dψ);
-    const s = sin(dψ);
+    const d = [target[0] - base[0], target[1] - base[1]];
 
-    pss = pss.map(ps => ps.map(p => {
-        const ux = p[0] - base[0];
-        const uy = p[1] - base[1];
-        return [
-            base[0] + dx + c*ux - s*uy,
-            base[1] + dy + s*ux + c*uy
-        ];
-    }));
+    pss = pss.map(ps => translate(rotateAbout(ps, dψ, base), d));
 
     return { alpha: α, pss };
 }, [0,1] /** cache only for 1 t value */, false /** log cache hits/misses? */);
@@ -237,24 +229,6 @@ function meanPoint(pss: number[][][]): number[] {
     return sumL > 0
         ? [x/sumL, y/sumL]
         : [pss[0][0][0], pss[0][0][1]];
-}
-
-
-function rotateAbout(
-        pss: number[][][],
-        c: number[],
-        ρ: number): number[][][] {
-
-    const cosρ = cos(ρ);
-    const sinρ = sin(ρ);
-    return pss.map(ps => ps.map(p => {
-        const ux = p[0] - c[0];
-        const uy = p[1] - c[1];
-        return [
-            c[0] + cosρ*ux - sinρ*uy,
-            c[1] + sinρ*ux + cosρ*uy
-        ];
-    }));
 }
 
 

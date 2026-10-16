@@ -1,11 +1,12 @@
-import { evalDeCasteljau, fromTo, getTAtLength, toCubic } from 'flo-bezier3';
+import { evalDeCasteljau, getTAtLength } from 'flo-bezier3';
 import { unwrappedChordAngles } from './intrinsic-skeleton/unwrapped-chord-angles.js';
 import { clamp } from '../utils/clamp.js';
 import type { Samples } from './match-paths/samples.js';
 import { length$ } from './fs/length.js';
-import { skeletonKnots } from './fs/skeleton-knots.js';
+import { calcSkelCumKnots } from './fs/skeleton-knots.js';
 import { knotIdxAt } from './fs/knot-idx-at.js';
 import { valueAt } from './fs/value-at.js';
+import { cubicSection } from './fs/cubic-section.js';
 
 const { abs, max, min, round } = Math;
 
@@ -70,8 +71,8 @@ function alignBranches(
         unitA: number,
         unitB: number): BranchAlignment {
 
-    const knotsA = skeletonKnots(bzA);
-    const knotsB = skeletonKnots(bzB);
+    const knotsA = calcSkelCumKnots(bzA);
+    const knotsB = calcSkelCumKnots(bzB);
 
     const nA = sampleCount(bzA);
     const nB = sampleCount(bzB);
@@ -320,7 +321,7 @@ function resampleAt(
         rd: number[],
         us: number[]): { beziers: number[][][]; radii: number[] } {
 
-    const knots = skeletonKnots(bz);
+    const knots = calcSkelCumKnots(bz);
     const lens = bz.map(length$);
 
     const beziers: number[][][] = [];
@@ -340,9 +341,7 @@ function resampleAt(
             const p = evalDeCasteljau(bz[j], t0);
             beziers.push([[...p], [...p], [...p], [...p]]);
         } else {
-            const t0 = clamp(getTAtLength(bz[j], sA), 0, 1);
-            const t1 = clamp(getTAtLength(bz[j], sB), 0, 1);
-            beziers.push(toCubic(fromTo(bz[j], t0, t1)));
+            beziers.push(cubicSection(bz[j], sA, sB));
         }
     }
 

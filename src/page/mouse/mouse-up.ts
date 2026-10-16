@@ -6,7 +6,6 @@ import { flipViewboxXY } from "../fs-consts-types/viewbox.js";
 function mouseUp(
         stateControl: StateControl,
         svgRef: React.RefObject<SVGSVGElement | null>,
-        viewbox: number[][],
         shapeIdx: 1|2|3) {
 
     return (event: React.MouseEvent<SVGSVGElement, MouseEvent>) => {

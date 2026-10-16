@@ -1,4 +1,5 @@
 import { XMLNS } from "./xmlns.js";
+import { segD } from "./seg-d.js";
 
 
 function drawBeziersAsSinglePath(
@@ -18,7 +19,7 @@ function drawBeziersAsSinglePath(
 
         if (ps.length <= 1) { continue; }
 
-        const [p0,p1,p2,p3] = ps;
+        const p0 = ps[0];
 
         // non-contiguous beziers (e.g. a reversed route step, or a whole
         // subtree) start a new subpath instead of being joined to the last
@@ -28,19 +29,16 @@ function drawBeziersAsSinglePath(
         }
         last = ps[ps.length - 1];
 
-        d += 
-              ps.length === 2
-            ? `L ${p1[0]} ${p1[1]} `
-            : ps.length === 3
-            ? `Q ${p1[0]} ${p1[1]} ${p2[0]} ${p2[1]} `
-            : `C ${p1[0]} ${p1[1]} ${p2[0]} ${p2[1]} ${p3[0]} ${p3[1]} `
+        d += segD(ps);
     }
 
     // d += ' z';
     const $path = document.createElementNS(XMLNS, 'path');
     $path.setAttributeNS(null, "d", d);
-    $path.setAttributeNS(null, "class", class_); 
+    $path.setAttributeNS(null, "class", class_);
     g.appendChild($path);
+
+    if (delay) { setTimeout(() => $path.remove(), delay); }
 
     return [$path];
 }

@@ -5,22 +5,23 @@ import {
     traverseVertices, isOneProng, isSharp, getRealProngCount,
     getProngCount
 } from 'flo-mat';
-import { getLeaves } from '../../../../mat/src/sat/get-leaves.js';
+import { getLeaves } from 'flo-mat';
 import { Debug } from '../../debug/debug.js';
 import { ToDraw } from "../../state/to-draw.js";
 import { deleteSvgs } from './delete-svgs.js';
 import { drawLeaves } from '../../draw-elem/draw-leaves.js';
+import { drawFs } from 'flo-draw';
 import { drawBranch } from '../../draw-elem/draw-branch.js';
-import { drawCull } from '../../draw-elem/draw-cull.js';
 import { drawMat } from '../../draw-elem/draw-mat.js';
 import { drawOneProng } from '../../draw-elem/draw-one-prong.js';
 import { drawTwoProng as createDrawTwoProng } from '../../draw-elem/draw-two-prong.js';
 import { drawThreeProng } from '../../draw-elem/draw-three-prong.js';
-import { vertex as drawVertex } from '../../draw-elem/draw-vertex.js';
+import { drawVertex } from '../../draw-elem/draw-vertex.js';
+import { getG } from '../../draw/get-g.js';
 
 
-const drawTwoProng = createDrawTwoProng(true, false);
-const drawHoleCloser = createDrawTwoProng(false, false);
+const drawTwoProng = createDrawTwoProng(true);
+const drawHoleCloser = createDrawTwoProng(false);
 
 
 const altClasses = [
@@ -38,24 +39,22 @@ const colors = [
     '#F57F17', '#3E2723'
 ].map(color => color + '33');
 
-let ii=0;
-async function drawElements(
+
+function drawElements(
         satScale: number,
         mats: Mat[],
         toDraws: ToDraw,
         svg$: SVGElement,
         $svgs: { [T in keyof ToDraw]: SVGElement[][] },
-        viewbox: number[][]) {
+        viewbox: number[][]): void {
 
     if (typeof _debug_ === 'undefined') { return; }
 
     // const svg$ = svgRef.current;
-    const g = svg$.getElementsByTagName('g')[0];
+    const g = getG(svg$);
 
     const vbWidth = (viewbox[1][0] - viewbox[0][0]);
 
-    let num2Prongs = 0;
-    const elemss$: SVGElement[][][] = [];
     for (const elemType_ in toDraws) {
         const elemType = elemType_ as keyof ToDraw;
 
@@ -70,38 +69,34 @@ async function drawElements(
             if (elemType === 'holeCloser') {
                 const holeClosers = getHoleClosers(mat.cpNode);
                 for (const holeCloser of holeClosers) {
-                    svgElems.push(drawHoleCloser(
-                        g, holeCloser, 'thin10 cyan nofill', 0, vbWidth/10)
-                    );
+                    svgElems.push(drawHoleCloser(g, holeCloser, 0, vbWidth/10));
                 }
             }
 
             if (elemType === 'cull') {
                 const cullSet = getSatCulls(mat.cpNode, satScale);
-                const culls = Array.from(cullSet)
-                .flatMap(s => Array.from(s[1])
-                .map(r => [s[0],r]));
+                const culls = Array.from(cullSet, c => c.center);
 
                 for (const cull of culls) {
-                    svgElems.push(drawCull(
-                        g, cull, 'thin10 cyan nofill', 0, vbWidth/10)
+                    svgElems.push(drawFs.crossHair(
+                        g, cull, 'thin10 cyan nofill', 0.1*vbWidth/10)
                     );
                 }
             }
 
             if (elemType === 'leaves') {
                 const leaves = getLeaves(mat.cpNode);
-                svgElems.push(drawLeaves(g, leaves, undefined, 0, vbWidth/10));
+                svgElems.push(drawLeaves(g, leaves, 0, vbWidth/10));
             }
 
             if (elemType === 'mat') {
-                svgElems.push(drawMat(g, mat, undefined, 0, vbWidth/10));
+                svgElems.push(drawMat(g, mat));
             }
 
             if (elemType === 'oneProng') {
                 traverseVertices(mat.cpNode, cpNode => {
                     if (isOneProng(cpNode) && !isSharp(cpNode)) {
-                        svgElems.push(drawOneProng(g, cpNode, undefined, 0, vbWidth/10))
+                        svgElems.push(drawOneProng(g, cpNode, 0, vbWidth/10))
                     }
                 });
             }
@@ -110,8 +105,7 @@ async function drawElements(
                 traverseVertices(mat.cpNode, cpNode => {
                     // if (getRealProngCount(cpNode) === 2) {
                     if (getProngCount(cpNode) === 2) {
-                        svgElems.push(drawTwoProng(g, cpNode, undefined, 0, vbWidth/10))
-                        num2Prongs++;
+                        svgElems.push(drawTwoProng(g, cpNode, 0, vbWidth/10))
                     }
                 });
             }
@@ -119,7 +113,7 @@ async function drawElements(
             if (elemType === 'threeProng') {
                 traverseVertices(mat.cpNode, cpNode => {
                     if (getRealProngCount(cpNode) >= 3) {
-                        svgElems.push(drawThreeProng(g, cpNode, undefined, 0, vbWidth/10))
+                        svgElems.push(drawThreeProng(g, cpNode, 0, vbWidth/10))
                     }
                 });
             }
@@ -128,29 +122,18 @@ async function drawElements(
                 const branches = getBranches(mat.cpNode);
                 let i = 0;
                 for (const branch of branches) {
-                    svgElems.push(drawBranch(
-                        g, branch,
-                        altClasses[i%5],
-                        0
-                    ));
+                    svgElems.push(drawBranch(g, branch, altClasses[i%5]));
                     i++;
                 }
             }
 
             if (elemType === 'vertex') {
                 traverseVertices(mat.cpNode, cpNode => {
-                    svgElems.push(drawVertex(g, cpNode, undefined, 0, vbWidth/10))
+                    svgElems.push(drawVertex(g, cpNode, 0, vbWidth/10))
                 });
             }
         }
-
-        ii = 0;
-        elemss$.push(svgElems);
     }
-
-    // console.log(`# 2-prongs: ${num2Prongs}`);
-
-    return elemss$;
 }
 
 

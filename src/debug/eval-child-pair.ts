@@ -1,17 +1,20 @@
-import type { PathCostWeights } from '../match-paths/path-cost-weights.js';
-import type { PathAlignDebug } from '../match-paths/path-align-debug.js';
-import type { Segment } from './segment.js';
-import type { SegMatchedPair, SegOp, SegChild, RouteStep } from './match-seg-trees.js';
-import type { ProductDtwResult } from './product-dtw.js';
-import {
-    matchSegTrees, reverseRoute, subDtwOf, getSampleSpacing, terminalGated,
-    posCostOf, angleCostOf, dropCostOf
-} from './match-seg-trees.js';
-import { routeSegments } from './route-segments.js';
-import { alignOfRoutes } from './match-paths-via-segments.js';
-import { calcProcrustes } from '../procrustes/calc-procrustes.js';
-import { getUnit$ } from './get-unit.js';
-import { lenOfRoute$ } from './len-of.js';
+import type { PathCostWeights } from '../morph/match-paths/path-cost-weights.js';
+import type { PathAlignDebug } from '../morph/match-paths/path-align-debug.js';
+import type { Segment, RouteStep } from '../morph/segment-tree/segment.js';
+import type { SegMatchedPair } from '../morph/segment-tree/match-seg-trees/seg-matched-pair.js';
+import type { SegOp } from '../morph/segment-tree/match-seg-trees/seg-op.js';
+import type { SegChild } from '../morph/segment-tree/match-seg-trees/seg-child.js';
+import type { ProductDtwResult } from '../morph/segment-tree/product-dtw.js';
+import { matchSegTrees } from '../morph/segment-tree/match-seg-trees/match-seg-trees.js';
+import { reverseRoute } from '../morph/segment-tree/match-seg-trees/reverse-route.js';
+import { subDtwOf } from '../morph/segment-tree/match-seg-trees/sub-dtw-of.js';
+import { terminalGated, posCostOf, angleCostOf, dropCostOf } from '../morph/segment-tree/match-seg-trees/child-costs.js';
+import { routeSegments } from '../morph/segment-tree/route-segments.js';
+import { alignOfRoutes } from './align-of-routes.js';
+import { anisoOf } from '../morph/segment-tree/match-seg-trees/aniso-of.js';
+import { getUnit$ } from '../morph/segment-tree/get-unit.js';
+import { lenOfRoute$, lenOfSegs$ } from '../morph/segment-tree/len-of.js';
+import { TARGET_SAMPLES } from '../morph/segment-tree/match-seg-trees/consts.js';
 
 
 /**
@@ -69,13 +72,9 @@ function evalChildPair(
 
     const unitA = getUnit$(loopA);
     const unitB = getUnit$(loopB);
-    const aniso = (
-        calcProcrustes(loopA).anisotropy +
-        calcProcrustes(loopB).anisotropy
-    ) / 2;
+    const aniso = anisoOf(loopA, loopB);
 
-    const root =
-        matchSegTrees(gA, gB, unitA, unitB, weights, aniso).root;
+    const root = matchSegTrees(gA, gB, loopA, loopB, weights);
 
     const a = locate(root, segA, 'a');
     const b = locate(root, segB, 'b');
@@ -105,8 +104,8 @@ function evalChildPair(
     // the sub-DTW's winning route pair (start pinned at the attach vertex)
     const cand = price.dtw.candidates[0];
     const align = alignOfRoutes(
-        reverseRoute(routeSegments(price.subA, a.child.attachV, cand.endA)),
-        reverseRoute(routeSegments(price.subB, b.child.attachV, cand.endB)),
+        reverseRoute(routeSegments(a.child.segs, a.child.attachV, cand.endA)),
+        reverseRoute(routeSegments(b.child.segs, b.child.attachV, cand.endB)),
         unitA, unitB, weights, false);
 
     const verdict =
@@ -142,8 +141,6 @@ interface ChildPairPrice {
     readonly deleteCost: number;
     readonly insertCost: number;
     readonly dtw: ProductDtwResult;
-    readonly subA: Segment[];
-    readonly subB: Segment[];
 }
 
 
@@ -154,34 +151,48 @@ interface ChildPairPrice {
  * are pooled on (position is a route fraction).
  */
 function priceChildPair(
-        gA: Segment[], gB: Segment[],
-        unitA: number, unitB: number,
-        routeLenA: number, routeLenB: number,
+        gA: Segment[],
+        gB: Segment[],
+        unitA: number,
+        unitB: number,
+        routeLenA: number,
+        routeLenB: number,
         weights: PathCostWeights,
         sway: number,
-        a: SegChild, b: SegChild): ChildPairPrice {
+        a: SegChild,
+        b: SegChild): ChildPairPrice {
 
-    const { dtw, subA, subB } = subDtwOf(
+    const dtw = subDtwOf(
         gA, gB,
         unitA, unitB,
-        getSampleSpacing(gA), getSampleSpacing(gB),
+        getSampleSpacing(gA),
+        getSampleSpacing(gB),
         weights, sway, a, b
     );
 
     const gated = terminalGated(a, b);
-    const positionCost = posCostOf(
-        a, b, routeLenA, routeLenB, unitA, unitB, weights);
-    const angleCost = angleCostOf(a, b, weights);
-    return {
-        gated, positionCost, angleCost,
-        dtwCost: dtw.totalCost + dtw.swayCost,
-        matchCost: gated
+    const positionCost = posCostOf(unitA, unitB, weights)(
+        a, b, routeLenA, routeLenB);
+    const angleCost = angleCostOf(weights)(a, b);
+    const matchCost = gated
             ? Infinity
-            : positionCost + angleCost + dtw.totalCost + dtw.swayCost,
-        deleteCost: dropCostOf(a, weights),
-        insertCost: dropCostOf(b, weights),
-        dtw, subA, subB
+            : positionCost + angleCost + dtw.totalCost + dtw.swayCost;
+
+    return {
+        gated,
+        positionCost,
+        angleCost,
+        dtwCost: dtw.totalCost + dtw.swayCost,
+        matchCost,
+        deleteCost: dropCostOf(weights)(a),
+        insertCost: dropCostOf(weights)(b),
+        dtw
     };
+}
+
+/** trunk-level sample spacing of a tree */
+function getSampleSpacing(g: Segment[]): number {
+    return lenOfSegs$(g) / TARGET_SAMPLES;
 }
 
 

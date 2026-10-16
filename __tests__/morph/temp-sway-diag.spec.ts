@@ -7,14 +7,16 @@ import { findMats, getPathsFromStr, MatOptions } from 'flo-mat';
 import { defaultPathWeights } from '../../src/morph/match-paths/path-cost-weights.js';
 import { segTreeWithLoop, loopOf } from '../helpers/seg-tree-with-loop.js';
 import type { Circle } from 'flo-mat';
-import { vertexIds } from '../../src/morph/segment-tree/vertex-ids.js';
+import { vertexIds$ } from '../../src/morph/segment-tree/vertex-ids.js';
+import { geomOf$ } from '../../src/morph/segment-tree/geom-of.js';
 import { getUnit$ } from '../../src/morph/segment-tree/get-unit.js';
 import { routeSegments } from '../../src/morph/segment-tree/route-segments.js';
 import type { Segment } from '../../src/morph/segment-tree/segment.js';
-import { matchSegTrees } from '../../src/morph/segment-tree/match-seg-trees.js';
+import { matchSegTrees } from '../../src/morph/segment-tree/match-seg-trees/match-seg-trees.js';
 import { composeRouteGeom } from '../../src/morph/segment-tree/compose-segs.js';
-import type { RouteStep } from '../../src/morph/segment-tree/match-seg-trees.js';
-import { calcProcrustes } from '../../src/morph/procrustes/calc-procrustes.js';
+import type { RouteStep } from '../../src/morph/segment-tree/segment.js';
+import type { TrunkCandDebug } from '../../src/debug/record-trunk-cands.js';
+import { calcProcrustes$ } from '../../src/morph/procrustes/calc-procrustes.js';
 import { unwrappedChordAngles } from '../../src/morph/intrinsic-skeleton/unwrapped-chord-angles.js';
 import { wrapAngle } from '../../src/morph/intrinsic-skeleton/wrap-angle.js';
 import { length$ } from '../../src/morph/fs/length.js';
@@ -133,21 +135,23 @@ describe('temp sway diagnostic', () => {
         const gA = loadGraph('M');
         const gB = loadGraph('N');
         // AFTER findMats - flo-boolean's debug branches crash on a bare {}
-        (globalThis as any)._debug_ = {};
+        (globalThis as any)._debug_ = { elems: { trunkCands: [] } };
         const uA = getUnit$(loopOf(gA));
         const uB = getUnit$(loopOf(gB));
-        const aniso = (calcProcrustes(loopOf(gA)).anisotropy +
-            calcProcrustes(loopOf(gB)).anisotropy) / 2;
+        const aniso = (calcProcrustes$(loopOf(gA)).anisotropy +
+            calcProcrustes$(loopOf(gB)).anisotropy) / 2;
 
         const vtx = (g: Segment[], v: Circle): string => {
             const p = v.center;
-            const deg = g.filter(
-                s => s.vertS === v || s.vertE === v).length;
-            return `${vertexIds(g).get(v)}${deg === 1 ? 'L' : 'F'}(${
+            const deg = g.filter(s => {
+                const { vertS, vertE } = geomOf$(s);
+                return vertS === v || vertE === v;
+            }).length;
+            return `${vertexIds$(g).get(v)}${deg === 1 ? 'L' : 'F'}(${
                 p[0].toFixed(0)},${p[1].toFixed(0)})`;
         };
         const vtxs = (g: Segment[]): string =>
-            [...vertexIds(g).keys()].map(v => vtx(g, v)).join(' ');
+            [...vertexIds$(g).keys()].map(v => vtx(g, v)).join(' ');
 
         const lines: string[] = [];
         lines.push(`aniso ${aniso.toFixed(3)}  unitA ${uA.toFixed(1)} unitB ${
@@ -156,17 +160,20 @@ describe('temp sway diagnostic', () => {
         lines.push(`B vertices: ${vtxs(gB)}`);
 
         for (const sway of [0, 0.1, 0.5, 1, 2]) {
-            const r = matchSegTrees(gA, gB, uA, uB,
-                { ...defaultPathWeights, sway }, aniso);
+            const r = matchSegTrees(gA, gB, loopOf(gA), loopOf(gB),
+                { ...defaultPathWeights, sway });
             lines.push('');
             lines.push(`=== sway weight ${sway} ===`);
-            lines.push(`chosen: startA ${vtx(gA, r.trunkStartA)} startB ${
-                vtx(gB, r.trunkStartB)}  cost ${r.root.cost.toFixed(3)}`);
-            const ops = r.root.ops.map(o =>
+            const cands: TrunkCandDebug[] =
+                (globalThis as any)._debug_.elems.trunkCands;
+            const chosen = cands.find(c => c.chosen)!;
+            lines.push(`chosen: startA ${vtx(gA, chosen.startA)} startB ${
+                vtx(gB, chosen.startB)}  cost ${r.cost.toFixed(3)}`);
+            const ops = r.ops.map(o =>
                 o.type === 'match' ? 'M' : o.type === 'delete' ? 'D' : 'I')
                 .join('');
             lines.push(`root ops: ${ops}`);
-            for (const c of r.trunkCands ?? []) {
+            for (const c of cands) {
                 const rA = routeSegments(gA, c.startA, c.endA);
                 const rB = routeSegments(gB, c.startB, c.endB);
                 const gSway = abs(wrapAngle(
@@ -184,10 +191,10 @@ describe('temp sway diagnostic', () => {
                     lSway.toFixed(3)}π absΔ ${laSway.toFixed(3)}π`);
                 if (c.ops !== undefined) {
                     lines.push(`    A route: ${rA.map(s => `${
-                        vtx(gA, s.reversed ? s.seg.vertE : s.seg.vertS)}`)
+                        vtx(gA, s.reversed ? geomOf$(s.seg).vertE : geomOf$(s.seg).vertS)}`)
                         .join('>')}>${vtx(gA, c.endA)}`);
                     lines.push(`    B route: ${rB.map(s => `${
-                        vtx(gB, s.reversed ? s.seg.vertE : s.seg.vertS)}`)
+                        vtx(gB, s.reversed ? geomOf$(s.seg).vertE : geomOf$(s.seg).vertS)}`)
                         .join('>')}>${vtx(gB, c.endB)}`);
                     for (const op of c.ops) {
                         const ch = (x: { attachV: Circle; dist: number;

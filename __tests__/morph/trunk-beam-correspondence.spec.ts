@@ -7,16 +7,18 @@ import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { findMats, getPathsFromStr, MatOptions } from 'flo-mat';
 import type { Segment } from '../../src/morph/segment-tree/segment.js';
-import type { SegOp } from '../../src/morph/segment-tree/match-seg-trees.js';
+import type { SegOp } from '../../src/morph/segment-tree/match-seg-trees/seg-op.js';
+import type { TrunkCandDebug } from '../../src/debug/record-trunk-cands.js';
 import { defaultPathWeights } from '../../src/morph/match-paths/path-cost-weights.js';
 import { segTreeWithLoop, loopOf } from '../helpers/seg-tree-with-loop.js';
 import type { Circle } from 'flo-mat';
-import { vertexIds } from '../../src/morph/segment-tree/vertex-ids.js';
+import { vertexIds$ } from '../../src/morph/segment-tree/vertex-ids.js';
+import { geomOf$ } from '../../src/morph/segment-tree/geom-of.js';
 import { getUnit$ } from '../../src/morph/segment-tree/get-unit.js';
 import { sampleSegTree } from '../../src/morph/segment-tree/sample-seg-tree.js';
 import { productDtw } from '../../src/morph/segment-tree/product-dtw.js';
-import { matchSegTrees } from '../../src/morph/segment-tree/match-seg-trees.js';
-import { calcProcrustes } from '../../src/morph/procrustes/calc-procrustes.js';
+import { matchSegTrees } from '../../src/morph/segment-tree/match-seg-trees/match-seg-trees.js';
+import { calcProcrustes$ } from '../../src/morph/procrustes/calc-procrustes.js';
 import { parseSvgFont } from '../../src/load-svg/load-svg-font.js';
 
 const { sqrt } = Math;
@@ -57,9 +59,12 @@ function graphOf(loops: number[][][][], applySat: boolean): Segment[] {
 
 function vLabel(g: Segment[], v: Circle): string {
     let deg = 0;
-    for (const s of g) { if (s.vertS === v || s.vertE === v) { deg++; } }
+    for (const s of g) {
+        const { vertS, vertE } = geomOf$(s);
+        if (vertS === v || vertE === v) { deg++; }
+    }
     const p = v.center;
-    return `#${vertexIds(g).get(v)}${deg === 1 ? 'leaf' : deg >= 3 ? 'FORK' : ''}` +
+    return `#${vertexIds$(g).get(v)}${deg === 1 ? 'leaf' : deg >= 3 ? 'FORK' : ''}` +
         `(${p[0].toFixed(0)},${p[1].toFixed(0)})`;
 }
 
@@ -82,8 +87,8 @@ function probe(applySat: boolean): { pairs: number; drops: number } {
     const gB = graphOf(loopsB, applySat);
     const uA = getUnit$(loopOf(gA));
     const uB = getUnit$(loopOf(gB));
-    const aniso = (calcProcrustes(loopOf(gA)).anisotropy +
-        calcProcrustes(loopOf(gB)).anisotropy) / 2;
+    const aniso = (calcProcrustes$(loopOf(gA)).anisotropy +
+        calcProcrustes$(loopOf(gB)).anisotropy) / 2;
 
     const pd = productDtw(
         sampleSegTree(gA, uA, 200), sampleSegTree(gB, uB, 200),
@@ -100,14 +105,16 @@ function probe(applySat: boolean): { pairs: number; drops: number } {
     }
 
     const dbgSave = (globalThis as { _debug_?: unknown })._debug_;
-    (globalThis as { _debug_?: unknown })._debug_ = {};
+    const dbg = { elems: { trunkCands: [] as TrunkCandDebug[] } };
+    (globalThis as { _debug_?: unknown })._debug_ = dbg;
     try {
-        const r = matchSegTrees(gA, gB, uA, uB, defaultPathWeights, aniso);
-        console.log(`-- re-rank leaders (${r.trunkCands!.length}):`);
-        for (const tc of r.trunkCands!) {
+        const r = matchSegTrees(
+            gA, gB, loopOf(gA), loopOf(gB), defaultPathWeights);
+        const cands = dbg.elems.trunkCands;
+        console.log(`-- re-rank leaders (${cands.length}):`);
+        for (const tc of cands) {
             if (tc.sel === undefined) { continue; }  // not fully evaluated
-            const chosen = tc.startA === r.trunkStartA &&
-                tc.startB === r.trunkStartB ? '  << CHOSEN' : '';
+            const chosen = tc.chosen ? '  << CHOSEN' : '';
             console.log(`  sel ${tc.sel.toFixed(4)} (rec ${
                 tc.recCost!.toFixed(4)} + sway ${tc.sway.toFixed(4)}, dp ${
                 tc.dpTotal.toFixed(4)}, cheap ${tc.cheap.toFixed(4)})  ` +
@@ -117,7 +124,7 @@ function probe(applySat: boolean): { pairs: number; drops: number } {
         }
         let pairs = 0;
         let drops = 0;
-        for (const op of r.root.ops) {
+        for (const op of r.ops) {
             if (op.type === 'match') { pairs++; } else { drops++; }
         }
         return { pairs, drops };

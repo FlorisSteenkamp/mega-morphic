@@ -1,8 +1,18 @@
-import type { Circle } from 'flo-mat';
+import type { CpNode, Circle } from 'flo-mat';
 
+
+declare const segmentStart: unique symbol;
 
 /**
  * A fork-to-fork/leaf skeleton stretch - no forks in its interior.
+ *
+ * A segment IS the contact point its MAT walk starts from: the outline
+ * steps `cp` → `cp.next` from there, through the pass-through disks, up to
+ * the next fork/leaf disk. Everything else about it - its end vertices,
+ * skeleton, radii, sleeves and area - is what that walk yields: `geomOf$`.
+ *
+ * * branded so only a segment START type-checks as a `Segment` (any other
+ *   contact point is just a `CpNode`); `segTreeFromCp` applies the brand
  *
  * A shape's segment tree is simply its `Segment[]` - the skeleton cut at
  * every fork:
@@ -15,7 +25,11 @@ import type { Circle } from 'flo-mat';
  * * **no** segment crosses a fork, so any leaf-to-leaf path decomposes into
  *   whole segments
  */
-interface Segment {
+type Segment = CpNode & { readonly [segmentStart]: true };
+
+
+/** What a segment's MAT walk yields (see `geomOf$`). */
+interface SegGeom {
     /** the vertex (maximal-disk circle) at the segment's start (first `skelPss` knot) */
     readonly vertS: Circle;
     /** the vertex (maximal-disk circle) at the segment's end (last `skelPss` knot) */
@@ -38,6 +52,8 @@ interface Segment {
         out: number[][][];
         back: number[][][]
     }[];
+
+    readonly skelLen: number;
 }
 
 
@@ -50,4 +66,4 @@ interface RouteStep {
 }
 
 
-export { Segment, RouteStep }
+export { Segment, SegGeom, RouteStep }

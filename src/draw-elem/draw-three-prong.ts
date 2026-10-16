@@ -1,22 +1,17 @@
 import type { CpNode } from 'flo-mat';
 import { drawFs } from 'flo-draw';
-import { getAllOnCircle, scaleCircle } from 'flo-mat';
+import { getAllOnCircle } from 'flo-mat';
 
 
 /** @internal */
 function drawThreeProng(
         g: SVGGElement,
-        // threeProng: ThreeProngForDebugging,
         threeProng: CpNode,
-        classes?: string,
         delay = 0,
         scaleFactor = 1) {
 
-    const circle = scaleCircle(
-        threeProng.pointOnShape.circle,
-        1
-    );
-    const { center: c, radius: r } = circle;
+    const { circle } = threeProng.pointOnShape;
+    const { center: c } = circle;
     
     // const poss = threeProng.poss;
     const poss = getAllOnCircle(threeProng)

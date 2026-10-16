@@ -1,11 +1,6 @@
 import type { Samples } from './samples.js';
-import { unwrappedChordAngles } from '../intrinsic-skeleton/unwrapped-chord-angles.js';
 import { clamp } from '../../utils/clamp.js';
-import { skeletonKnots } from '../fs/skeleton-knots.js';
-import { valueAt } from '../fs/value-at.js';
-import { padTo } from '../fs/pad-to.js';
-
-const { max, min } = Math;
+import { sampleProfile } from '../fs/sample-profile.js';
 
 
 /**
@@ -38,25 +33,7 @@ function sampleFeatures(
 
     const n = clamp(2 * pss.length, 24, 160);
 
-    const knots = skeletonKnots(pss);
-    const φs = padTo(unwrappedChordAngles(pss), radii.length);
-
-    const u: number[] = [];
-    const r: number[] = [];
-    const φ: number[] = [];
-    for (let i = 0; i < n; i++) {
-        const ui = i / (n - 1);
-        u.push(ui);
-        r.push(valueAt(radii, knots, ui) / unit);
-        φ.push(valueAt(φs, knots, ui));
-    }
-
-    const turn: number[] = [];
-    for (let i = 0; i < n; i++) {
-        const i0 = max(0, i - 1);
-        const i1 = min(n - 1, i + 1);
-        turn.push((φ[i1] - φ[i0]) / (u[i1] - u[i0]));
-    }
+    const { u, r, turn } = sampleProfile(pss, radii, unit, n, 1);
 
     return { u, r, turn };
 }

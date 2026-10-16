@@ -1,6 +1,6 @@
 import type { CpNode } from 'flo-mat';
 import { drawFs } from 'flo-draw';
-import { drawCirclePercent } from './draw-circle-percent.js';
+import { drawDisk } from '../draw/draw-disk.js';
 import { getAllOnCircle } from 'flo-mat';
 
 
@@ -8,7 +8,6 @@ import { getAllOnCircle } from 'flo-mat';
 function drawLeaves(
         g: SVGGElement,
         leaves: CpNode[],
-        classes = 'thin10 deeppink nofill',
         delay = 0,
         scaleFactor = 1) {    
 
@@ -18,9 +17,9 @@ function drawLeaves(
     for (const cpNode of leaves) {
         const cp = cpNode.pointOnShape;
         const { circle } = cp;
-        const { center: c, radius: r } = circle;
+        const { center: c } = circle;
 
-        const $center = [drawCirclePercent(g, c, 0.5, 'pinker thin5 nofill')];
+        const $center = drawDisk(g, c, '0.5%', 'pinker thin5 nofill');
 
         const poss = getAllOnCircle(cpNode)
             .map(cpNode => cpNode.pointOnShape);
@@ -33,7 +32,7 @@ function drawLeaves(
             $ls.push(...line(g, [p, c], 'thin5 red', delay));
         }
         
-        const $circle = drawCircle(g, circle, classes, delay); 
+        const $circle = drawCircle(g, circle, 'thin10 deeppink nofill', delay);
         // const $cp = dot(g, p, 0.005*scaleFactor, 'pinker', delay);
 
         $elems.push(...[

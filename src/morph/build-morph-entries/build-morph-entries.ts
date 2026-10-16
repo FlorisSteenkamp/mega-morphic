@@ -1,16 +1,16 @@
-declare var _debug_: Debug; 
-import type { Debug } from '../../debug/debug.js';
 import type { MorphEntry, Glue } from '../morph-entry.js';
 import type { AnchorPair } from '../align-branches.js';
-import type { SegMatchedPair } from '../segment-tree/match-seg-trees.js';
+import type { SegMatchedPair } from '../segment-tree/match-seg-trees/seg-matched-pair.js';
 import type { PathCostWeights } from '../match-paths/path-cost-weights.js';
 import type { Segment } from '../segment-tree/segment.js';
 import { getShapeArea } from 'flo-boolean';
-import { matchPathsViaSegments } from '../segment-tree/match-paths-via-segments.js';
+import { matchSegTrees } from '../segment-tree/match-seg-trees/match-seg-trees.js';
+import { defaultPathWeights } from '../match-paths/path-cost-weights.js';
+import { recordPathMatch } from '../../debug/record-path-match.js';
 import { composeRouteGeom } from '../segment-tree/compose-segs.js';
 import { alignBranches, resampleAt } from '../align-branches.js';
 import { buildSleeveSides } from '../anchored-sleeves.js';
-import { skeletonKnots } from '../fs/skeleton-knots.js';
+import { calcSkelCumKnots } from '../fs/skeleton-knots.js';
 import { getLastP } from '../fs/get-last-p.js';
 import { boundaries } from '../fs/boundaries.js';
 import { clamp } from '../../utils/clamp.js';
@@ -19,6 +19,7 @@ import { nearestIdx } from '../nearest-idx.js';
 import { placeTopology } from '../place-topology.js';
 import { getUnit$ } from '../segment-tree/get-unit.js';
 import { lenOf$ } from '../segment-tree/len-of.js';
+import { pairsOf } from '../segment-tree/match-seg-trees/pairs-of.js';
 
 
 /**
@@ -34,20 +35,15 @@ function buildMorphEntries(
         gB: Segment[],
         loopA: number[][][],
         loopB: number[][][],
-        weights?: Partial<PathCostWeights>):
-        MorphEntry[] {
+        weights?: Partial<PathCostWeights>): MorphEntry[] {
 
-    const pm = matchPathsViaSegments(gA, gB, loopA, loopB, { weights });
+    const fullWeights: PathCostWeights = { ...defaultPathWeights, ...weights };
 
-    // The morph arrays only exist when morph debugging is enabled (other
-    // debug configs, e.g. flo-boolean-only in tests, lack them).
-    if (typeof _debug_ !== 'undefined' &&
-        _debug_.elems?.pathMatchResult !== undefined) {
-        // Keep only the LATEST result - readers use [0]/at(-1) and stale
-        // entries (whole trees) would otherwise accumulate.
-        _debug_.elems.pathMatchResult.length = 0;
-        _debug_.elems.pathMatchResult.push(pm);
-    }
+    // Continuation leftovers are never matched (the builder can't express
+    // covered continuations) - they retract via the usual piece-stub
+    // semantics.
+    const trunk = matchSegTrees(gA, gB, loopA, loopB, fullWeights);
+    recordPathMatch(trunk, gA, gB, loopA, loopB, fullWeights);
 
     // The sleeves walk the outline in its global direction - the glyph
     // loop gives a reliable winding for the cap arcs.
@@ -67,12 +63,12 @@ function buildMorphEntries(
 
     // Every segment covered by SOME matched route (per tree) - the rest
     // retracts/grows as per-segment collapsed entries.
-    const covered1 = coveredSegsOf(pm.trunk, 'a');
-    const covered2 = coveredSegsOf(pm.trunk, 'b');
+    const covered1 = coveredSegsOf(trunk, 'a');
+    const covered2 = coveredSegsOf(trunk, 'b');
 
     let pairIdx = 0;
 
-    buildPair(pm.trunk);
+    buildPair(trunk);
 
     // Whatever no matched route covers collapses onto its coverage-side
     // vertex, closest-to-coverage first.
@@ -127,9 +123,9 @@ function buildMorphEntries(
 
         // Boundary anchored to the maximal disks, shape lerped on top.
         const sides = buildSleeveSides(
-            { edges: gA.edges, knots: skeletonKnots(gA.bz),
+            { edges: gA.edges, knots: calcSkelCumKnots(gA.bz),
               us: al.usA, bz: mA.beziers, radii: mA.radii },
-            { edges: gB.edges, knots: skeletonKnots(gB.bz),
+            { edges: gB.edges, knots: calcSkelCumKnots(gB.bz),
               us: al.usB, bz: mB.beziers, radii: mB.radii }
         );
 
@@ -176,17 +172,9 @@ function coveredSegsOf(
         trunk: SegMatchedPair,
         side: 'a' | 'b'): Set<Segment> {
 
-    const out = new Set<Segment>();
-    const walk = (mp: SegMatchedPair): void => {
-        for (const st of side === 'a' ? mp.routeA : mp.routeB) {
-            out.add(st.seg);
-        }
-        for (const op of mp.ops) {
-            if (op.type === 'match') { walk(op.sub); }
-        }
-    };
-    walk(trunk);
-    return out;
+    return new Set(pairsOf(trunk)
+        .flatMap(({ mp }) => side === 'a' ? mp.routeA : mp.routeB)
+        .map(st => st.seg));
 }
 
 

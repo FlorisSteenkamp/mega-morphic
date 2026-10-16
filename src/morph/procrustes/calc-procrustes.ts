@@ -1,6 +1,7 @@
 import type { Pose } from './pose.js';
 import { getShapeArea, getShapeCentroid, get2ndMomentOfInertia, getProdMomentOfInertia } from 'flo-boolean';
 import { mapmap } from '../../utils/map-map.js';
+import { memoize } from 'flo-memoize';
 
 const { sqrt, abs, atan2, hypot } = Math;
 
@@ -17,7 +18,7 @@ const { sqrt, abs, atan2, hypot } = Math;
  * phase involves no such labeling; it just rotates fast near c₂₀ = 0
  * (where `anisotropy` → 0 flags the axis as meaningless anyway).
  */
-function calcProcrustes(
+const calcProcrustes$ = memoize(function(
         bezierLoop: (number[][])[]): Pose {
 
     const centroid = getShapeCentroid(bezierLoop);
@@ -43,7 +44,7 @@ function calcProcrustes(
         momMajor: (T + c)/2,
         momMinor: (T - c)/2
     };
-}
+});
 
 
-export { calcProcrustes }
+export { calcProcrustes$ }

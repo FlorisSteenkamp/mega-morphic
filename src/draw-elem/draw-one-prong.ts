@@ -6,18 +6,14 @@ import { drawFs } from 'flo-draw';
 function drawOneProng(
         g: SVGGElement,
         cp: CpNode,
-        classes?: string,
         delay = 0,
         scaleFactor = 1) {
 
-    // const cp = cpNode.cp;
     const { pointOnShape: pos } = cp;
-    const { circle } = pos;
-
-    const p1 = pos.p;
+    const { circle, p: p1 } = pos;
     const p2 = cp.nextOnCircle.pointOnShape.p;
 
-    const $posP = drawFs.dot(g, pos.p, 0.02*scaleFactor, 'deeppink', delay);
+    const $posP = drawFs.dot(g, p1, 0.02*scaleFactor, 'deeppink', delay);
     const $posP2 = drawFs.dot(g, p2, 0.04*scaleFactor, 'deeppink', delay);
 
     const $line = p1[0] !== p2[0] || p1[1] !== p2[1]

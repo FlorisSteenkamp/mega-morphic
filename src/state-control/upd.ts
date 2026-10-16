@@ -6,11 +6,6 @@ import { NestedObj } from './nested-obj';
 
 type UpdFunction = <T extends NestedObj>(v: T, newV: Partial<T>) => T;
 
-interface Upd {
-    upd: UpdFunction;
-    upd$: UpdFunction;
-}
-
 
 function _upd(
         state: State,
@@ -68,4 +63,4 @@ function toLocalStorage(appState: AppState) {
 }
 
 
-export { _upd, Upd, UpdFunction }
+export { _upd, UpdFunction }

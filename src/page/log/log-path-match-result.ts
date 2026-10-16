@@ -1,10 +1,13 @@
 declare var _debug_: Debug; 
 import type { Debug } from '../../debug/debug.js';
-import type { PathMatchResult } from '../../morph/match-paths/path-match-result.js';
-import type { SegMatchedPair, SegOp, SegChild } from '../../morph/segment-tree/match-seg-trees.js';
+import type { PathMatchResult } from '../../debug/path-match-result.js';
+import type { SegChild } from '../../morph/segment-tree/match-seg-trees/seg-child.js';
+import { pairsOf } from '../../morph/segment-tree/match-seg-trees/pairs-of.js';
 import { drawBeziersAsSinglePath } from '../../draw/draw-beziers-as-single-path.js';
+import { geomOf$ } from '../../morph/segment-tree/geom-of.js';
+import { distToPss } from './align-viz.js';
 
-const { hypot, PI: π } = Math;
+const { PI: π } = Math;
 
 
 /**
@@ -18,8 +21,7 @@ function logPathMatchResult(
     const pm: PathMatchResult | undefined = _debug_.elems.pathMatchResult[0];
     if (pm === undefined) { return; }
 
-    const ops: SegOp[] = [];
-    collect(pm.trunk);
+    const ops = pairsOf(pm.trunk).flatMap(({ mp }) => mp.ops);
 
     if (ops.length === 0) {
         console.log('no child ops in trunk match', pm);
@@ -41,10 +43,10 @@ function logPathMatchResult(
 
     // Highlight in the app's frame convention: a = red, b = green.
     if (best.type !== 'insert') {
-        highlight(g, best.a.segs.flatMap(s => s.skelPss), 'red', showDelay);
+        drawBeziersAsSinglePath(g, skelOf(best.a), 'thin20 red nofill', showDelay);
     }
     if (best.type !== 'delete') {
-        highlight(g, best.b.segs.flatMap(s => s.skelPss), 'green', showDelay);
+        drawBeziersAsSinglePath(g, skelOf(best.b), 'thin20 green nofill', showDelay);
     }
 
     console.log(`nearest op: ${best.type}`);
@@ -52,14 +54,6 @@ function logPathMatchResult(
     if (best.type !== 'delete') { logChild('b', best.b); }
     if (best.type === 'match') {
         console.log('  sub-match cost:', best.sub.cost);
-    }
-
-
-    function collect(mp: SegMatchedPair): void {
-        for (const op of mp.ops) {
-            ops.push(op);
-            if (op.type === 'match') { collect(op.sub); }
-        }
     }
 }
 
@@ -77,30 +71,15 @@ function logChild(side: 'a' | 'b', c: SegChild): void {
 }
 
 
-/** Min distance from `p` to the subtree's skeleton control points. */
-function distToChild(p: number[], c: SegChild): number {
-    let d = Infinity;
-    for (const seg of c.segs) {
-        for (const ps of seg.skelPss) {
-            for (const q of ps) {
-                d = Math.min(d, hypot(q[0] - p[0], q[1] - p[1]));
-            }
-        }
-    }
-    return d;
+/** The subtree's skeleton beziers. */
+function skelOf(c: SegChild): number[][][] {
+    return c.segs.flatMap(s => geomOf$(s).skelPss);
 }
 
 
-function highlight(
-        g: SVGGElement,
-        pss: number[][][],
-        color: string,
-        showDelay?: number): void {
-
-    const [$path] = drawBeziersAsSinglePath(g, pss, `thin20 ${color} nofill`);
-    if ($path !== undefined && showDelay) {
-        setTimeout(() => $path.remove(), showDelay);
-    }
+/** Min distance from `p` to the subtree's skeleton control points. */
+function distToChild(p: number[], c: SegChild): number {
+    return distToPss(p, skelOf(c));
 }
 
 

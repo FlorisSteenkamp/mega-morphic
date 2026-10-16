@@ -7,11 +7,13 @@ function logMatCurve(mats: Mat[]) {
     return function matCurve(g: SVGGElement, p: number[], showDelay?: number) {
         const cpNode = getNearestCpNodeByMatCurve(mats, p).t;
 
-        const ps = CpNodeFs.getMatCurveToNext(cpNode);
+        const pss = CpNodeFs.getMatCurveToNext(cpNode);
 
-        drawFs.bezier(g, ps, 'red thin20 nofill', showDelay);
+        for (const ps of pss) {
+            drawFs.bezier(g, ps, 'red thin20 nofill', showDelay);
+        }
 
-        console.log(ps);
+        console.log(pss);
     }
 }
 

@@ -1,4 +1,4 @@
-import { assocPath } from "ramda";
+import { assocPath } from "./assoc-path.js";
 import { getObjPath } from "./get-obj-path.js";
 
 

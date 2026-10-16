@@ -21,6 +21,7 @@ import { logProfileAlignment } from '../log/log-profile-alignment.js';
 import { logChildDtw } from '../log/log-child-dtw.js';
 import { logMorphBezier } from '../log/log-morph-bezier.js';
 import type { PageData } from '../page-data.js';
+import { getG } from '../../draw/get-g.js';
 
 
 function onClick(
@@ -41,7 +42,7 @@ function onClick(
             const svg3$ = svgRef.current;
             if (pageState.clickFor !== 'mBezier' ||
                 refPageData === undefined || !svg3$) { return; }
-            const g3 = svg3$.getElementsByTagName('g')[0];
+            const g3 = getG(svg3$);
             const p = flipViewboxXY(pageState.viewbox3,
                 getViewboxXY(svg3$, event.clientX, event.clientY));
             logMorphBezier(refPageData)(g3, p, pageState.showDelay);
@@ -61,7 +62,7 @@ function onClick(
         
         const svg$ = svgRef.current;
         if (!svg$) { return; }
-        const g = svg$.getElementsByTagName('g')[0];
+        const g = getG(svg$);
 
         const fs: Record<ClickFor,
                 (g: SVGGElement, p: number[], delay: number) => void> = {

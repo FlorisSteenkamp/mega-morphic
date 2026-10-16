@@ -1,6 +1,7 @@
 import type { StateControl } from '../../state-control/state-control.js';
 import { getViewboxXY } from '../fs-consts-types/get-viewbox-xy.js';
 import { toViewBoxStr, getFlipTransform, flipViewboxXY } from '../fs-consts-types/viewbox.js';
+import { getG } from '../../draw/get-g.js';
 
 
 /**
@@ -37,7 +38,7 @@ function panMouseDown(
             const dy = grab[1] - cur[1];
             vb = vb.map(p => [p[0] + dx, p[1] + dy]);
             svg$.setAttribute('viewBox', toViewBoxStr(vb));
-            const g$ = svg$.getElementsByTagName('g')[0];
+            const g$ = getG(svg$);
             if (g$) { g$.setAttribute('transform', getFlipTransform(vb)); }
         };
 

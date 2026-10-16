@@ -8,11 +8,10 @@ import { findMats, getPathsFromStr, MatOptions } from 'flo-mat';
 import type { Segment } from '../../src/morph/segment-tree/segment.js';
 import { defaultPathWeights } from '../../src/morph/match-paths/path-cost-weights.js';
 import { segTreeWithLoop, loopOf } from '../helpers/seg-tree-with-loop.js';
-import { getUnit$ } from '../../src/morph/segment-tree/get-unit.js';
-import { matchSegTrees } from '../../src/morph/segment-tree/match-seg-trees.js';
+import { matchSegTrees } from '../../src/morph/segment-tree/match-seg-trees/match-seg-trees.js';
 import { composeRouteGeom } from '../../src/morph/segment-tree/compose-segs.js';
-import type { RouteStep } from '../../src/morph/segment-tree/match-seg-trees.js';
-import { calcProcrustes } from '../../src/morph/procrustes/calc-procrustes.js';
+import type { RouteStep } from '../../src/morph/segment-tree/segment.js';
+import { calcProcrustes$ } from '../../src/morph/procrustes/calc-procrustes.js';
 import { unwrappedChordAngles } from '../../src/morph/intrinsic-skeleton/unwrapped-chord-angles.js';
 import { wrapAngle } from '../../src/morph/intrinsic-skeleton/wrap-angle.js';
 import { length$ } from '../../src/morph/fs/length.js';
@@ -51,14 +50,13 @@ function meanAngleOf(route: RouteStep[]): number {
     return total === 0 ? 0 : s/total;
 }
 
-function swing(nameA: string, nameB: string, aniso: number): number {
+function swing(nameA: string, nameB: string, sway: number): number {
     const gA = loadGraph(nameA);
     const gB = loadGraph(nameB);
     const r = matchSegTrees(
-        gA, gB, getUnit$(loopOf(gA)), getUnit$(loopOf(gB)),
-        defaultPathWeights, aniso);
+        gA, gB, loopOf(gA), loopOf(gB), { ...defaultPathWeights, sway });
     return abs(wrapAngle(
-        meanAngleOf(r.root.routeB) - meanAngleOf(r.root.routeA)));
+        meanAngleOf(r.routeB) - meanAngleOf(r.routeA)));
 }
 
 describe('sway orientation tie-break', () => {
@@ -69,10 +67,10 @@ describe('sway orientation tie-break', () => {
                     ['hyphen', 'hyphen-2'], ['hyphen-2', 'hyphen']] as const) {
                 const gA = loadGraph(a);
                 const gB = loadGraph(b);
-                const aniso = (calcProcrustes(loopOf(gA)).anisotropy +
-                    calcProcrustes(loopOf(gB)).anisotropy) / 2;
+                const aniso = (calcProcrustes$(loopOf(gA)).anisotropy +
+                    calcProcrustes$(loopOf(gB)).anisotropy) / 2;
 
-                const withSway = swing(a, b, aniso);
+                const withSway = swing(a, b, defaultPathWeights.sway);
                 const noSway = swing(a, b, 0);
                 console.log(`${a} → ${b} (SAT ${sat}, aniso ${
                     aniso.toFixed(3)}): swing sway ON ${

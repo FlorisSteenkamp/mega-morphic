@@ -1,8 +1,10 @@
 import type { PageData } from '../page-data.js';
 import type { Segment } from '../../morph/segment-tree/segment.js';
 import { segTreeFromCp } from '../../morph/segment-tree/seg-tree-from-cp.js';
-import { vertexIds } from '../../morph/segment-tree/vertex-ids.js';
+import { vertexIds$ } from '../../morph/segment-tree/vertex-ids.js';
+import { geomOf$ } from '../../morph/segment-tree/geom-of.js';
 import { XMLNS } from '../../draw/xmlns.js';
+import { clearOverlay } from './clear-overlay.js';
 
 
 /**
@@ -16,15 +18,14 @@ function showVertexNums(
         refPageData: React.RefObject<PageData | null>,
         show: boolean): void {
 
-    const { props, svgRef1, svgRef2 } = refPageData.current!;
-    const g1 = svgRef1.current?.getElementsByTagName('g')[0];
-    const g2 = svgRef2.current?.getElementsByTagName('g')[0];
-    if (g1 === undefined || g2 === undefined) { return; }
-
-    g1.querySelectorAll('.branch-num').forEach($ => $.remove());
-    g2.querySelectorAll('.branch-num').forEach($ => $.remove());
+    const pageData = refPageData.current!;
+    const gs = clearOverlay(pageData, 'branch-num');
+    if (gs === undefined) { return; }
+    const [g1, g2] = gs;
 
     if (!show) { return; }
+
+    const { props } = pageData;
 
     const { mats1, mats2 } = props.pageState.deduced;
     if (mats1.length === 0 || mats2.length === 0) { return; }
@@ -44,9 +45,11 @@ function drawNums(g: SVGGElement, tree: Segment[]): void {
         ? 1 : Math.hypot(ctm.a, ctm.b);
     const fontSize = 12 / pxPerUnit;
 
-    for (const [v, id] of vertexIds(tree)) {
-        const inc = tree.filter(
-            s => s.vertS === v || s.vertE === v);
+    for (const [v, id] of vertexIds$(tree)) {
+        const inc = tree.filter(s => {
+            const { vertS, vertE } = geomOf$(s);
+            return vertS === v || vertE === v;
+        });
         const leaf = inc.length === 1;
 
         // the vertex IS the maximal disk - its center is the skeleton point
@@ -55,10 +58,10 @@ function drawNums(g: SVGGElement, tree: Segment[]): void {
         if (leaf) {
             // nudge PAST the tip (opposite the inward tangent) so the
             // number sits clear of the skeleton
-            const s = inc[0];
-            const ps = s.vertS === v
-                ? s.skelPss[0]
-                : s.skelPss[s.skelPss.length - 1].toReversed();
+            const { vertS, skelPss } = geomOf$(inc[0]);
+            const ps = vertS === v
+                ? skelPss[0]
+                : skelPss[skelPss.length - 1].toReversed();
             const d = tipTangent(ps);
             const off = fontSize * 0.5;
             p = [pV[0] - off*d[0], pV[1] - off*d[1]];

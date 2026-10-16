@@ -2,8 +2,9 @@ import type { Circle } from 'flo-mat';
 import type { Glue, MorphEntry } from './morph-entry.js';
 import type { Segment } from './segment-tree/segment.js';
 import { composeSegs } from './segment-tree/compose-segs.js';
+import { geomOf$ } from './segment-tree/geom-of.js';
 import { buildSleeveSides } from './anchored-sleeves.js';
-import { skeletonKnots } from './fs/skeleton-knots.js';
+import { calcSkelCumKnots } from './fs/skeleton-knots.js';
 import { getLastP } from './fs/get-last-p.js';
 import { boundaries } from './fs/boundaries.js';
 import { nearestIdx } from './nearest-idx.js';
@@ -32,9 +33,15 @@ function placeTopology(
         capSign: number,
         entries: MorphEntry[]): void {
 
+    /** a segment's two end vertices */
+    const endsOf = (s: Segment): [Circle, Circle] => {
+        const { vertS, vertE } = geomOf$(s);
+        return [vertS, vertE];
+    };
+
     const adj = new Map<Circle, Segment[]>();
     for (const s of g) {
-        for (const v of [s.vertS, s.vertE]) {
+        for (const v of endsOf(s)) {
             adj.getOrInsert(v, []).push(s);
         }
     }
@@ -44,7 +51,7 @@ function placeTopology(
     const dist = new Map<Circle, number>();
     const queue: Circle[] = [];
     for (const s of covered) {
-        for (const v of [s.vertS, s.vertE]) {
+        for (const v of endsOf(s)) {
             if (!dist.has(v)) { dist.set(v, 0); queue.push(v); }
         }
     }
@@ -53,13 +60,16 @@ function placeTopology(
         const d = dist.get(v)!;
         for (const s of adj.get(v) ?? []) {
             if (covered.has(s)) { continue; }
-            const w = s.vertS === v ? s.vertE : s.vertS;
+            const [vS, vE] = endsOf(s);
+            const w = vS === v ? vE : vS;
             if (!dist.has(w)) { dist.set(w, d + 1); queue.push(w); }
         }
     }
 
-    const dOf = (s: Segment): number =>
-        min(dist.get(s.vertS) ?? Infinity, dist.get(s.vertE) ?? Infinity);
+    const dOf = (s: Segment): number => {
+        const [vS, vE] = endsOf(s);
+        return min(dist.get(vS) ?? Infinity, dist.get(vE) ?? Infinity);
+    };
 
     // closer-to-coverage first: a segment's coverage-side neighbors are
     // already placed when it is (chained glue)
@@ -70,13 +80,14 @@ function placeTopology(
     for (const seg of pending) { place(seg); }
 
     function place(seg: Segment): void {
-        const d0 = dist.get(seg.vertS) ?? Infinity;
-        const d1 = dist.get(seg.vertE) ?? Infinity;
+        const [vS, vE] = endsOf(seg);
+        const d0 = dist.get(vS) ?? Infinity;
+        const d1 = dist.get(vE) ?? Infinity;
         // junction = the coverage-side vertex (collapse target)
-        const jV = d0 <= d1 ? seg.vertS : seg.vertE;
+        const jV = d0 <= d1 ? vS : vE;
 
         // junction LAST (pushCollapsedEntry collapses onto the last point)
-        const { bz, rd: radii, edges } = composeSegs([seg], seg.vertS === jV);
+        const { bz, rd: radii, edges } = composeSegs([seg], vS === jV);
 
         const junction = getLastP(bz);
 
@@ -140,7 +151,7 @@ function pushCollapsedEntry(
 
     // No resampling needed: the collapsed frame mirrors the real frame
     // segment for segment, so both use the real frame's knots.
-    const us = skeletonKnots(bz);
+    const us = calcSkelCumKnots(bz);
     const pointEdges = edges.map(() => ({
         out: [[junction, junction]],
         back: [[junction, junction]]

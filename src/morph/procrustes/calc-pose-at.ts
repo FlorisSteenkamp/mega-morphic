@@ -1,6 +1,6 @@
 import type { MorphEntry } from '../morph-entry.js';
 import type { Pose } from './pose.js';
-import { calcProcrustes } from './calc-procrustes.js';
+import { calcProcrustes$ } from './calc-procrustes.js';
 import { resolveMorphAt } from '../resolve-morph-at/resolve-morph-at.js';
 
 
@@ -24,7 +24,7 @@ function calcPoseAt(
         entries: MorphEntry[],
         t: number): Pose {
 
-    return calcProcrustes(resolveMorphAt(entries, t).outlines.flat());
+    return calcProcrustes$(resolveMorphAt(entries, t).outlines.flat());
 }
 
 

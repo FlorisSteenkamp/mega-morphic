@@ -1,6 +1,7 @@
 import type { Circle } from 'flo-mat';
 import type { Segment } from './segment.js';
 import { memoize } from 'flo-memoize';
+import { geomOf$ } from './geom-of.js';
 
 
 /**
@@ -9,11 +10,12 @@ import { memoize } from 'flo-memoize';
  * for a given tree, so usable both as cache/dedupe keys and as the vertex
  * labels of every debug view (matching `showVertexNums`).
  */
-const vertexIds = memoize(function(
+const vertexIds$ = memoize(function(
         tree: Segment[]): Map<Circle, number> {
 
     const ids = new Map<Circle, number>();
-    for (const { vertS, vertE } of tree) {
+    for (const seg of tree) {
+        const { vertS, vertE } = geomOf$(seg);
         ids.getOrInsert(vertS, ids.size);
         ids.getOrInsert(vertE, ids.size);
     }
@@ -22,4 +24,4 @@ const vertexIds = memoize(function(
 });
 
 
-export { vertexIds }
+export { vertexIds$ }

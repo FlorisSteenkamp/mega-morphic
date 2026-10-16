@@ -1,6 +1,7 @@
 import { StateControl } from "../../state-control/state-control.js";
 import { getViewboxXY } from "../fs-consts-types/get-viewbox-xy.js";
 import { flipViewboxXY } from "../fs-consts-types/viewbox.js";
+import { getG } from "../../draw/get-g.js";
 
 
 function mouseMove(
@@ -40,7 +41,7 @@ function mouseMove(
             [viewboxX, viewboxY]
         ];
 
-        let g$ = svg$.getElementsByTagName('g')[0];
+        let g$ = getG(svg$);
         zoomState.zoomRect = drawRect(g$, newZoomRect);
 
         //setXY({x,y});

@@ -1,11 +1,9 @@
-declare var _debug_: Debug; 
 import type { Debug } from '../debug/debug.js';
 import { getPathsFromStr, findMats, Mat } from 'flo-mat';
 import { reverseShapeOrientation } from 'flo-boolean';
 import { StateControl } from '../state-control/state-control';
 import { updDebugGlobal } from './fs-consts-types/upd-debug-global';
 import { getViewBoxForShape } from './fs-consts-types/viewbox';
-import { beziersToSvgPathStr } from 'flo-boolean';
 
 
 const IS_DEBUG_ON = true;
@@ -26,7 +24,6 @@ function loadDeducedProps(
         rot1
     );
 
-    // console.log(beziersToSvgPathStr(bezierLoops1[0]))
     const viewbox1 = getViewBoxForShape(bezierLoops1);
     const bezierLoops2 = getPathsFromStr(pathStr2);
     const viewbox2 = getViewBoxForShape(bezierLoops2);
@@ -73,9 +70,7 @@ function flipLoops(
 
     if (!flipH && !flipV) { return loops; }
 
-    const [[minX, minY], [maxX, maxY]] = getViewBoxForShape(loops);
-    const cx = (minX + maxX) / 2;
-    const cy = (minY + maxY) / 2;
+    const [cx, cy] = shapeCenter(loops);
 
     const flipped = loops.map(loop => loop.map(ps => ps.map(([x, y]) => [
         flipH ? 2*cx - x : x,
@@ -95,9 +90,7 @@ function rotateLoops(
 
     if (degrees % 360 === 0) { return loops; }
 
-    const [[minX, minY], [maxX, maxY]] = getViewBoxForShape(loops);
-    const cx = (minX + maxX) / 2;
-    const cy = (minY + maxY) / 2;
+    const [cx, cy] = shapeCenter(loops);
     const θ = degrees * Math.PI / 180;
     const c = Math.cos(θ);
     const s = Math.sin(θ);
@@ -106,6 +99,14 @@ function rotateLoops(
         cx + c*(x - cx) - s*(y - cy),
         cy + s*(x - cx) + c*(y - cy)
     ])));
+}
+
+
+/** The center of the loops' bounding box (as used for the view box). */
+function shapeCenter(loops: number[][][][]): number[] {
+    const [[minX, minY], [maxX, maxY]] = getViewBoxForShape(loops);
+
+    return [(minX + maxX) / 2, (minY + maxY) / 2];
 }
 
 

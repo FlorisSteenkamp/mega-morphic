@@ -1,11 +1,13 @@
 declare var _debug_: Debug;
 import type { Debug } from '../../debug/debug.js';
 import type { PageData } from '../page-data.js';
-import type { SegMatchedPair } from '../../morph/segment-tree/match-seg-trees.js';
+import { pairsOf } from '../../morph/segment-tree/match-seg-trees/pairs-of.js';
 import type { Segment } from '../../morph/segment-tree/segment.js';
 import { matchColors } from './match-colors.js';
+import { geomOf$ } from '../../morph/segment-tree/geom-of.js';
 import { coveredSegsOf } from '../../morph/build-morph-entries/build-morph-entries.js';
 import { drawBeziersAsSinglePath } from '../../draw/draw-beziers-as-single-path.js';
+import { clearOverlay } from './clear-overlay.js';
 
 
 /** overlay option for the current drawMatch call (UI module state) */
@@ -24,13 +26,9 @@ function drawMatch(
 
     withBoundary = showBoundary;
 
-    const { svgRef1, svgRef2 } = refPageData.current!;
-    const g1 = svgRef1.current?.getElementsByTagName('g')[0];
-    const g2 = svgRef2.current?.getElementsByTagName('g')[0];
-    if (g1 === undefined || g2 === undefined) { return; }
-
-    g1.querySelectorAll('.match-viz').forEach($ => $.remove());
-    g2.querySelectorAll('.match-viz').forEach($ => $.remove());
+    const gs = clearOverlay(refPageData.current!, 'match-viz');
+    if (gs === undefined) { return; }
+    const [g1, g2] = gs;
 
     if (!show || typeof _debug_ === 'undefined') { return; }
 
@@ -44,7 +42,16 @@ function drawMatch(
     const covered2 = coveredSegsOf(pm.trunk, 'b');
 
     // Same DFS preorder as buildMorphEntries - colors match the morph view.
-    const { pairIdx, insCount, delCount } = walk(pm.trunk, g1, g2);
+    const pairs = pairsOf(pm.trunk);
+    for (const { mp, idx } of pairs) {
+        const color = matchColors[idx % matchColors.length];
+        for (const st of mp.routeA) { drawSegment(g1, st.seg, color); }
+        for (const st of mp.routeB) { drawSegment(g2, st.seg, color); }
+    }
+
+    const ops = pairs.flatMap(({ mp }) => mp.ops);
+    const delCount = ops.filter(op => op.type === 'delete').length;
+    const insCount = ops.filter(op => op.type === 'insert').length;
 
     // Everything no matched route covers retracts/grows - red/green like
     // the morph view.
@@ -56,52 +63,10 @@ function drawMatch(
     }
 
     console.log(
-        `matched ${pairIdx} route pairs,`,
+        `matched ${pairs.length} route pairs,`,
         `${delCount} deleted, ${insCount} inserted subtrees,`,
-        `cost ${pm.cost.toFixed(3)}`
+        `cost ${pm.trunk.cost.toFixed(3)}`
     );
-}
-
-
-/**
- * Draws a matched route pair's covered segments in the pair's color on
- * both svgs, then recurses into the matched child pairs - the same DFS
- * preorder as `buildMorphEntries`, so colors line up with the morph view.
- * `pairIdx0` is this pair's preorder index; returns the accumulated next
- * pair index and delete/insert counts.
- */
-function walk(
-        mp: SegMatchedPair,
-        g1: SVGGElement,
-        g2: SVGGElement,
-        pairIdx0 = 0) {
-
-    const color = matchColors[pairIdx0 % matchColors.length];
-    for (const st of mp.routeA) {
-        drawSegment(g1, st.seg, color);
-    }
-    for (const st of mp.routeB) {
-        drawSegment(g2, st.seg, color);
-    }
-
-    let pairIdx = pairIdx0 + 1;
-    let delCount = 0;
-    let insCount = 0;
-    for (const op of mp.ops) {
-        if (op.type === 'match') {
-            const r = walk(op.sub, g1, g2, pairIdx);
-            pairIdx = r.pairIdx;
-            delCount += r.delCount;
-            insCount += r.insCount;
-        }
-        else if (op.type === 'delete') {
-            delCount++;
-        } else {
-            insCount++;
-        }
-    }
-
-    return { pairIdx, insCount, delCount };
 }
 
 
@@ -114,19 +79,14 @@ function drawSegment(
         seg: Segment,
         color: string) {
 
+    const { skelPss, sleeves } = geomOf$(seg);
+
     drawBeziersAsSinglePath(
-        g, seg.skelPss, `thin20 ${color} nofill match-viz`);
+        g, skelPss, `thin20 ${color} nofill match-viz`);
 
     if (!withBoundary) { return; }
-    for (const { out, back } of seg.sleeves) {
-        if (out.length > 0) {
-            drawBeziersAsSinglePath(
-                g, out, `thin10 ${color} nofill match-viz`);
-        }
-        if (back.length > 0) {
-            drawBeziersAsSinglePath(
-                g, back, `thin10 ${color} nofill match-viz`);
-        }
+    for (const pss of sleeves.flatMap(({ out, back }) => [out, back])) {
+        drawBeziersAsSinglePath(g, pss, `thin10 ${color} nofill match-viz`);
     }
 }
 

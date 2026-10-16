@@ -44,7 +44,6 @@ const defaultPageState: PageState = {
     showDelay: 1000,
     clickFor: 'twoProng',
     satScale: 1.5,
-    // @ts-ignore
     toDraw: defaultToDraw,
     viewbox1: [[0,0],[1450,1450]],
     viewbox2: [[0,0],[1450,1450]],
@@ -82,6 +81,3 @@ export {
     defaultTransientState, 
     defaultDeduced 
 }
-
-
-// {"version":4,"pageState":{"showDelay":1000,"clickFor":"twoProng","satScale":1.5,"toDraw":{"oneProng":false,"twoProng":false,"threeProng":false,"looseBoundingBox":false,"tightBoundingBox":false,"boundingHull":false,"vertex":false,"mat":true,"maxVertex":false,"leaves":false,"cull":false,"cpNode":false,"branch":false,"holeCloser":false},"viewbox1":[[-3.2017070225307407,-158.14453193119607],[381.40747615269254,486.29604598454057]],"viewbox2":[[-74.27513227513236,-153.81568287037055],[347.4444444444441,516.4964864417988]],"viewbox3":[[-43.201058201058174,-158.25483630952397],[442.88624338624334,500.9594494047618]],"glyph1Name":"parenleft","glyph2Name":"parenright","viewMat":true,"simplify":false,"showSvgs":[true,true,true]}}

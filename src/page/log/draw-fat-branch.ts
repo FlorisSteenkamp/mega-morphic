@@ -10,11 +10,11 @@ function drawFatBranchTree(
         fatBranch: FatBranch,
         fullTree: boolean) {
 
-    if (fatBranch === undefined) { return; }
-
     const { cpChain, pss } = fatBranch;
 
-    drawOutline(g, pss, 'red', showDelay);
+    // outline stroked + filled at 25% as ONE path (per-piece fills only
+    // cover chords)
+    drawBeziersAsSinglePath(g, pss, 'thin20 red fill25', showDelay);
     drawMatCurves(g, cpChain, 'red', showDelay);
 
     if (!fullTree) { return; }
@@ -29,7 +29,8 @@ function drawFatBranchTree(
         const children = level.flatMap(branch => branch.children);
 
         for (const branch of children) {
-            drawOutline(g, branch.pss, color, showDelay);
+            drawBeziersAsSinglePath(
+                g, branch.pss, `thin20 ${color} fill25`, showDelay);
             drawMatCurves(g, branch.cpChain, color, showDelay);
         }
 
@@ -47,20 +48,6 @@ function drawMatCurves(
     getChainMatCurves(cpChain).forEach(ps => {
         drawFs.bezier(g, ps, `thin5 ${color} nofill`, showDelay);
     });
-}
-
-
-/** Outline stroked + filled at 25% as ONE path (per-piece fills only cover chords). */
-function drawOutline(
-        g: SVGGElement,
-        pss: number[][][],
-        color: string,
-        showDelay?: number) {
-
-    const [$path] = drawBeziersAsSinglePath(g, pss, `thin20 ${color} fill25`);
-    if ($path !== undefined && showDelay) {
-        setTimeout(() => $path.remove(), showDelay);
-    }
 }
 
 

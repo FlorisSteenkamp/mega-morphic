@@ -1,12 +1,13 @@
 import type { PageData } from "../../page/page-data.js";
 import { poseCorrectionAt } from "../procrustes/pose-ramp.js";
-import { calcProcrustes } from "../procrustes/calc-procrustes.js";
+import { calcProcrustes$ } from "../procrustes/calc-procrustes.js";
 import { resolveMorphAt } from "../resolve-morph-at/resolve-morph-at.js";
 import { entryNetTurns } from "../resolve-morph-at/get-morphed-skeleton.js";
 import { drawBeziersAsSinglePath } from "../../draw/draw-beziers-as-single-path.js";
 import { drawLoopsAsPath } from './draw-loops-as-path.js';
 import { drawPoseGizmo } from './draw-pose-gizmo.js';
 import { mapDeep } from "../../utils/map-deep.js";
+import { getG } from "../../draw/get-g.js";
 
 
 /** Interpolate every morph drawable at `t` ∈ [0,1] and draw. */
@@ -31,14 +32,14 @@ function drawMorph(
     // (procrustes): straight centroid line, constant angular rate,
     // geometric scale - the shape blend alone wanders off the path.
     if (outlines.length > 0) {
-        const measured = calcProcrustes(outlines.flat());
+        const measured = calcProcrustes$(outlines.flat());
         const tf = poseCorrectionAt(morphPose, t, measured);
 
         drawn = mapDeep(3, drawn, tf);
         outlines = mapDeep(3, outlines, tf);
     }
 
-    const g3 = svgRef3.current!.getElementsByTagName('g')[0];
+    const g3 = getG(svgRef3.current!);
     g3.replaceChildren();
 
     // The morphed boundary, drawn first so skeletons render on top.

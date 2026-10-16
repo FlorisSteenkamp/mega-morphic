@@ -1,7 +1,7 @@
 import { evalDeCasteljau } from "flo-bezier3";
 import { clamp } from "../../utils/clamp";
 
-const { min, max, floor } = Math;
+const { floor } = Math;
 
 
 /**

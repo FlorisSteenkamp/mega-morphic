@@ -74,7 +74,6 @@ function createLoop(stateControl: StateControl) {
     return function() {
         let { transientState } = stateControl;
         let { current } = transientState;
-        let pageState = stateControl.state.appState.pageState;
 
         if (current.cpNode === undefined) { return; }
 

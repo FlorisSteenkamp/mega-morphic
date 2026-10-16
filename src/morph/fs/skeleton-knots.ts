@@ -2,8 +2,11 @@ import { length$ } from './length.js';
 import { sum } from '../../utils/sum.js';
 
 
-/** Normalized cumulative arc-length knots of a skeleton bezier list. */
-function skeletonKnots(
+/**
+ * Returns the normalized cumulative arc-length knots of a skeleton
+ * bezier list.
+ */
+function calcSkelCumKnots(
         pss: number[][][]): number[] {
 
     const lens = pss.map(length$);
@@ -22,4 +25,4 @@ function skeletonKnots(
 }
 
 
-export { skeletonKnots }
+export { calcSkelCumKnots }

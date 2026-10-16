@@ -1,4 +1,4 @@
-import { fromTo, getTAtLength, toCubic, evalDeCasteljau } from 'flo-bezier3';
+import { getTAtLength, evalDeCasteljau } from 'flo-bezier3';
 import { distributeBezierListsEvenly } from './distribute-beziers-evenly.js';
 import { clamp } from '../utils/clamp.js';
 import { length$ } from './fs/length.js';
@@ -6,6 +6,9 @@ import { sum } from '../utils/sum.js';
 import { lenOf$ } from './segment-tree/len-of.js';
 import { knotIdxAt } from './fs/knot-idx-at.js';
 import { toChordFrame } from './fs/to-chord-frame.js';
+import { dirAtStart } from './fs/dir-at-start.js';
+import { dirAtEnd } from './fs/dir-at-end.js';
+import { cubicSection } from './fs/cubic-section.js';
 
 const { atan2, hypot, PI: π } = Math;
 
@@ -237,9 +240,7 @@ function cutByArcFraction(
         const a = Math.max(s0, c);
         const b = Math.min(s1, c + lens[i]);
         if (b - a > EPS_LEN) {
-            const t0 = clamp(getTAtLength(pieces[i], a - c), 0, 1);
-            const t1 = clamp(getTAtLength(pieces[i], b - c), 0, 1);
-            out.push(toCubic(fromTo(pieces[i], t0, t1)));
+            out.push(cubicSection(pieces[i], a - c, b - c));
         }
         c += lens[i];
     }
@@ -354,26 +355,6 @@ function boundaryPoint(bz: number[][][], k: number): number[] {
 function unit(v: number[]): number[] {
     const h = hypot(v[0], v[1]);
     return h > 0 ? [v[0]/h, v[1]/h] : [1, 0];
-}
-
-
-function dirAtStart(ps: number[][]): number[] {
-    const p0 = ps[0];
-    for (let i = 1; i < ps.length; i++) {
-        const [x, y] = [ps[i][0] - p0[0], ps[i][1] - p0[1]];
-        if (x !== 0 || y !== 0) { return [x, y]; }
-    }
-    return [0, 0];  // degenerate - filled from a neighbor by boundaryTangents
-}
-
-
-function dirAtEnd(ps: number[][]): number[] {
-    const pE = ps[ps.length - 1];
-    for (let i = ps.length - 2; i >= 0; i--) {
-        const [x, y] = [pE[0] - ps[i][0], pE[1] - ps[i][1]];
-        if (x !== 0 || y !== 0) { return [x, y]; }
-    }
-    return [0, 0];  // degenerate - filled from a neighbor by boundaryTangents
 }
 
 

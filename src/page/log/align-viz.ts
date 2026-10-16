@@ -1,6 +1,7 @@
 import type { PathAlignDebug } from '../../morph/match-paths/path-align-debug.js';
 import { drawFs } from 'flo-draw';
 import { resampleAt } from '../../morph/align-branches.js';
+import { getG } from '../../draw/get-g.js';
 
 const { hypot, min, max, floor } = Math;
 
@@ -87,8 +88,7 @@ function distToPss(p: number[], pss: number[][][]): number {
 
 
 function svgGroup(id: string): SVGGElement | undefined {
-    const svg = document.getElementById(id);
-    return svg?.getElementsByTagName('g')[0];
+    return getG(document.getElementById(id));
 }
 
 

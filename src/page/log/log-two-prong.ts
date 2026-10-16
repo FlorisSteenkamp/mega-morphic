@@ -4,21 +4,17 @@ import { drawTwoProng } from '../../draw-elem/draw-two-prong.js';
 
 
 function logTwoProng(
-        mats: Mat[],
-        showSpokes?: boolean,
-        showTrace?: boolean,
-        showBoundaries?: boolean) {
+        mats: Mat[]) {
             
     return (g: SVGGElement,
             p: number[],
-            showDelay = 1000,
-            scale = 1) => {
+            showDelay = 1000) => {
                 
         const twoProng = getNearestTwoProng(mats, p).t;
 
         console.log(twoProng);
 
-        drawTwoProng(false,true)(g, twoProng, undefined, showDelay, scale);
+        drawTwoProng(false)(g, twoProng, showDelay);
     }
 }
 

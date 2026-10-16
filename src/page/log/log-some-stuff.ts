@@ -1,27 +1,15 @@
 declare var _debug_: Debug;
 import { Debug } from '../../debug/debug';
-import { CpNodeFs } from 'flo-mat';
 import { mapObj } from '../../utils/map-obj';
-
-const { getProngCount } = CpNodeFs;
 
 
 function logSomeStuff(timingAll: number) {
     // console.log(`All took: ${timingAll.toFixed(0)} milliseconds.`);
     
-    function addToVertexCount(
-            vertexCount: { [index: number]: number },
-            n: number,
-            i: number) {
-
-        if (!vertexCount[n]) { vertexCount[n] = 0; } 
-        vertexCount[n] += i;
-    }
-
     const { timing } = _debug_;
     const {
         simplifyPaths, normalize,  // flo-boolean
-        oneAnd2Prongs, threeProngs, holeClosers, simplifyMat, sats  // flo-boolean
+        oneAnd2Prongs, threeProngs, holeClosers, simplifyMat, sats  // flo-mat
     } = timing;
 
     // console.log(`All took ${timingAll.toFixed(0)} milliseconds; simplify-paths: ${simplifyPaths.toFixed(0)}; 1&2-prongs: ${oneAnd2Prongs.toFixed(0)}; 3-prongs: ${threeProngs.toFixed(0)}; hole-closers: ${holeClosers.toFixed(0)}; simplify-mats: ${simplifyMat.toFixed(0)}; sats: ${sats.toFixed(0)}; normalize: ${normalize.toFixed(0)}`);

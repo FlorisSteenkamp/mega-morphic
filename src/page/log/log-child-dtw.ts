@@ -1,18 +1,21 @@
 declare var _debug_: Debug;
 import type { Debug } from '../../debug/debug.js';
 import type { PathCostWeights } from '../../morph/match-paths/path-cost-weights.js';
-import type { SegMatchedPair, SegOp } from '../../morph/segment-tree/match-seg-trees.js';
+import type { SegMatchedPair } from '../../morph/segment-tree/match-seg-trees/seg-matched-pair.js';
+import type { SegOp } from '../../morph/segment-tree/match-seg-trees/seg-op.js';
 import type { PathAlignDebug } from '../../morph/match-paths/path-align-debug.js';
 import type { Circle } from 'flo-mat';
 import type { Segment, RouteStep } from '../../morph/segment-tree/segment.js';
-import { vertexIds } from '../../morph/segment-tree/vertex-ids.js';
-import type { ChildLocation } from '../../morph/segment-tree/eval-child-pair.js';
-import { evalChildPair } from '../../morph/segment-tree/eval-child-pair.js';
-import { length$ } from '../../morph/fs/length.js';
+import { vertexIds$ } from '../../morph/segment-tree/vertex-ids.js';
+import { geomOf$ } from '../../morph/segment-tree/geom-of.js';
+import type { ChildLocation } from '../../debug/eval-child-pair.js';
+import { evalChildPair } from '../../debug/eval-child-pair.js';
 import { drawBeziersAsSinglePath } from '../../draw/draw-beziers-as-single-path.js';
 import { drawAlignSteps, distToPss, svgGroup } from './align-viz.js';
 import { matchColors } from '../events/match-colors.js';
 import { lenOf$ } from '../../morph/segment-tree/len-of.js';
+import type { PairInTree } from '../../morph/segment-tree/match-seg-trees/pairs-of.js';
+import { pairsOf } from '../../morph/segment-tree/match-seg-trees/pairs-of.js';
 
 
 /** One side's selection: a segment, or the trunk-pair route. */
@@ -21,17 +24,6 @@ type Sel = { seg?: Segment; trunk?: boolean };
 /** Two-click selection state (debug tool - module scope suffices). */
 let selA: Sel | undefined;
 let selB: Sel | undefined;
-
-
-/** A matched pair as a click target: its per-side selection identity
- *  (the child's entry segment; undefined for the trunk pair) +
- *  its DFS-preorder index (= the match view's color index). */
-interface PairSel {
-    readonly mp: SegMatchedPair;
-    readonly segA?: Segment;
-    readonly segB?: Segment;
-    readonly idx: number;
-}
 
 
 /**
@@ -65,13 +57,13 @@ function logChildDtw(
         // paints; on a tie the matched interpretation wins), then any
         // segment - one uniform metric
         let nearest: Segment | undefined;
-        let hitPair: PairSel | undefined;
+        let hitPair: PairInTree | undefined;
         let bestD = Infinity;
         for (const pair of pairs) {
             const route = shapeIdx === 1
                 ? pair.mp.routeA : pair.mp.routeB;
             for (const st of route) {
-                const d = distToPss(p, st.seg.skelPss);
+                const d = distToPss(p, geomOf$(st.seg).skelPss);
                 if (d < bestD) {
                     bestD = d;
                     hitPair = pair;
@@ -80,7 +72,7 @@ function logChildDtw(
             }
         }
         for (const seg of tree) {
-            const d = distToPss(p, seg.skelPss);
+            const d = distToPss(p, geomOf$(seg).skelPss);
             if (d < bestD) { bestD = d; hitPair = undefined; nearest = seg; }
         }
 
@@ -94,10 +86,10 @@ function logChildDtw(
             // the pair's whole matched route (covered segments only)
             const route = shapeIdx === 1
                 ? hitPair.mp.routeA : hitPair.mp.routeB;
-            highlight(g, route.flatMap(st => st.seg.skelPss),
+            drawBeziersAsSinglePath(g, route.flatMap(st => geomOf$(st.seg).skelPss),
                 `thin35 ${color} nofill`, showDelay);
         } else if (nearest !== undefined) {
-            highlight(g, nearest.skelPss, `thin20 ${color} nofill`, showDelay);
+            drawBeziersAsSinglePath(g, geomOf$(nearest).skelPss, `thin20 ${color} nofill`, showDelay);
         }
 
         const what = hitPair !== undefined
@@ -159,8 +151,8 @@ function logTrunkPair(showDelay?: number): void {
             shapeCost,
             childCost: cost - shapeCost
         },
-        routeA: describeRoute(mp.routeA, vertexIds(pm.gA)),
-        routeB: describeRoute(mp.routeB, vertexIds(pm.gB)),
+        routeA: describeRoute(mp.routeA, vertexIds$(pm.gA)),
+        routeB: describeRoute(mp.routeB, vertexIds$(pm.gB)),
         // long gap runs collapse material to a point on the other side
         // (grow/retract despite full coverage) - u ranges of runs > 3 samples
         gapRuns: mp.align === undefined ? undefined : gapRuns(mp.align),
@@ -207,9 +199,9 @@ function gapRuns(al: PathAlignDebug): string[] {
 /** The pair's matched child-fork anchors: normalized positions per side. */
 function anchorsOf(mp: SegMatchedPair): string[] {
     const LA = mp.align === undefined
-        ? undefined : totalLenOf(mp.align.skelPssA);
+        ? undefined : lenOf$(mp.align.skelPssA);
     const LB = mp.align === undefined
-        ? undefined : totalLenOf(mp.align.skelPssB);
+        ? undefined : lenOf$(mp.align.skelPssB);
     if (LA === undefined || LB === undefined) { return []; }
 
     return mp.ops
@@ -224,13 +216,6 @@ function anchorsOf(mp: SegMatchedPair): string[] {
 }
 
 
-function totalLenOf(pss: number[][][]): number {
-    let L = 0;
-    for (const ps of pss) { L += length$(ps); }
-    return L;
-}
-
-
 /** Route steps in travel order: vertex hops (ids as `showVertexNums`) +
  *  segment lengths. */
 function describeRoute(
@@ -238,10 +223,11 @@ function describeRoute(
         ids: Map<Circle, number>): string[] {
 
     return route.map(({ seg, reversed }) => {
-        const s = ids.get(seg.vertS);
-        const e = ids.get(seg.vertE);
+        const { vertS, vertE, skelPss } = geomOf$(seg);
+        const s = ids.get(vertS);
+        const e = ids.get(vertE);
         return `${reversed ? `v${e}→v${s}` : `v${s}→v${e}`} len ${
-            lenOf$(seg.skelPss).toFixed(0)}`;
+            lenOf$(skelPss).toFixed(0)}`;
     });
 }
 
@@ -326,40 +312,6 @@ function summarize(ops: SegOp[]): Record<SegOp['type'], number> {
     const out = { match: 0, delete: 0, insert: 0 };
     for (const op of ops) { out[op.type]++; }
     return out;
-}
-
-
-/**
- * All matched pairs in the same DFS preorder as `buildMorphEntries` (idx =
- * match-view color index) with their per-side selection identity: the
- * matched child's entry segment (undefined for the trunk pair -
- * both-trunk selection routes to `logTrunkPair`).
- */
-function pairsOf(trunk: SegMatchedPair): PairSel[] {
-    const out: PairSel[] = [];
-    const walk = (mp: SegMatchedPair, segA?: Segment, segB?: Segment): void => {
-        out.push({ mp, segA, segB, idx: out.length });
-        for (const op of mp.ops) {
-            if (op.type === 'match') {
-                walk(op.sub, op.a.entry, op.b.entry);
-            }
-        }
-    };
-    walk(trunk);
-    return out;
-}
-
-
-function highlight(
-        g: SVGGElement,
-        pss: number[][][],
-        classes: string,
-        showDelay?: number): void {
-
-    const [$path] = drawBeziersAsSinglePath(g, pss, classes);
-    if ($path !== undefined && showDelay) {
-        setTimeout(() => $path.remove(), showDelay);
-    }
 }
 
 

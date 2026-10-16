@@ -1,7 +1,9 @@
+import type { Segment, RouteStep } from './segment.js';
 import { memoize } from 'flo-memoize';
 import { sum } from '../../utils/sum.js';
 import { fastPluck, type HasPath } from '../../utils/fast-pluck.js';
 import { length$ } from '../fs/length.js';
+import { geomOf$ } from './geom-of.js';
 
 
 function _lenOfs(): (vs: readonly number[][][][]) => number;
@@ -23,8 +25,16 @@ const lenOf$ = memoize(function(pss: number[][][]) {
 const _lenOfs$ = memoize(_lenOfs);
 
 const lenOfs$ = _lenOfs$();
-const lenOfRoute$ = _lenOfs$('seg.skelPss');
-const lenOfSegs$ = _lenOfs$('skelPss');
+
+/** total skeleton length of the segments */
+const lenOfSegs$ = memoize(function(segs: readonly Segment[]) {
+    return sum(segs.map(s => lenOf$(geomOf$(s).skelPss)));
+});
+
+/** total skeleton length of the route */
+const lenOfRoute$ = memoize(function(route: readonly RouteStep[]) {
+    return sum(route.map(st => lenOf$(geomOf$(st.seg).skelPss)));
+});
 
 
 export { lenOf$, lenOfs$, lenOfSegs$, lenOfRoute$, _lenOfs$ }

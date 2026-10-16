@@ -1,10 +1,8 @@
 import { drawFs } from 'flo-draw';
 import { Mat } from 'flo-mat';
 import { distanceBetween } from 'flo-vector2d';
-import { sum } from '../../utils/sum.js';
-import { getBoundaryBeziersBetween } from '../../../../mat/src/cp-node/fs/get-boundary-beziers-between.js';
+import { getBoundaryBeziersBetween } from 'flo-mat';
 import { getNearestCpNode } from '../get-nearest/get-nearest-cp-node.js';
-import { length$ } from '../../morph/fs/length.js';
 import { lenOf$ } from '../../morph/segment-tree/len-of.js';
 
 

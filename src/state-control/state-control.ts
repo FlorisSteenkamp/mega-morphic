@@ -1,5 +1,5 @@
 import { State } from '../state/state';
-import { Upd, UpdFunction } from './upd';
+import { UpdFunction } from './upd';
 import { TransientState } from '../state/transient-state';
 
 

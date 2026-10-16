@@ -18,7 +18,7 @@ function getChainMatCurves(
 
         // Same-circle jumps skip MAT subtrees; terminating steps are points.
         if (cpChain[i+1] === cp.next && !isTerminating(cp)) {
-            pss.push(getMatCurveToNext(cp));
+            pss.push(...getMatCurveToNext(cp));
         }
     }
 

@@ -1,6 +1,6 @@
 import { getClosestBezierInMats } from '../../utils/get-closest-bezier-in-mats.js';
 import { drawFs } from 'flo-draw';
-import { curvature, evalDeCasteljau, evalDeCasteljauDd, getCurvatureExtrema, getCurvatureExtremaDd, normal } from 'flo-bezier3';
+import { curvature, evalDeCasteljau, evalDeCasteljauDd, getCurvatureExtrema, normal } from 'flo-bezier3';
 import { toLength, translate } from 'flo-vector2d';
 import { Mat } from 'flo-mat';
 
@@ -28,13 +28,12 @@ function logK(mats: Mat[]) {
             drawFs.dot(g,p,1,'blue',showDelay);
         }
 
-        ts.map(t => {
+        ts.forEach(t => {
             const k = curvature(ps,t);
             const p = evalDeCasteljau(ps,t);
             const n = toLength(normal(ps,t),k*5000);
             drawFs.line(g, [p,translate(p,n)], 'red thin2', showDelay);
         });
-        const extremaDd = getCurvatureExtremaDd(ps);
         drawFs.bezier(g, ps, undefined, showDelay);
     }
 }

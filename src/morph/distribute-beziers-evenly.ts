@@ -1,8 +1,7 @@
-import { getTAtLength, fromTo, toCubic } from 'flo-bezier3';
 import { sum } from "../utils/sum.js";
-import { clamp } from '../utils/clamp.js';
+import { cubicSection } from './fs/cubic-section.js';
 import { length$ } from "./fs/length.js";
-import { skeletonKnots } from './fs/skeleton-knots.js';
+import { calcSkelCumKnots } from './fs/skeleton-knots.js';
 import { knotIdxAt } from './fs/knot-idx-at.js';
 
 
@@ -48,10 +47,7 @@ function splitAtBreakpoints(
         const ps = beziers[i];
         const sA = (a - knots[i]) * total;
         const sB = (b - knots[i]) * total;
-        const tA = clamp(getTAtLength(ps, sA), 0, 1);
-        const tB = clamp(getTAtLength(ps, sB), 0, 1);
-
-        out.push(toCubic(fromTo(ps, tA, tB)));
+        out.push(cubicSection(ps, sA, sB));
     }
 
     return out;
@@ -70,8 +66,8 @@ function distributeBezierListsEvenly(
     const L1 = sum(b1.map(length$));
     const L2 = sum(b2.map(length$));
 
-    const k1 = skeletonKnots(b1);
-    const k2 = skeletonKnots(b2);
+    const k1 = calcSkelCumKnots(b1);
+    const k2 = calcSkelCumKnots(b2);
     const breakpoints = unionKnots(k1, k2);
 
     return [

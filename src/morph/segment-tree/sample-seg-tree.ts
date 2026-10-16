@@ -1,67 +1,54 @@
 import type { Circle } from 'flo-mat';
 import type { Segment } from './segment.js';
 import type { SampledSegGraph } from './sampled-seg-graph.js';
-import { unwrappedChordAngles } from '../intrinsic-skeleton/unwrapped-chord-angles.js';
-import { skeletonKnots } from '../fs/skeleton-knots.js';
-import { valueAt } from '../fs/value-at.js';
-import { padTo } from '../fs/pad-to.js';
-import { _lenOfs$, lenOf$, lenOfSegs$ } from './len-of.js';
+import { sampleProfile } from '../fs/sample-profile.js';
+import { lenOfSegs$ } from './len-of.js';
+import { geomOf$ } from './geom-of.js';
 
-const { max, round, min, PI: π } = Math;
+const { max, round, PI: π } = Math;
 
 
 /**
  * @param g the glyph's segment tree (or a segment subset sharing vertices)
  * @param unit length normalization (√ tree round salience, as the matcher)
- * @param target approximate total sample count over the whole skeleton
+ * @param sampleCount approximate total sample count over the whole skeleton
+ * (each segment rounds up to at least two samples, so the actual count can
+ * come out slightly higher)
  * @param rootV pin routes to START at this vertex (junction-to-leaf paths
  * for subtree matching) instead of leaf-to-leaf
  */
 function sampleSegTree(
         g: Segment[],
         unit: number,
-        target: number,
-        rootV?: Circle): SampledSegGraph {
+        sampleCount: number,
+        rootV: Circle | undefined): SampledSegGraph {
 
-    // const totalLen = sum(g.map(s => s.skelLen));
     const totalLen = lenOfSegs$(g);
 
-    const δ = totalLen / target;
-    const step = δ / unit;
+    const δ = totalLen/sampleCount;
+    const step = δ/unit;
 
     const r: number[] = [];
     const t: number[] = [];
     const φ: number[] = [];
     const succ: number[][] = [];
+
     /** per segment per direction: its sample ids in travel order */
-    const runs: { ids: number[]; tail: Circle; head: Circle }[] = [];
+    const runs: {
+        ids: number[];
+        tail: Circle;
+        head: Circle
+    }[] = [];
 
     for (const seg of g) {
-        const skelLen = lenOf$(seg.skelPss);
+        const { skelPss, radii, vertS, vertE, skelLen } = geomOf$(seg);
+
         const n = max(2, round(skelLen / δ) + 1);
 
-        // per-knot positions + features (shared by both runs)
-        const knots = skeletonKnots(seg.skelPss);
-        const φs = padTo(unwrappedChordAngles(seg.skelPss), seg.radii.length);
-
-        const us: number[] = [];
-        const rs: number[] = [];
-        const φi: number[] = [];
-        for (let i = 0; i < n; i++) {
-            const u = i / (n - 1);
-            us.push(u);
-            rs.push(valueAt(seg.radii, knots, u) / unit);
-            φi.push(valueAt(φs, knots, u));
-        }
-        // turning vs NORMALIZED arc (segment-local; fork turns not included)
-        const Ln = skelLen / unit;
-        const ts: number[] = [];
-        for (let i = 0; i < n; i++) {
-            const i0 = max(0, i - 1);
-            const i1 = min(n - 1, i + 1);
-            const ds = (us[i1] - us[i0]) * Ln;
-            ts.push(ds > 0 ? (φi[i1] - φi[i0]) / ds : 0);
-        }
+        // features shared by both runs; turning vs NORMALIZED arc
+        // (segment-local; fork turns not included)
+        const { r: rs, φ: φi, turn: ts } = sampleProfile(
+            skelPss, radii, unit, n, skelLen / unit);
 
         for (const rev of [false, true]) {
             const ids: number[] = [];
@@ -78,8 +65,8 @@ function sampleSegTree(
             }
             runs.push({
                 ids,
-                tail: rev ? seg.vertE : seg.vertS,
-                head: rev ? seg.vertS : seg.vertE
+                tail: rev ? vertE : vertS,
+                head: rev ? vertS : vertE
             });
         }
     }
@@ -100,8 +87,9 @@ function sampleSegTree(
     // leafness LOCAL to this segment set (sub-trees share vertices)
     const degree = new Map<Circle, number>();
     for (const s of g) {
-        degree.set(s.vertS, (degree.get(s.vertS) ?? 0) + 1);
-        degree.set(s.vertE, (degree.get(s.vertE) ?? 0) + 1);
+        const { vertS, vertE } = geomOf$(s);
+        degree.set(vertS, (degree.get(vertS) ?? 0) + 1);
+        degree.set(vertE, (degree.get(vertE) ?? 0) + 1);
     }
     const isLeaf = (v: Circle): boolean => degree.get(v) === 1;
     const isFork = (v: Circle): boolean => (degree.get(v) ?? 0) >= 3;
