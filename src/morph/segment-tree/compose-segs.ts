@@ -5,61 +5,50 @@ import { geomOf$ } from './geom-of.js';
 type SleevePair = { out: number[][][]; back: number[][][] };
 
 interface ComposedGeom {
-    bz: number[][][];
-    rd: number[];
-    edges: SleevePair[];
+    readonly skelPss: number[][][];
+    readonly radii: number[];
+    readonly sleeves: readonly SleevePair[];
 }
 
 
 /**
- * Contiguous same-branch segments' composite geometry from the segments'
- * own data, optionally walked in reverse (skeleton reversed; edge sleeves
- * reverse order and swap sides - the boundary geometry itself keeps its
- * outline direction).
+ * A segment's geometry, optionally walked in reverse (skeleton reversed;
+ * edge sleeves reverse order and swap sides - the boundary geometry itself
+ * keeps its outline direction).
+ *
+ * * not reversed: the memoized `geomOf$` arrays themselves - don't mutate
+ *   the result
  */
-function composeSegs(
-        segs: readonly Segment[],
-        reversed = false): ComposedGeom {
+function composeSeg(
+        seg: Segment,
+        reversed: boolean): ComposedGeom {
 
-    let bz: number[][][] = [];
-    let rd: number[] = [];
-    let edges: SleevePair[] = [];
+    const { skelPss, radii, sleeves } = geomOf$(seg);
 
-    for (const seg of segs) {
-        const { skelPss, radii, sleeves } = geomOf$(seg);
-        bz = [...bz, ...skelPss];
-        rd = rd.length === 0 ? [...radii] : [...rd, ...radii.slice(1)];
-        edges = [...edges, ...sleeves];
+    if (!reversed) {
+        return { skelPss, radii, sleeves };
     }
 
-    if (reversed) {
-        bz = bz.map(ps => ps.toReversed()).reverse();
-        rd = rd.toReversed();
-        edges = edges.toReversed()
-            .map(e => ({ out: e.back, back: e.out }));
-    }
-
-    return { bz, rd, edges };
+    return {
+        skelPss: skelPss.toReversed().map(ps => ps.toReversed()),
+        radii: radii.toReversed(),
+        sleeves: sleeves.toReversed().map(s => ({ out: s.back, back: s.out }))
+    };
 }
 
 
 /** A route's composite geometry (travel order, per-step direction). */
 function composeRouteGeom(route: readonly RouteStep[]): ComposedGeom {
+    const gs = route.map(({ seg, reversed }) => composeSeg(seg, reversed));
 
-    let bz: number[][][] = [];
-    let rd: number[] = [];
-    let edges: SleevePair[] = [];
-
-    for (const { seg, reversed } of route) {
-        const g = composeSegs([seg], reversed);
-        bz = [...bz, ...g.bz];
-        rd = rd.length === 0 ? g.rd : [...rd, ...g.rd.slice(1)];
-        edges = [...edges, ...g.edges];
-    }
-
-    return { bz, rd, edges };
+    return {
+        skelPss: gs.flatMap(g => g.skelPss),
+        // consecutive steps share their joint vertex's radius
+        radii: gs.flatMap((g, i) => i === 0 ? g.radii : g.radii.slice(1)),
+        sleeves: gs.flatMap(g => g.sleeves)
+    };
 }
 
 
-export { composeSegs, composeRouteGeom }
+export { composeSeg, composeRouteGeom }
 export type { ComposedGeom }

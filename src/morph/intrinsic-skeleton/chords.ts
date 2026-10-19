@@ -1,3 +1,4 @@
+import { fillGaps } from '../fs/fill-gaps.js';
 
 const { atan2, hypot } = Math;
 
@@ -15,7 +16,7 @@ function chords(
         pss: number[][][]): { L: number[]; phi: number[] } {
 
     const L: number[] = [];
-    const phi: number[] = [];
+    const rawPhi: number[] = [];
 
     for (const ps of pss) {
         const p0 = ps[0];
@@ -27,24 +28,13 @@ function chords(
         const l = hypot(dx, dy);
 
         L.push(l);
-        phi.push(l < EPS ? NaN : atan2(dy, dx));
+        rawPhi.push(l < EPS ? NaN : atan2(dy, dx));
         // if (l === 0) { console.log(ps)}
     }
 
-    // Forward fill
-    for (let k = 1; k < phi.length; k++) {
-        if (Number.isNaN(phi[k])) { phi[k] = phi[k - 1]; }
-    }
-
-    // Backward fill
-    for (let k = phi.length - 2; k >= 0; k--) {
-        if (Number.isNaN(phi[k])) { phi[k] = phi[k + 1]; }
-    }
-
-    // Fallback
-    for (let k = 0; k < phi.length; k++) {
-        if (Number.isNaN(phi[k])) { phi[k] = 0; }
-    }
+    // degenerate angles from the nearest real one; 0 if there is none
+    const phi = fillGaps(rawPhi, Number.isNaN)
+        .map(φ => Number.isNaN(φ) ? 0 : φ);
 
     return { L, phi };
 }

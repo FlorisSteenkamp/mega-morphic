@@ -5,20 +5,34 @@ import { wrapAngle } from '../../intrinsic-skeleton/wrap-angle.js';
 const { abs, PI: π } = Math;
 
 
-// Quadratic in the normalized mismatch: small slides along the trunk stay
-// cheap, long-distance moves get prohibitive. Positions are compared as
-// ROUTE FRACTIONS (scale-invariant AND mass-independent - per-glyph units
-// skew same-position children when total salience differs, e.g. M vs N,
-// worst exactly at route ends), rescaled by the mean normalized route
-// length so this reduces to the old (dA/uA - dB/uB)² when the two agree.
-function posCostOf(
+/**
+ * Returns a function returning the cost of matching child `a` (on a route of
+ * length `routeLenA`) to child `b` (on a route of length `routeLenB`), based on
+ * where each child sits along its route.
+ *
+ * * the cost is quadratic in the normalized mismatch, so small slides along
+ *   the trunk stay cheap and long-distance moves become prohibitive
+ * 
+ * * positions are compared as route fractions, which makes the cost both
+ *   scale-invariant and mass-independent
+ * 
+ * * the fractions are rescaled by the mean normalized route length, so the
+ *   cost reduces to the old `(dA/uA - dB/uB)²` when the two lengths agree
+ * 
+ * * dividing by per-glyph units instead is avoided: when total salience
+ *   differs (e.g. M vs N) it gives children at the same route position
+ *   different values, with the error worst at the route's far end
+ */
+function calcChildPosCost(
         unitA: number,
         unitB: number,
         w: PathCostWeights) {
 
     return function(
-            a: SegChild, b: SegChild,
-            routeLenA: number, routeLenB: number): number {
+            a: SegChild,
+            b: SegChild,
+            routeLenA: number,
+            routeLenB: number): number {
 
         const λ = (routeLenA/unitA + routeLenB/unitB) / 2;
 
@@ -27,7 +41,7 @@ function posCostOf(
 }
 
 
-function angleCostOf(
+function calcAngleCost(
         w: PathCostWeights) {
 
     return function(a: SegChild, b: SegChild): number {
@@ -36,7 +50,7 @@ function angleCostOf(
 }
 
 
-function dropCostOf(
+function calcDropCost(
         w: PathCostWeights) {
 
     return function(c: SegChild): number {
@@ -45,21 +59,21 @@ function dropCostOf(
 }
 
 
-// terminal (seam) children only match terminal children - regular ones
-// only regular (side/seam sequences correspond)
-const terminalGated = (a: SegChild, b: SegChild): boolean =>
-    (a.terminal === undefined) !== (b.terminal === undefined);
+/**
+ * Returns `true` if `a` and `b` may not be matched because exactly one of them
+ * is a terminal (seam) child.
+ *
+ * * terminal children only match terminal children and regular ones only
+ *   regular ones, so the side and seam sequences correspond
+ */
+function isTerminalGated(
+        a: SegChild,
+        b: SegChild): boolean {
+
+    return (a.terminal === undefined) !== (b.terminal === undefined);
+}
 
 
-// Per-side sequences in sleeve-boundary order: regular children by dist,
-// then that side's seam terminals in fork-sweep order (end fork → out
-// side's tail; start fork → back side's tail).
-const seqOf = (ch: SegChild[], side: 1 | -1): SegChild[] => [
-    ...ch.filter(c => c.side === side && c.terminal === undefined)
-        .sort((x, y) => side*(x.dist - y.dist)),
-    ...ch.filter(c => c.terminal === (side === 1 ? 'end' : 'start'))
-        .sort((x, y) => x.sweep! - y.sweep!)
-];
-
-
-export { posCostOf, angleCostOf, dropCostOf, terminalGated, seqOf }
+export {
+    calcChildPosCost, calcAngleCost, calcDropCost, isTerminalGated
+}

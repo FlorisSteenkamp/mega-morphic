@@ -1,5 +1,5 @@
 
-const { atan2, max, tan, cos, sin, abs, ceil, PI: π } = Math;
+const { atan2, tan, cos, sin, abs, ceil, PI: π } = Math;
 
 
 const MIN_LEN = 1e-6;
@@ -28,7 +28,8 @@ function capArcBeziers(
     const sweep = sign > 0 ? ccw : ccw - 2*π;
     if (abs(sweep) < 1e-9) { return []; }
 
-    const segs = max(1, ceil(abs(sweep) / (π/2)));
+    // ≥ 1 since |sweep| ≥ 1e-9
+    const segs = ceil(abs(sweep) / (π/2));
     const out: number[][][] = [];
     for (let i = 0; i < segs; i++) {
         const th0 = a0 + sweep * (i / segs);

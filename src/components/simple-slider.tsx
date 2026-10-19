@@ -11,8 +11,7 @@ interface Props {
     /** track/thumb accent and value-label color */
     color?: string;
     'aria-labelledby'?: string;
-    onChange?: (
-        event: Event, value: number | number[], activeThumb: number) => void;
+    onChange?: (value: number) => void;
 }
 
 
@@ -31,7 +30,7 @@ const Slider = memo(function SimpleSlider(props: Props) {
 
     function handleChange(event: React.ChangeEvent<HTMLInputElement>) {
         if (onChange !== undefined) {
-            onChange(event.nativeEvent, Number(event.target.value), 0);
+            onChange(Number(event.target.value));
         }
     }
 

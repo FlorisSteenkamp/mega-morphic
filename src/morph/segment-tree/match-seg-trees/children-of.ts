@@ -1,6 +1,7 @@
 import type { Circle } from 'flo-mat';
 import type { Segment, RouteStep } from '../segment.js';
 import type { SegChild } from './seg-child.js';
+import { cross, dot } from 'flo-vector2d';
 import { geomOf$ } from '../geom-of.js';
 import { sum } from '../../../utils/sum.js';
 import { chordDir } from './chord-dir.js';
@@ -20,8 +21,8 @@ function childrenOf(
         unit: number): SegChild[] {
 
     const routeSegs = new Set(route.map(r => r.seg));
-    const scopeSet = new Set(scope);
 
+    // vertex → incident scope segments off the route
     const adj = new Map<Circle, Segment[]>();
     for (const s of scope) {
         if (routeSegs.has(s)) { continue; }
@@ -58,30 +59,26 @@ function childrenOf(
     const segChildren: SegChild[] = [];
     const claimed = new Set<Segment>();
 
-    const startV = verts[0];
-    const endV = verts[verts.length - 1];
-
     for (let i = 0; i < verts.length; i++) {
         const v = verts[i];
         for (const entry of adj.get(v) ?? []) {
             if (claimed.has(entry)) { continue; }
-            const segs = collectSubtree(entry, v, scopeSet, routeSegs);
+            const segs = collectSubtree(entry, v, adj);
             for (const s of segs) { claimed.add(s); }
 
             const cd = chordDir(entry, geomOf$(entry).vertS === v ? 'start' : 'endRev');
             const rd = dirs[i];
-            const cross = rd[0]*cd[1] - rd[1]*cd[0];
-            const dot = rd[0]*cd[0] + rd[1]*cd[1];
-            const θ = atan2(cross, dot);
+            const cr = cross(rd, cd);
+            const θ = atan2(cr, dot(rd, cd));
 
             // Seam terminals: children AT a route end, ordered by the fork
             // sweep (the sleeve boundary walks the end cap from the out
             // side: descending θ; the start cap toward the out side:
             // ascending θ). The cut sits at the route's own prong, so the
             // order is well defined even for collinear continuations.
-            const terminal = i === verts.length - 1 && v === endV
+            const terminal = i === verts.length - 1
                 ? 'end' as const
-                : i === 0 && v === startV
+                : i === 0
                 ? 'start' as const
                 : undefined;
             const sweep = terminal === 'end' ? -θ
@@ -91,7 +88,7 @@ function childrenOf(
             segChildren.push({
                 attachV: v,
                 dist: dists[i],
-                side: cross >= 0 ? 1 : -1,
+                side: cr >= 0 ? 1 : -1,
                 angle: θ,
                 entry,
                 segs,

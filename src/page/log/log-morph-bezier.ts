@@ -65,28 +65,9 @@ function logMorphBezier(
         drawFs.bezier(g, bestPs, undefined, showDelay);
 
         // Control polygon (thin lines) + control points (dots).
-        const els: SVGElement[] = [];
-
-        const $poly = document.createElementNS(XMLNS, 'path');
-        $poly.setAttributeNS(null, 'd',
-            'M' + bestPs.map(q => `${q[0]} ${q[1]}`).join(' L '));
-        $poly.setAttributeNS(null, 'class', 'red thin2 nofill');
-        g.appendChild($poly);
-        els.push($poly);
-
+        drawFs.polyline(g, bestPs, 'red thin2 nofill', showDelay);
         for (const q of bestPs) {
-            const $c = document.createElementNS(XMLNS, 'circle');
-            $c.setAttributeNS(null, 'cx', `${q[0]}`);
-            $c.setAttributeNS(null, 'cy', `${q[1]}`);
-            $c.setAttributeNS(null, 'r', '0.1');
-            $c.setAttributeNS(null, 'class', 'red nostroke');
-            g.appendChild($c);
-            els.push($c);
-        }
-
-        if (showDelay) {
-            setTimeout(() => { for (const $ of els) { $.remove(); } },
-                showDelay);
+            drawFs.circle(g, { center: q, radius: 0.1 }, 'red nostroke', showDelay);
         }
 
         // --- G1 kink report: tangent discontinuity at every joint --------
@@ -155,13 +136,13 @@ function logMorphBezier(
 
 
 /** The tangent kink angle (degrees) at the joint prev→next. */
-function jointKink(prev: number[][], next: number[][]): number {
-    const dOut = dirAtEnd(prev);
-    const dIn = dirAtStart(next);
-    return abs(atan2(
-        dOut[0]*dIn[1] - dOut[1]*dIn[0],
-        dOut[0]*dIn[0] + dOut[1]*dIn[1])) * 180/π;
-}
+// function jointKink(prev: number[][], next: number[][]): number {
+//     const dOut = dirAtEnd(prev);
+//     const dIn = dirAtStart(next);
+//     return abs(atan2(
+//         dOut[0]*dIn[1] - dOut[1]*dIn[0],
+//         dOut[0]*dIn[0] + dOut[1]*dIn[1])) * 180/π;
+// }
 
 
 export { logMorphBezier }

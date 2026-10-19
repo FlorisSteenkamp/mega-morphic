@@ -117,11 +117,21 @@ function jointDir(
     if (Number.isNaN(τA) || Number.isNaN(τB)) { return undefined; }
 
     const τ = τA + t*wrapAngle(τB - τA);
-    const T = Ts[bidx];
+
+    return fromTN(τ, Ts[bidx]);
+}
+
+
+/**
+ * The unit vector at angle `θ` in the (T, N) basis (N = T rotated +90°) -
+ * the inverse of `anchored-sleeves`' `tangentAngle`.
+ */
+function fromTN(θ: number, T: number[]): number[] {
     const N = [-T[1], T[0]];
+
     return [
-        cos(τ)*T[0] + sin(τ)*N[0],
-        cos(τ)*T[1] + sin(τ)*N[1]
+        cos(θ)*T[0] + sin(θ)*N[0],
+        cos(θ)*T[1] + sin(θ)*N[1]
     ];
 }
 
@@ -138,14 +148,15 @@ function setStartTangent(ps: number[][], dir: number[]): number[][] {
 }
 
 
-/** The piece with its END handle rotated onto `dir` (travel direction). */
+/**
+ * The piece with its END handle rotated onto `dir` (travel direction):
+ * `setStartTangent` on the piece walked backwards (promoted to a cubic
+ * BEFORE reversing, so lines/quads get the same handles as forwards).
+ */
 function setEndTangent(ps: number[][], dir: number[]): number[][] {
-    const [p0, p1, p2, p3] = toCubic(ps);
-    const chord = hypot(p3[0] - p0[0], p3[1] - p0[1]);
-    let l = hypot(p2[0] - p3[0], p2[1] - p3[1]);
-    if (l < 1e-9) { l = chord/3; }
-    if (l < 1e-9) { return [p0, p1, p2, p3]; }
-    return [p0, p1, [p3[0] - l*dir[0], p3[1] - l*dir[1]], p3];
+    const backwards = toCubic(ps).toReversed();
+
+    return setStartTangent(backwards, [-dir[0], -dir[1]]).toReversed();
 }
 
 
@@ -245,10 +256,7 @@ function anchorPoint(
 
     const p = boundaryPoint(bz, bidx);
     const r = rs[bidx];
-    const T = Ts[bidx];
-    const N = [-T[1], T[0]];
-    const ux = cos(θ)*T[0] + sin(θ)*N[0];
-    const uy = cos(θ)*T[1] + sin(θ)*N[1];
+    const [ux, uy] = fromTN(θ, Ts[bidx]);
 
     return [p[0] + ρ*r*ux, p[1] + ρ*r*uy];
 }

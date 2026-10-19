@@ -1,6 +1,7 @@
 import type { MorphEntry } from '../morph-entry.js';
 import type { Pose } from './pose.js';
 import { mapmap } from '../../utils/map-map.js';
+import { poseCorrectionAt } from './pose-ramp.js';
 
 
 /**
@@ -21,12 +22,14 @@ function alignEntriesBToA(
         poseA: Pose,
         poseB: Pose): MorphEntry[] {
 
-    const { centroid: centroidA, scale: scaleA } = poseA;
-    const { centroid: centroidB, scale: scaleB } = poseB;
+    const { scale: scaleA } = poseA;
+    const { scale: scaleB } = poseB;
 
     const scale = scaleA/scaleB;
 
-    const bToAFrame_ = bToAFrame(centroidA, centroidB, scale);
+    // B's frame onto A's = the pose correction at t=0 of B's own pose
+    // (centroid B → A, scale × scaleA/scaleB)
+    const bToAFrame = poseCorrectionAt({ poseA, poseB }, 0, poseB);
 
     return entries.map(e => {
         // Deleted (A-side) topo entries live entirely in shape A's frame.
@@ -38,30 +41,13 @@ function alignEntriesBToA(
             ...e,
             // An inserted entry's collapsed frame is in shape B's coords too.
             ...(e.collapsed === 'a'
-                ? { skelPssA: mapmap(e.skelPssA, bToAFrame_) }
+                ? { skelPssA: mapmap(e.skelPssA, bToAFrame) }
                 : {}
             ),
-            skelPssB: mapmap(e.skelPssB, bToAFrame_),
+            skelPssB: mapmap(e.skelPssB, bToAFrame),
             rb: e.rb.map(r => r * scale)
         };
     });
-}
-
-
-function bToAFrame(
-        centroidA: number[],
-        centroidB: number[],
-        scale: number) {
-
-    const [cAx, cAy] = centroidA;
-    const [cBx, cBy] = centroidB;
-
-    return function([x, y]: number[]): number[] {
-        return [
-            cAx + scale*(x - cBx),
-            cAy + scale*(y - cBy)
-        ];
-    }
 }
 
 

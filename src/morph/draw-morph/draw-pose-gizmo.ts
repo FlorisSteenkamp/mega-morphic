@@ -4,7 +4,7 @@ import { calcProcrustes$ } from "../procrustes/calc-procrustes.js";
 const { cos, sin, sqrt, hypot, PI: π } = Math;
 
 
-/** Tisserand-gauge context for the readout (see getMorphedSkeleton). */
+/** Tisserand-gauge context for the readout (see getMorphedSkeleton$). */
 interface TisserandInfo {
     /** the trunk gauge's whole-turn count */
     readonly m: number;
@@ -25,7 +25,7 @@ interface TisserandInfo {
 function drawPoseGizmo(
         g: SVGGElement,
         outlines: number[][][][],
-        tisserand?: TisserandInfo) {
+        tisserand: TisserandInfo) {
     if (outlines.length === 0) { return; }
 
     const { centroid, scale, angle, anisotropy, momMajor, momMinor } =
@@ -52,10 +52,11 @@ function drawPoseGizmo(
     // The g is y-flipped (getFlipTransform), so convert display→model y
     // about the CURRENT viewbox's y-center; labels counter-flip themselves.
     const svg = g.ownerSVGElement;
-    const vb = svg?.viewBox.baseVal;
-    if (vb === undefined || vb === null) { return; }
+    if (svg === null) { return; }
+    const vb = svg.viewBox.baseVal;
+    if (vb === null) { return; }
 
-    const ctm = svg?.getScreenCTM();
+    const ctm = svg.getScreenCTM();
     const pxPerUnit = ctm === null || ctm === undefined
         ? 1 : hypot(ctm.a, ctm.b);
     const fontSize = 12 / pxPerUnit;
@@ -69,13 +70,11 @@ function drawPoseGizmo(
         [`Îmin ${(momMinor / (area * area)).toFixed(4)}`, '#f00'],
     ];
 
-    if (tisserand !== undefined) {
-        const { m, t } = tisserand;
-        if (m !== 0) {
-            lines.push([
-                `spin ${m} turn${Math.abs(m) === 1 ? '' : 's'}, ` +
-                `gauge ${(-t*m*360).toFixed(0)}°`, '#000']);
-        }
+    const { m, t } = tisserand;
+    if (m !== 0) {
+        lines.push([
+            `spin ${m} turn${Math.abs(m) === 1 ? '' : 's'}, ` +
+            `gauge ${(-t*m*360).toFixed(0)}°`, '#000']);
     }
     lines.forEach(([text, color], i) => {
         const yDisplay = vb.y + fontSize*(1 + i*1.2);

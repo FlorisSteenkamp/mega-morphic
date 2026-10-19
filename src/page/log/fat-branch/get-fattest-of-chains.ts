@@ -20,31 +20,20 @@ function getFattestOfChains(
         chains: CpNode[][],
         invertCap: boolean): FatBranch | undefined {
 
-    let bestChain: CpNode[] | undefined;
-    let bestPss: number[][][] | undefined;
+    let best: FatBranch | undefined;
     let bestSalience = -Infinity;
 
-    for (const chain of chains) {
-        const cpChain = chain;
+    for (const cpChain of chains) {
         const pss = getChainPss(cpChain, invertCap);
         const salience = abs(getShapeArea(pss));
 
         if (salience > bestSalience) {
             bestSalience = salience;
-            bestChain = cpChain;
-            bestPss = pss;
+            best = { cpChain, pss, children: [] };
         }
     }
 
-    if (bestChain === undefined) {
-        return undefined;
-    }
-
-    return {
-        cpChain: bestChain,
-        pss: bestPss!,
-        children: []
-    };
+    return best;
 }
 
 

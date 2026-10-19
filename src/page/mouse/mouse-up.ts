@@ -2,6 +2,8 @@ import { StateControl } from "../../state-control/state-control.js";
 import { getViewboxXY } from "../fs-consts-types/get-viewbox-xy.js";
 import { flipViewboxXY } from "../fs-consts-types/viewbox.js";
 
+const { min, max } = Math;
+
 
 function mouseUp(
         stateControl: StateControl,
@@ -29,9 +31,8 @@ function clickedForNewViewboxSecond(
     // Get info
     let { state, upd, transientState } = stateControl;
     let { pageState } = state.appState;
-    const viewbox = shapeIdx === 1 ? pageState.viewbox1
-        : shapeIdx === 2 ? pageState.viewbox2
-        : pageState.viewbox3;
+    const vbKey = `viewbox${shapeIdx}` as const;
+    const viewbox = pageState[vbKey];
     let { zoomState } = transientState;
     let { prevViewboxXY } = zoomState;
 
@@ -42,36 +43,23 @@ function clickedForNewViewboxSecond(
     zoomState.mouseIsDown = false;
     if (zoomState.zoomRect) { zoomState.zoomRect.remove(); }
 
-    // Swap if necessary
-    if (viewboxXY[0] < prevViewboxXY[0]) {
-        [viewboxXY[0], prevViewboxXY[0]] = [prevViewboxXY[0], viewboxXY[0]];
-    }
-    if (viewboxXY[1] < prevViewboxXY[1]) {
-        [viewboxXY[1], prevViewboxXY[1]] = [prevViewboxXY[1], viewboxXY[1]];
-    }
-
-    let newViewbox = [prevViewboxXY, viewboxXY];
+    // the dragged rectangle, whichever corner it was dragged from
+    const [a0, a1] = prevViewboxXY;
+    const [b0, b1] = viewboxXY;
+    const newViewbox = [[min(a0, b0), min(a1, b1)], [max(a0, b0), max(a1, b1)]];
 
     let viewboxW = viewbox[1][0] - viewbox[0][0];
     let viewboxH = viewbox[1][1] - viewbox[0][1];
-    let newViewboxW = viewboxXY[0] - prevViewboxXY[0];
-    let newViewboxH = viewboxXY[1] - prevViewboxXY[1];
+    let newViewboxW = newViewbox[1][0] - newViewbox[0][0];
+    let newViewboxH = newViewbox[1][1] - newViewbox[0][1];
 
     let relWidth = newViewboxW / viewboxW;
     let relHeight = newViewboxH / viewboxH;
 
     if (relWidth < 0.01 || relHeight < 0.01) { return; }
 
-    if (shapeIdx === 1) {
-        transientState.viewboxStack1.push(viewbox);
-        upd(pageState, { viewbox1: newViewbox });
-    } else if (shapeIdx === 2) {
-        transientState.viewboxStack2.push(viewbox);
-        upd(pageState, { viewbox2: newViewbox });
-    } else {
-        transientState.viewboxStack3.push(viewbox);
-        upd(pageState, { viewbox3: newViewbox });
-    }
+    transientState[`viewboxStack${shapeIdx}`].push(viewbox);
+    upd(pageState, { [vbKey]: newViewbox });
 }
 
 

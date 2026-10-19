@@ -7,11 +7,11 @@ const path = './fonts-test/achispado.svg';
 const _font = loadSvgFont(path);
 
 
-async function loadPath(glyphName: string) {
+/** The glyph's SVG path string. */
+async function loadPath(glyphName: string): Promise<string> {
     const font = await _font;
-    const pathStr = font.find(glyph => glyph.name === glyphName)!.d;
 
-    return { pathStr };
+    return font.find(glyph => glyph.name === glyphName)!.d;
 }
 
 

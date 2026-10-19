@@ -1,6 +1,6 @@
 // Regression: no real (non-collapsed) morph entry may spin ~a full turn
 // mid-morph (M→N full-MAT trunk/stem spin - the no-net-rotation gauge in
-// getMorphedSkeleton). Probe = length-weighted mean material direction,
+// getMorphedSkeleton$). Probe = length-weighted mean material direction,
 // unwrapped over t.
 import { describe, test, expect } from '@jest/globals';
 import { readFileSync } from 'node:fs';

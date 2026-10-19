@@ -2,8 +2,9 @@ import type { Circle } from 'flo-mat';
 import type { SampledSegGraph } from './sampled-seg-graph.js';
 import type { PathCostWeights } from '../match-paths/path-cost-weights.js';
 import { wrapAngle } from '../intrinsic-skeleton/wrap-angle.js';
+import { stepCostOf } from '../match-paths/step-cost-of.js';
 
-const { abs, min, PI: π } = Math;
+const { abs, min, max, PI: π } = Math;
 
 /** cost tolerance for a tie: symmetric shapes tie up to rounding */
 const EPS = 1e-9;
@@ -17,26 +18,53 @@ type ProductDtwResult_Candidate = {
     readonly shapeCost: number;
     /** measured local sway along this candidate's warp */
     readonly swayCost: number;
+    /**
+     * **diagnostics only** - material covered by both routes, as a fraction
+     * of the total
+     */
+    readonly covered: number;
 }
 
+/**
+ * The product DTW's outcome: the winning route pair plus all ranked
+ * candidates.
+ *
+ * * the matcher only reads `totalCost`, `swayCost` and `candidates`
+ * * every field marked **diagnostics only** exists for inspection (e.g.
+ *   `product-dtw-diagnostic.spec.ts`) and is never read by the matcher
+ */
 interface ProductDtwResult {
-    /** raw profile-alignment cost of the winning route pair (no tails) */
-    readonly shapeCost: number;
     /** objective = shapeCost + del × (material NOT covered by the routes) */
     readonly totalCost: number;
     /** measured local sway along the winning warp (NOT in the objective) */
     readonly swayCost: number;
-    /** material covered by both routes, as a fraction of the total */
+    /** ranked route candidates (ascending totalCost, best first) */
+    readonly candidates: ProductDtwResult_Candidate[];
+
+    //-----------------------------------
+    // DIAGNOSTICS ONLY FIELDS FOLLOW...
+    //-----------------------------------
+
+    /**
+     * **diagnostics only** - raw profile-alignment cost of the winning route
+     * pair (no tails)
+     */
+    readonly shapeCost: number;
+    /**
+     * **diagnostics only** - material covered by both routes, as a fraction
+     * of the total
+     */
     readonly covered: number;
-    /** chosen route endpoints: leaf vertices per glyph */
+    /**
+     * **diagnostics only** - the winning route endpoints: leaf vertices per
+     * glyph (the matcher takes routes from `candidates`)
+     */
     readonly startA: Circle;
     readonly endA: Circle;
     readonly startB: Circle;
     readonly endB: Circle;
-    /** product state count (diagnostics) */
+    /** **diagnostics only** - product state count */
     readonly states: number;
-    /** ranked route candidates (ascending totalCost, best first) */
-    readonly candidates: ProductDtwResult_Candidate[];
 }
 
 
@@ -150,11 +178,8 @@ function productDtw(
     const maxSum = nA + nB - 2;
 
     for (let s = 0; s <= maxSum; s++) {
-        const rA0 = s - nB + 1 > 0
-            ? s - nB + 1 : 0;
-
-        const rA1 = s < nA - 1
-            ? s : nA - 1;
+        const rA0 = max(0, s - nB + 1);
+        const rA1 = min(s, nA - 1);
 
         for (let rA = rA0; rA <= rA1; rA++) {
             const a = rankToA[rA];
@@ -169,16 +194,20 @@ function productDtw(
             const best = min(m, ix, iy);
             const bestAlts = altsWithin(best, [m, ix, iy], [AM[i], AIx[i], AIy[i]]);
 
+            const open = m + gapOpen;
+
+            // gap in A: consume A alone - NO coverage reward (a gap is a
+            // retraction: the material keeps its drop price, else gap runs
+            // launder drop costs into near-free coverage and mismatched
+            // routes/pairings win)
+            const gA = min(open, ix);
+            const altsA = gA === Infinity
+                ? undefined
+                : altsWithin(gA, [open, ix], [AM[i], AIx[i]]);
+
             for (const aN of A.succ[a]) {
-                // gap in A: consume A alone - NO coverage reward (a gap is a
-                // retraction: the material keeps its drop price, else gap
-                // runs launder drop costs into near-free coverage and
-                // mismatched routes/pairings win)
-                const open = m + gapOpen;
-                const g = min(open, ix);
-                if (g !== Infinity) {
-                    settle(Ix, AIx, aN*nB + b, g + extA,
-                        altsWithin(g, [open, ix], [AM[i], AIx[i]]));
+                if (altsA !== undefined) {
+                    settle(Ix, AIx, aN*nB + b, gA + extA, altsA);
                 }
                 // diagonal
                 for (const bN of B.succ[b]) {
@@ -190,21 +219,16 @@ function productDtw(
                     })));
                 }
             }
-            for (const bN of B.succ[b]) {
-                const open = m + gapOpen;
-                const g = min(open, iy);
-                if (g !== Infinity) {
-                    settle(Iy, AIy, a*nB + bN, g + extB,
-                        altsWithin(g, [open, iy], [AM[i], AIy[i]]));
+            // gap in B
+            const gB = min(open, iy);
+            if (gB !== Infinity) {
+                const altsB = altsWithin(gB, [open, iy], [AM[i], AIy[i]]);
+                for (const bN of B.succ[b]) {
+                    settle(Iy, AIy, a*nB + bN, gB + extB, altsB);
                 }
             }
         }
     }
-
-    let bVal = Infinity;
-    let bAlt: Alt | undefined;
-    let bEndA: Circle | undefined;
-    let bEndB: Circle | undefined;
 
     const candidates: ProductDtwResult_Candidate[] = [];
 
@@ -216,7 +240,9 @@ function productDtw(
             const endA = A.leafOf.get(aE)!;
             const endB = B.leafOf.get(bE)!;
 
-            // one candidate per tied alternative (start) at this end pair
+            // one candidate per tied alternative (start) at this end pair;
+            // v = shape − del·covered  ⇒  shape = v + del·covered;
+            // total re-adds the constant drop price of ALL material.
             for (const alt of altsWithin(v, [M[i], Ix[i], Iy[i]], [AM[i], AIx[i], AIy[i]])) {
                 candidates.push({
                     startA: A.leafOf.get(alt.start >>> 16)!,
@@ -225,33 +251,17 @@ function productDtw(
                     endB,
                     totalCost: v + del*(A.material + B.material),
                     shapeCost: v + del*alt.cov,
-                    swayCost: swayCostOf(alt)
+                    swayCost: swayCostOf(alt),
+                    covered: alt.cov / (A.material + B.material)
                 });
-                if (v < bVal) {
-                    bVal = v;
-                    bAlt = alt;
-                    bEndA = endA;
-                    bEndB = endB;
-                }
             }
         }
     }
+    // stable: equal costs keep push order, so the winner is the first
+    // candidate of minimal cost
     candidates.sort((x, y) => x.totalCost - y.totalCost);
 
-    // v = shape − del·covered  ⇒  shape = v + del·covered;
-    // total re-adds the constant drop price of ALL material.
-    return {
-        shapeCost: bVal + del*bAlt!.cov,
-        totalCost: bVal + del*(A.material + B.material),
-        swayCost: swayCostOf(bAlt!),
-        covered: bAlt!.cov / (A.material + B.material),
-        startA: A.leafOf.get(bAlt!.start >>> 16)!,
-        startB: B.leafOf.get(bAlt!.start & 0xffff)!,
-        endA: bEndA!,
-        endB: bEndB!,
-        states: N,
-        candidates
-    };
+    return { ...candidates[0], states: N, candidates };
 
 
     /** mean over corresponded material (cov sums matA+matB per step) */
@@ -328,16 +338,10 @@ function calcCost(
         radius: number,
         turning: number) {
 
-    return function(a: number, b: number): number {
-        const rA = ssgA.r[a];
-        const rB = ssgB.r[b];
+    const stepCost = stepCostOf(diagStep, radius, turning);
 
-        return (
-            diagStep * (
-                radius*abs(rA - rB) +
-                turning*((rA + rB)/2)*abs(abs(ssgA.t[a]) - abs(ssgB.t[b])) / (2*π)
-            )
-        );
+    return function(a: number, b: number): number {
+        return stepCost(ssgA.r[a], ssgB.r[b], ssgA.t[a], ssgB.t[b]);
     }
 }
 

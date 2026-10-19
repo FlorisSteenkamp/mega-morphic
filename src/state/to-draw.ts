@@ -1,7 +1,15 @@
-import { DebugElems } from '../debug/debug.js';
+import { toDrawKeyToText } from '../page/fs-consts-types/to-draw-key-to-text.js';
 
 
-type ToDraw = { [T in keyof DebugElems]: boolean };
+/** a drawable debug element (see `toDrawKeyToText`) */
+type ToDrawKey = keyof typeof toDrawKeyToText;
+
+/** which debug elements to draw */
+type ToDraw = Record<ToDrawKey, boolean>;
+
+/** all drawable debug elements, in display order */
+const toDrawKeys = Object.keys(toDrawKeyToText) as ToDrawKey[];
 
 
-export { ToDraw }
+export type { ToDraw, ToDrawKey }
+export { toDrawKeys }

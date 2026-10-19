@@ -1,29 +1,21 @@
 import type { Circle } from 'flo-mat';
 import type { Segment } from '../segment.js';
-import { geomOf$ } from '../geom-of.js';
+import { farEnd } from '../far-end.js';
 
 
-/** All scope segments reachable from `entry` without passing through `block`. */
+/**
+ * All segments reachable from `entry` (via `adj`) without passing through
+ * `block`.
+ *
+ * @param entry the subtree's first segment (incident to `block`)
+ * @param block the vertex the subtree hangs off
+ * @param adj vertex → incident segments of the graph to search (e.g. the
+ * scope minus the route)
+ */
 function collectSubtree(
         entry: Segment,
         block: Circle,
-        scope: Set<Segment>,
-        routeSegs: Set<Segment>): Segment[] {
-
-    const adj = new Map<Circle, Segment[]>();
-    for (const s of scope) {
-        if (routeSegs.has(s)) { continue; }
-        const { vertS, vertE } = geomOf$(s);
-        for (const v of [vertS, vertE]) {
-            adj.getOrInsert(v, []).push(s);
-        }
-    }
-
-    /** the segment's end vertex other than `v` */
-    const farEnd = (s: Segment, v: Circle): Circle => {
-        const { vertS, vertE } = geomOf$(s);
-        return vertS === v ? vertE : vertS;
-    };
+        adj: Map<Circle, Segment[]>): Segment[] {
 
     const segs = new Set([entry]);
     const queue = [farEnd(entry, block)];

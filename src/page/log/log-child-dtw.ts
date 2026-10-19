@@ -1,12 +1,13 @@
 declare var _debug_: Debug;
 import type { Debug } from '../../debug/debug.js';
+import type { PathMatchResult } from '../../debug/path-match-result.js';
 import type { PathCostWeights } from '../../morph/match-paths/path-cost-weights.js';
 import type { SegMatchedPair } from '../../morph/segment-tree/match-seg-trees/seg-matched-pair.js';
 import type { SegOp } from '../../morph/segment-tree/match-seg-trees/seg-op.js';
 import type { PathAlignDebug } from '../../morph/match-paths/path-align-debug.js';
 import type { Circle } from 'flo-mat';
 import type { Segment, RouteStep } from '../../morph/segment-tree/segment.js';
-import { vertexIds$ } from '../../morph/segment-tree/vertex-ids.js';
+import { vertexIds$ } from '../../debug/segment-tree/vertex-ids.js';
 import { geomOf$ } from '../../morph/segment-tree/geom-of.js';
 import type { ChildLocation } from '../../debug/eval-child-pair.js';
 import { evalChildPair } from '../../debug/eval-child-pair.js';
@@ -48,7 +49,7 @@ function logChildDtw(
             return;
         }
 
-        const { gA, gB, loopA, loopB } = pm;
+        const { gA, gB } = pm;
 
         const tree = shapeIdx === 1 ? gA : gB;
         const pairs = pairsOf(pm.trunk);
@@ -107,7 +108,7 @@ function logChildDtw(
         console.log(`selected ${what} on svg${shapeIdx}`);
 
         if (selA.trunk === true && selB.trunk === true) {
-            logTrunkPair(showDelay);
+            logTrunkPair(pm, showDelay);
             return;
         }
         if (selA.seg === undefined || selB.seg === undefined) {
@@ -116,7 +117,7 @@ function logChildDtw(
             return;
         }
 
-        evaluate(selA.seg, selB.seg, loopA, loopB, weights, showDelay);
+        evaluate(pm, selA.seg, selB.seg, weights, showDelay);
     };
 }
 
@@ -126,12 +127,7 @@ function logChildDtw(
  * breakdown per piece - uncovered slices are the material that retracts
  * (grow/retract asymmetries live here).
  */
-function logTrunkPair(showDelay?: number): void {
-    const pm = _debug_.elems.pathMatchResult[0];
-    if (pm === undefined) {
-        console.log('no match yet - click morph first');
-        return;
-    }
+function logTrunkPair(pm: PathMatchResult, showDelay?: number): void {
     const mp = pm.trunk;
 
     const g1 = svgGroup('svg');
@@ -198,21 +194,20 @@ function gapRuns(al: PathAlignDebug): string[] {
 
 /** The pair's matched child-fork anchors: normalized positions per side. */
 function anchorsOf(mp: SegMatchedPair): string[] {
-    const LA = mp.align === undefined
-        ? undefined : lenOf$(mp.align.skelPssA);
-    const LB = mp.align === undefined
-        ? undefined : lenOf$(mp.align.skelPssB);
-    if (LA === undefined || LB === undefined) { return []; }
+    const { align, ops } = mp;
+    if (align === undefined) { return []; }
 
-    return mp.ops
-        .filter(op => op.type === 'match')
-        .map(op => {
-            const o = op as Extract<SegOp, { type: 'match' }>;
-            const uA = o.a.dist / LA;
-            const uB = o.b.dist / LB;
-            return `uA ${uA.toFixed(3)} ↔ uB ${uB.toFixed(3)} ` +
-                `(Δu ${(uA - uB).toFixed(3)}, side ${o.a.side})`;
-        });
+    const LA = lenOf$(align.skelPssA);
+    const LB = lenOf$(align.skelPssB);
+
+    return ops.flatMap(op => {
+        if (op.type !== 'match') { return []; }
+
+        const uA = op.a.dist / LA;
+        const uB = op.b.dist / LB;
+        return [`uA ${uA.toFixed(3)} ↔ uB ${uB.toFixed(3)} ` +
+            `(Δu ${(uA - uB).toFixed(3)}, side ${op.a.side})`];
+    });
 }
 
 
@@ -234,17 +229,14 @@ function describeRoute(
 
 /** Prices the selected pair with the SEGMENT matcher's actual economics. */
 function evaluate(
+        pm: PathMatchResult,
         segA: Segment,
         segB: Segment,
-        loopA: number[][][],
-        loopB: number[][][],
         weights: PathCostWeights,
         showDelay?: number): void {
 
-    const pm = _debug_.elems.pathMatchResult[0];
-    if (pm === undefined) { return; }
-
-    const r = evalChildPair(pm.gA, pm.gB, segA, segB, loopA, loopB, weights);
+    const { gA, gB, loopA, loopB } = pm;
+    const r = evalChildPair(gA, gB, segA, segB, loopA, loopB, weights);
 
     if (r.align !== undefined) {
         const g1 = svgGroup('svg');

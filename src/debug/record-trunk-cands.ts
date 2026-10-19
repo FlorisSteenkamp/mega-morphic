@@ -3,6 +3,7 @@ import type { Debug } from './debug.js';
 import type { Circle } from 'flo-mat';
 import type { Ranked } from '../morph/segment-tree/match-seg-trees/ranked.js';
 import type { SegOp } from '../morph/segment-tree/match-seg-trees/seg-op.js';
+import type { SegMatchedPair } from '../morph/segment-tree/match-seg-trees/seg-matched-pair.js';
 
 
 /**
@@ -33,20 +34,59 @@ interface TrunkCandDebug {
 }
 
 
+/** the leaders fully evaluated so far in the current match */
+const evaluated = new Map<Ranked, { recCost: number; sel: number; ops: SegOp[] }>();
+
+
+function isRecording(): boolean {
+    return typeof _debug_ !== 'undefined' &&
+        _debug_.elems?.trunkCands !== undefined;
+}
+
+
 /**
  * * **Debug only**
  *
- * Stores the trunk re-rank table of the latest match. A no-op unless
- * morph debugging is enabled.
+ * Notes one trunk leader's full recursive evaluation (for the table stored
+ * by `recordTrunkCands`). A no-op unless morph debugging is enabled.
+ *
+ * @param l the leader
+ * @param pair its recursively built pair
  */
-function recordTrunkCands(
-        leaders: Ranked[],
-        evaluated: Map<Ranked, { recCost: number; sel: number; ops: SegOp[] }>,
-        chosen: Ranked | undefined) {
+function recordTrunkEval(
+        l: Ranked,
+        pair: SegMatchedPair): void {
 
-    if (typeof _debug_ === 'undefined' ||
-        _debug_.elems?.trunkCands === undefined) {
-        return;
+    if (!isRecording()) { return; }
+
+    // selection value, as in `pickBest`: recursive cost + measured sway
+    const sel = pair.cost + l.c.swayCost;
+
+    evaluated.set(l, { recCost: pair.cost, sel, ops: pair.ops });
+}
+
+
+/**
+ * * **Debug only**
+ *
+ * Stores the trunk re-rank table of the latest match, with the evaluations
+ * noted by `recordTrunkEval`. The chosen candidate is the first evaluated
+ * leader of minimum `sel` (as selected by `pickBest`). A no-op unless
+ * morph debugging is enabled.
+ *
+ * @param leaders the trunk leaders in rank order
+ */
+function recordTrunkCands(leaders: Ranked[]): void {
+    if (!isRecording()) { return; }
+
+    let chosen: Ranked | undefined;
+    let chosenSel = Infinity;
+    for (const l of leaders) {
+        const sel = evaluated.get(l)?.sel;
+        if (sel !== undefined && sel < chosenSel) {
+            chosenSel = sel;
+            chosen = l;
+        }
     }
 
     const cands = leaders.map(l => ({
@@ -58,11 +98,13 @@ function recordTrunkCands(
         ...(evaluated.get(l) ?? {})
     }));
 
+    evaluated.clear();
+
     // Keep only the LATEST table.
     _debug_.elems.trunkCands.length = 0;
     _debug_.elems.trunkCands.push(...cands);
 }
 
 
-export { recordTrunkCands }
+export { recordTrunkEval, recordTrunkCands }
 export type { TrunkCandDebug }

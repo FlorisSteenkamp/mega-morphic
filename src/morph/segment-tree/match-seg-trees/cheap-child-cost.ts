@@ -1,7 +1,8 @@
 import type { PathCostWeights } from '../../match-paths/path-cost-weights.js';
 import type { SegChild } from './seg-child.js';
-import { alignSeq } from '../../match-paths/align-seq.js';
-import { posCostOf, angleCostOf, dropCostOf, terminalGated, seqOf } from './child-costs.js';
+import { calcChildPosCost, calcAngleCost, calcDropCost, isTerminalGated } from './child-costs.js';
+import { alignSides } from './align-sides.js';
+import { sum } from '../../../utils/sum.js';
 
 const { abs } = Math;
 
@@ -27,9 +28,9 @@ function cheapChildCost(
         unitB: number,
         weights: PathCostWeights): CalcCheapChildCost {
 
-    const posCost = posCostOf(unitA, unitB, weights);
-    const angleCost = angleCostOf(weights);
-    const drop = dropCostOf(weights);
+    const calcChildPosCost_ = calcChildPosCost(unitA, unitB, weights);
+    const calcAngleCost_ = calcAngleCost(weights);
+    const calcDropCost_ = calcDropCost(weights);
 
     return function(
             chA: SegChild[],
@@ -38,25 +39,14 @@ function cheapChildCost(
             lenRB: number): number {
 
         function cheapMatch(a: SegChild, b: SegChild): number {
-            return terminalGated(a, b)
+            return isTerminalGated(a, b)
                 ? Infinity
-                : posCost(a, b, lenRA, lenRB) +
-                  angleCost(a, b) +
+                : calcChildPosCost_(a, b, lenRA, lenRB) +
+                  calcAngleCost_(a, b) +
                   weights.del*abs(a.material - b.material);
         }
 
-        let cost = 0;
-        for (const side of [1, -1] as const) {
-            cost += alignSeq(
-                seqOf(chA, side),
-                seqOf(chB, side),
-                cheapMatch,  // match
-                drop,        // del
-                drop         // ins
-            ).cost;
-        }
-
-        return cost;
+        return sum(alignSides(chA, chB, cheapMatch, calcDropCost_).map(s => s.cost));
     }
 }
 

@@ -40,7 +40,7 @@ function loadGraph(glyphName: string): Segment[] {
 }
 
 function meanAngleOf(route: RouteStep[]): number {
-    const { bz } = composeRouteGeom(route);
+    const { skelPss: bz } = composeRouteGeom(route);
     const ψs = unwrappedChordAngles(bz);
     let s = 0, total = 0;
     for (let i = 0; i < bz.length; i++) {

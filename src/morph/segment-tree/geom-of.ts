@@ -1,4 +1,5 @@
-import type { Segment, SegGeom } from './segment.js';
+import type { Segment } from './segment.js';
+import type { SegGeom } from './seg-geom.js';
 import type { CpNode } from 'flo-mat';
 import { getMatCurveToNext, getBoundaryBeziersToNext } from 'flo-mat';
 import { lineToQuadratic } from 'flo-bezier3';
@@ -6,6 +7,7 @@ import { memoize } from 'flo-memoize';
 import { stepsOf$ } from './steps-of.js';
 import { segmentArea } from './segment-area.js';
 import { lenOf$ } from './len-of.js';
+import { getLastP } from '../fs/get-last-p.js';
 
 
 /**
@@ -61,7 +63,7 @@ function skelCurveOf(cp: CpNode): number[][] {
     if (pss.length === 1) { return pss[0]; }
 
     const p0 = pss[0][0];
-    const p1 = pss[pss.length - 1].at(-1)!;
+    const p1 = getLastP(pss);
 
     return lineToQuadratic([p0, p1]);
 }

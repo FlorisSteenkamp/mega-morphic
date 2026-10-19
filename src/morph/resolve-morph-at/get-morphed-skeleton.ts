@@ -23,14 +23,10 @@ const { min, max, floor, hypot, round, PI: π } = Math;
  * Parents are resolved recursively on demand; results are memoized per
  * (entries, t, entry index).
  */
-const getMorphedSkeleton = memoize(function(
+const getMorphedSkeleton$ = memoize(function(
         entries: MorphEntry[],
         t: number,
         i: number) {
-
-    const parentPsi_ = parentPsi(entries, t);
-    const staticPsiA_ = staticPsiA(entries);
-    const staticPsiB_ = staticPsiB(entries);
 
     const { skelPssA, skelPssB, glue } = entries[i];
 
@@ -75,12 +71,12 @@ const getMorphedSkeleton = memoize(function(
 
     // Junction slides along the parent from k1 to k2.
     const kf = (1 - t)*k1 + t*k2;
-    const target = pAtIndex(getMorphedSkeleton(entries, t, e).pss, kf);
+    const target = pAtIndex(getMorphedSkeleton$(entries, t, e).pss, kf);
 
     // parent frame rotation beyond its naive lerp
-    const ψ = parentPsi_(e, kf);
-    const ψA = staticPsiA_(e, k1);
-    const ψB = staticPsiB_(e, k2);
+    const ψ = parentPsi(entries, t, e, kf);
+    const ψA = staticPsiA(entries, e, k1);
+    const ψB = staticPsiB(entries, e, k2);
     let dψ = (1 - t)*(ψ - ψA) + t*(ψ - ψB);
 
     // Take the shortest rotation RELATIVE to the parent, not in
@@ -123,14 +119,14 @@ const getMorphedSkeleton = memoize(function(
  */
 function parentPsi(
         entries: MorphEntry[],
-        t: number) {
+        t: number,
+        e: number,
+        k: number): number {
 
-    return function(e: number, k: number): number {
-        const { alpha, pss } = getMorphedSkeleton(entries, t, e);
-        const ψs = unwrappedChordAngles(pss);
+    const { alpha, pss } = getMorphedSkeleton$(entries, t, e);
+    const ψs = unwrappedChordAngles(pss);
 
-        return alpha + (profileAngleAt(ψs, k) - ψs[0]);
-    }
+    return alpha + (profileAngleAt(ψs, k) - ψs[0]);
 }
 
 
@@ -138,13 +134,11 @@ function parentPsi(
  * ψ at `k` on parent `e`'s static frame-a skeleton.
  */
 function staticPsiA(
-        entries: MorphEntry[]) {
+        entries: MorphEntry[],
+        e: number,
+        k: number): number {
 
-    return function (e: number, k: number): number {
-        return profileAngleAt(unwrappedChordAngles(
-            entries[e].skelPssA
-        ), k);
-    }
+    return profileAngleAt(unwrappedChordAngles(entries[e].skelPssA), k);
 }
 
 
@@ -153,15 +147,15 @@ function staticPsiA(
  *  drawn parent's continuous anchor at t=1 (same value mod 2π).
  */
 function staticPsiB(
-        entries: MorphEntry[]) {
+        entries: MorphEntry[],
+        e: number,
+        k: number): number {
 
-    return function (e: number, k: number): number {
-        const ψsA = unwrappedChordAngles(entries[e].skelPssA);
-        const ψsB = unwrappedChordAngles(entries[e].skelPssB);
-        const adj = ψsA[0] + wrapAngle(ψsB[0] - ψsA[0]) - ψsB[0];
+    const ψsA = unwrappedChordAngles(entries[e].skelPssA);
+    const ψsB = unwrappedChordAngles(entries[e].skelPssB);
+    const adj = ψsA[0] + wrapAngle(ψsB[0] - ψsA[0]) - ψsB[0];
 
-        return profileAngleAt(ψsB, k) + adj;
-    }
+    return profileAngleAt(ψsB, k) + adj;
 }
 
 
@@ -221,7 +215,7 @@ function meanPoint(pss: number[][][]): number[] {
     for (const ps of pss) {
         const p0 = ps[0];
         const p1 = ps[ps.length - 1];
-        const L = hypot(p1[0] - p0[0], p1[1] - p0[1]);
+        const L = chordLen(ps);
         x += L*(p0[0] + p1[0])/2;
         y += L*(p0[1] + p1[1])/2;
         sumL += L;
@@ -245,4 +239,4 @@ function entryNetTurns(e: MorphEntry): number {
 }
 
 
-export { getMorphedSkeleton, entryNetTurns }
+export { getMorphedSkeleton$, entryNetTurns }

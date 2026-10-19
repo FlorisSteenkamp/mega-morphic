@@ -7,7 +7,9 @@ import {
 } from 'flo-mat';
 import { getLeaves } from 'flo-mat';
 import { Debug } from '../../debug/debug.js';
-import { ToDraw } from "../../state/to-draw.js";
+import type { ToDraw } from "../../state/to-draw.js";
+import type { GeneratedSvgs } from './create-empty-generated-svgs.js';
+import { toDrawKeys } from "../../state/to-draw.js";
 import { deleteSvgs } from './delete-svgs.js';
 import { drawLeaves } from '../../draw-elem/draw-leaves.js';
 import { drawFs } from 'flo-draw';
@@ -45,7 +47,7 @@ function drawElements(
         mats: Mat[],
         toDraws: ToDraw,
         svg$: SVGElement,
-        $svgs: { [T in keyof ToDraw]: SVGElement[][] },
+        $svgs: GeneratedSvgs,
         viewbox: number[][]): void {
 
     if (typeof _debug_ === 'undefined') { return; }
@@ -55,9 +57,9 @@ function drawElements(
 
     const vbWidth = (viewbox[1][0] - viewbox[0][0]);
 
-    for (const elemType_ in toDraws) {
-        const elemType = elemType_ as keyof ToDraw;
-
+    // (the key list, not `toDraws`' own keys - a saved state may carry
+    // stale ones)
+    for (const elemType of toDrawKeys) {
         const toDraw = toDraws[elemType];
 
         const svgElems = $svgs[elemType] || [];
@@ -103,7 +105,6 @@ function drawElements(
 
             if (elemType === 'twoProng') {
                 traverseVertices(mat.cpNode, cpNode => {
-                    // if (getRealProngCount(cpNode) === 2) {
                     if (getProngCount(cpNode) === 2) {
                         svgElems.push(drawTwoProng(g, cpNode, 0, vbWidth/10))
                     }

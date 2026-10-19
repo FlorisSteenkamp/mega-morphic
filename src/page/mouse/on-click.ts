@@ -57,12 +57,12 @@ function onClick(
         const mats = shapeIdx === 1 ? mats1 : mats2;
         const viewbox = shapeIdx === 1 ? viewbox1 : viewbox2;
 
-        const [viewboxX,viewboxY] = flipViewboxXY(viewbox,
-            getViewboxXY(svgRef.current!, event.clientX, event.clientY));
-        
         const svg$ = svgRef.current;
         if (!svg$) { return; }
         const g = getG(svg$);
+
+        const [viewboxX,viewboxY] = flipViewboxXY(viewbox,
+            getViewboxXY(svg$, event.clientX, event.clientY));
 
         const fs: Record<ClickFor,
                 (g: SVGGElement, p: number[], delay: number) => void> = {
@@ -99,13 +99,7 @@ function gotoPrevViewbox(
     const { transientState, state, upd } = stateControl;
     const { pageState } = state.appState;
 
-    const viewboxStack = shapeIdx === 1
-        ? transientState.viewboxStack1
-        : shapeIdx === 2
-        ? transientState.viewboxStack2
-        : transientState.viewboxStack3;
-
-    let viewbox = viewboxStack.pop();
+    let viewbox = transientState[`viewboxStack${shapeIdx}`].pop();
 
     if (!viewbox) {
         const { mats1, mats2 } = pageState.deduced;
@@ -118,13 +112,7 @@ function gotoPrevViewbox(
         viewbox = getViewBoxForShape(bezierLoops);
     }
 
-    if (shapeIdx === 1) {
-        upd(pageState, { viewbox1: viewbox });
-    } else if (shapeIdx === 2) {
-        upd(pageState, { viewbox2: viewbox });
-    } else {
-        upd(pageState, { viewbox3: viewbox });
-    }
+    upd(pageState, { [`viewbox${shapeIdx}`]: viewbox });
 }
 
 

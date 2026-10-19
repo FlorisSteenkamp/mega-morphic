@@ -4,6 +4,7 @@ import type { SampledSegGraph } from './sampled-seg-graph.js';
 import { sampleProfile } from '../fs/sample-profile.js';
 import { lenOfSegs$ } from './len-of.js';
 import { geomOf$ } from './geom-of.js';
+import { adjOf$ } from './adj-of.js';
 
 const { max, round, PI: π } = Math;
 
@@ -85,14 +86,10 @@ function sampleSegTree(
     }
 
     // leafness LOCAL to this segment set (sub-trees share vertices)
-    const degree = new Map<Circle, number>();
-    for (const s of g) {
-        const { vertS, vertE } = geomOf$(s);
-        degree.set(vertS, (degree.get(vertS) ?? 0) + 1);
-        degree.set(vertE, (degree.get(vertE) ?? 0) + 1);
-    }
-    const isLeaf = (v: Circle): boolean => degree.get(v) === 1;
-    const isFork = (v: Circle): boolean => (degree.get(v) ?? 0) >= 3;
+    const adj = adjOf$(g);
+    const degree = (v: Circle): number => adj.get(v)?.length ?? 0;
+    const isLeaf = (v: Circle): boolean => degree(v) === 1;
+    const isFork = (v: Circle): boolean => degree(v) >= 3;
 
     // Routes may start/end at leaves OR STOP at a fork (the terminal
     // stretch beyond it then competes as an ordinary child).

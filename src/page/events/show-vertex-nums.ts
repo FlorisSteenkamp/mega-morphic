@@ -1,7 +1,7 @@
 import type { PageData } from '../page-data.js';
 import type { Segment } from '../../morph/segment-tree/segment.js';
 import { segTreeFromCp } from '../../morph/segment-tree/seg-tree-from-cp.js';
-import { vertexIds$ } from '../../morph/segment-tree/vertex-ids.js';
+import { vertexIds$ } from '../../debug/segment-tree/vertex-ids.js';
 import { geomOf$ } from '../../morph/segment-tree/geom-of.js';
 import { XMLNS } from '../../draw/xmlns.js';
 import { clearOverlay } from './clear-overlay.js';

@@ -66,8 +66,6 @@ function buildMorphEntries(
     const covered1 = coveredSegsOf(trunk, 'a');
     const covered2 = coveredSegsOf(trunk, 'b');
 
-    let pairIdx = 0;
-
     buildPair(trunk);
 
     // Whatever no matched route covers collapses onto its coverage-side
@@ -92,7 +90,8 @@ function buildMorphEntries(
             glueOf?: (skelPssA: number[][][], skelPssB: number[][][]) => Glue
             ): number {
 
-        const i = pairIdx++;
+        // = the pair's DFS-preorder index (one entry is pushed per pair,
+        // before its children), so it doubles as the color index
         const idx = entries.length;
 
         const gA = composeRouteGeom(mp.routeA);
@@ -103,8 +102,8 @@ function buildMorphEntries(
 
         // Feature anchors: ALL matched child forks along the paths (incl.
         // absorbed stretches - the matcher pooled them).
-        const LA = lenOf$(gA.bz);
-        const LB = lenOf$(gB.bz);
+        const LA = lenOf$(gA.skelPss);
+        const LB = lenOf$(gB.skelPss);
 
         const matchOps = mp.ops.filter(
             op => op.type === 'match');
@@ -115,17 +114,17 @@ function buildMorphEntries(
 
         // Non-linear (feature-warped) correspondence along the skeleton.
         const al = alignBranches(
-            gA.bz, gA.rd, gB.bz, gB.rd, anchors, unitA, unitB
+            gA.skelPss, gA.radii, gB.skelPss, gB.radii, anchors, unitA, unitB
         );
 
-        const mA = resampleAt(gA.bz, gA.rd, al.usA);
-        const mB = resampleAt(gB.bz, gB.rd, al.usB);
+        const mA = resampleAt(gA.skelPss, gA.radii, al.usA);
+        const mB = resampleAt(gB.skelPss, gB.radii, al.usB);
 
         // Boundary anchored to the maximal disks, shape lerped on top.
         const sides = buildSleeveSides(
-            { edges: gA.edges, knots: calcSkelCumKnots(gA.bz),
+            { sleeves: gA.sleeves, knots: calcSkelCumKnots(gA.skelPss),
               us: al.usA, bz: mA.beziers, radii: mA.radii },
-            { edges: gB.edges, knots: calcSkelCumKnots(gB.bz),
+            { sleeves: gB.sleeves, knots: calcSkelCumKnots(gB.skelPss),
               us: al.usB, bz: mB.beziers, radii: mB.radii }
         );
 
@@ -140,7 +139,7 @@ function buildMorphEntries(
             sleeveOut: sides.out,
             sleeveBack: sides.back,
             capSign,
-            classes: `${matchColors[i % matchColors.length]} thin35 nofill`,
+            classes: `${matchColors[idx % matchColors.length]} thin35 nofill`,
             ...(glueOf !== undefined
                 ? { glue: glueOf(mA.beziers, mB.beziers) }
                 : {}

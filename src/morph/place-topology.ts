@@ -1,15 +1,16 @@
 import type { Circle } from 'flo-mat';
 import type { Glue, MorphEntry } from './morph-entry.js';
 import type { Segment } from './segment-tree/segment.js';
-import { composeSegs } from './segment-tree/compose-segs.js';
+import { composeSeg } from './segment-tree/compose-segs.js';
 import { geomOf$ } from './segment-tree/geom-of.js';
 import { buildSleeveSides } from './anchored-sleeves.js';
 import { calcSkelCumKnots } from './fs/skeleton-knots.js';
 import { getLastP } from './fs/get-last-p.js';
 import { boundaries } from './fs/boundaries.js';
 import { nearestIdx } from './nearest-idx.js';
+import { squaredDistanceBetween } from 'flo-vector2d';
 
-const { min, hypot } = Math;
+const { min } = Math;
 
 
 /**
@@ -87,7 +88,7 @@ function placeTopology(
         const jV = d0 <= d1 ? vS : vE;
 
         // junction LAST (pushCollapsedEntry collapses onto the last point)
-        const { bz, rd: radii, edges } = composeSegs([seg], vS === jV);
+        const { skelPss: bz, radii, sleeves } = composeSeg(seg, vS === jV);
 
         const junction = getLastP(bz);
 
@@ -113,8 +114,7 @@ function placeTopology(
             const { skelPssA, skelPssB } = entries[e];
             const bn = boundaries(side === 'a' ? skelPssA : skelPssB);
             const k = nearestIdx(bn, junction);
-            const d = hypot(
-                bn[k][0] - junction[0], bn[k][1] - junction[1]);
+            const d = squaredDistanceBetween(bn[k], junction);
             if (d < bestD) { bestD = d; bestAt = { e, k }; }
         }
         if (bestAt === undefined) { return; }
@@ -122,7 +122,7 @@ function placeTopology(
         const glue: Glue = { e: bestAt.e, k1: bestAt.k, k2: bestAt.k };
 
         owner.set(seg, pushCollapsedEntry(
-            bz, radii, edges, side, classes, capSign, glue, entries));
+            bz, junction, radii, sleeves, side, classes, capSign, glue, entries));
     }
 }
 
@@ -131,18 +131,19 @@ function placeTopology(
  * Pushes a topology entry: the real geometry in its own frame, collapsed
  * onto its junction (last point) with zero radii and point sleeves in the
  * other frame. Returns the entry index.
+ *
+ * @param junction `bz`'s last point
  */
 function pushCollapsedEntry(
         bz: number[][][],
+        junction: number[],
         radii: number[],
-        edges: { out: number[][][]; back: number[][][] }[],
+        sleeves: readonly { out: number[][][]; back: number[][][] }[],
         side: 'a' | 'b',
         classes: string,
         capSign: number,
         glue: Glue,
         entries: MorphEntry[]): number {
-
-    const junction = getLastP(bz);
 
     const collapsed = collapseTo(bz, junction);
     // Radii → 0 so the branch's disks vanish into the fork disk
@@ -152,14 +153,14 @@ function pushCollapsedEntry(
     // No resampling needed: the collapsed frame mirrors the real frame
     // segment for segment, so both use the real frame's knots.
     const us = calcSkelCumKnots(bz);
-    const pointEdges = edges.map(() => ({
+    const pointSleeves = sleeves.map(() => ({
         out: [[junction, junction]],
         back: [[junction, junction]]
     }));
 
-    const real = { edges, knots: us, us, bz, radii };
+    const real = { sleeves, knots: us, us, bz, radii };
     const gone = {
-        edges: pointEdges, knots: us, us, bz: collapsed, radii: rZero
+        sleeves: pointSleeves, knots: us, us, bz: collapsed, radii: rZero
     };
 
     const sides = side === 'a'

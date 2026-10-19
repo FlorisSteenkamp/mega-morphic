@@ -3,8 +3,9 @@ import type { Debug } from '../../debug/debug.js';
 import type { PathCostWeights } from './path-cost-weights.js';
 import type { Samples } from './samples.js';
 import type { AlignStep } from './tail-align.js';
+import { stepCostOf } from './step-cost-of.js';
 
-const { abs, min, PI: π } = Math;
+const { min } = Math;
 
 
 /**
@@ -35,16 +36,10 @@ function alignProfiles(
     const tailUnitB = tail * stepB;
     const diagStep = (stepA + stepB) / 2;
 
-    // Mirror-invariant turning (see align-branches), weighted by the mean
-    // local radius so both terms price DISAGREEMENT AREA (salience
-    // fraction) - bends in fat regions matter more than in thin ones.
-    const cost = (i: number, j: number): number => {
-        const rA = fA.r[i];
-        const rB = fB.r[j];
-        return diagStep * (radius*abs(rA - rB)
-            + turning*((rA + rB)/2)
-                * abs(abs(fA.turn[i]) - abs(fB.turn[j])) / (2*π));
-    };
+    // mirror-invariant turning (see align-branches)
+    const stepCost = stepCostOf(diagStep, radius, turning);
+    const cost = (i: number, j: number): number =>
+        stepCost(fA.r[i], fB.r[j], fA.turn[i], fB.turn[j]);
 
     const INF = Infinity;
     const M: number[][] = [];

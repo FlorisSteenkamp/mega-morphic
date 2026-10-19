@@ -1,12 +1,12 @@
+import type { Samples } from './match-paths/samples.js';
 import { evalDeCasteljau, getTAtLength } from 'flo-bezier3';
 import { unwrappedChordAngles } from './intrinsic-skeleton/unwrapped-chord-angles.js';
 import { clamp } from '../utils/clamp.js';
-import type { Samples } from './match-paths/samples.js';
 import { length$ } from './fs/length.js';
 import { calcSkelCumKnots } from './fs/skeleton-knots.js';
 import { knotIdxAt } from './fs/knot-idx-at.js';
 import { valueAt } from './fs/value-at.js';
-import { cubicSection } from './fs/cubic-section.js';
+import { quadSection } from './fs/quad-section.js';
 
 const { abs, max, min, round } = Math;
 
@@ -313,8 +313,12 @@ function toBreakpoints(
 
 /**
  * Resamples one frame at its (monotone, possibly repeating) breakpoints:
- * beziers per interval (degenerate point-cubics for zero-length intervals)
- * and the radius at each breakpoint.
+ * quadratic beziers per interval (degenerate point-quadratics for
+ * zero-length intervals) and the radius at each breakpoint.
+ *
+ * * the skeleton `bz` is lines and quadratics only (see `geomOf$`), so a
+ *   uniform quadratic per interval keeps the two frames' control points
+ *   in one-to-one correspondence for the intrinsic lerp
  */
 function resampleAt(
         bz: number[][][],
@@ -339,9 +343,9 @@ function resampleAt(
         if (uB - uA <= 1e-12 || lens[j] === 0) {
             const t0 = lens[j] === 0 ? 0 : clamp(getTAtLength(bz[j], sA), 0, 1);
             const p = evalDeCasteljau(bz[j], t0);
-            beziers.push([[...p], [...p], [...p], [...p]]);
+            beziers.push([[...p], [...p], [...p]]);
         } else {
-            beziers.push(cubicSection(bz[j], sA, sB));
+            beziers.push(quadSection(bz[j], sA, sB));
         }
     }
 

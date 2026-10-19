@@ -1,5 +1,6 @@
 import type { Mat } from 'flo-mat';
-import { getNearestTwoProng } from '../get-nearest/get-nearest-two-prong.js';
+import { getRealProngCount } from 'flo-mat';
+import { getNearestVertex } from '../get-nearest/get-nearest-vertex.js';
 import { drawTwoProng } from '../../draw-elem/draw-two-prong.js';
 
 
@@ -10,7 +11,9 @@ function logTwoProng(
             p: number[],
             showDelay = 1000) => {
                 
-        const twoProng = getNearestTwoProng(mats, p).t;
+        const twoProng = getNearestVertex(
+            mats, p, cpNode => getRealProngCount(cpNode) === 2
+        ).t;
 
         console.log(twoProng);
 

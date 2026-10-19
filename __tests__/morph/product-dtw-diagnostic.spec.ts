@@ -8,7 +8,7 @@ import type { Segment } from '../../src/morph/segment-tree/segment.js';
 import { defaultPathWeights } from '../../src/morph/match-paths/path-cost-weights.js';
 import { segTreeWithLoop, loopOf } from '../helpers/seg-tree-with-loop.js';
 import type { Circle } from 'flo-mat';
-import { vertexIds$ } from '../../src/morph/segment-tree/vertex-ids.js';
+import { vertexIds$ } from '../../src/debug/segment-tree/vertex-ids.js';
 import { geomOf$ } from '../../src/morph/segment-tree/geom-of.js';
 import { getUnit$ } from '../../src/morph/segment-tree/get-unit.js';
 import { sampleSegTree } from '../../src/morph/segment-tree/sample-seg-tree.js';

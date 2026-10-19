@@ -4,8 +4,9 @@ import type { Debug } from '../../debug/debug.js';
 import type { Circle } from 'flo-mat';
 import type { SegDp } from '../../morph/segment-tree/match-seg-trees/seg-dp.js';
 import type { SegChild } from '../../morph/segment-tree/match-seg-trees/seg-child.js';
-import { vertexIds$ } from '../../morph/segment-tree/vertex-ids.js';
+import { vertexIds$ } from '../../debug/segment-tree/vertex-ids.js';
 import { geomOf$ } from '../../morph/segment-tree/geom-of.js';
+import { btnStyleBlue } from '../btn-styles.js';
 
 
 const windowStyle: React.CSSProperties = {
@@ -57,20 +58,12 @@ function NeedleWindow(props: { onClose: () => void }) {
         <button
             onClick={props.onClose}
             style={{
+                ...btnStyleBlue,
                 position: 'fixed',
                 bottom: '16px',
                 left: '50%',
                 transform: 'translateX(-50%)',
                 zIndex: 1001,
-                padding: '9px 20px',
-                fontSize: '14px',
-                fontWeight: 500,
-                lineHeight: '1',
-                color: '#fff',
-                backgroundColor: '#1976d2',
-                border: 'none',
-                borderRadius: '4px',
-                cursor: 'pointer',
                 boxShadow: '0 2px 8px rgba(0,0,0,0.35)',
             }}
         >
@@ -93,6 +86,8 @@ function needleContent() {
 
     const { cost, shapeCost, dp } = pm.trunk;
     const childCost = cost - shapeCost;
+    const idsA = vertexIds$(pm.gA);
+    const idsB = vertexIds$(pm.gB);
 
     return <div style={windowStyle}>
         <b>Trunk children DP</b> (cost {childCost.toFixed(3)}) — traceback:
@@ -100,8 +95,7 @@ function needleContent() {
         <span style={{ background: opColors.delete }}> delete </span>
         <span style={{ background: opColors.insert }}> insert </span>
         {dp.map(dp => (
-            <DpTable key={dp.side} dp={dp}
-                idsA={vertexIds$(pm.gA)} idsB={vertexIds$(pm.gB)} />
+            <DpTable key={dp.side} dp={dp} idsA={idsA} idsB={idsB} />
         ))}
     </div>;
 }
@@ -155,7 +149,6 @@ function DpTable(props: {
                                     ...cellStyle,
                                     background:
                                         opColors[path.get(`${r},${c}`)!]
-                                        ?? undefined
                                 }}
                             >
                                 {v.toFixed(3)}

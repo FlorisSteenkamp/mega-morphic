@@ -20,8 +20,8 @@ function alignOfRoutes(
         weights: PathCostWeights,
         trunkLevel: boolean): PathAlignDebug {
 
-    const { bz: bzA, rd: rdA } = composeRouteGeom(routeA);
-    const { bz: bzB, rd: rdB } = composeRouteGeom(routeB);
+    const { skelPss: bzA, radii: rdA } = composeRouteGeom(routeA);
+    const { skelPss: bzB, radii: rdB } = composeRouteGeom(routeB);
     const fA = sampleFeatures(bzA, rdA, unit1);
     const fB = sampleFeatures(bzB, rdB, unit2);
     const steps = alignProfiles(

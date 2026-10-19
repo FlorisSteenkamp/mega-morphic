@@ -1,6 +1,8 @@
 import type { Circle } from 'flo-mat';
 import type { Segment } from './segment.js';
 import { geomOf$ } from './geom-of.js';
+import { adjOf$ } from './adj-of.js';
+import { farEnd } from './far-end.js';
 
 
 /**
@@ -12,18 +14,7 @@ function routeSegments(
         v0: Circle,
         v1: Circle): { seg: Segment; reversed: boolean }[] {
 
-    /** vertex → its incident segments (with the far vertex) */
-    const adj = new Map<Circle, { seg: Segment; to: Circle }[]>();
-
-    function link(v: Circle, seg: Segment, to: Circle): void {
-        adj.getOrInsert(v, []).push({ seg, to });
-    };
-
-    for (const seg of g) {
-        const { vertS, vertE } = geomOf$(seg);
-        link(vertS, seg, vertE);
-        link(vertE, seg, vertS);
-    }
+    const adj = adjOf$(g);
 
     const prev = new Map<Circle, { seg: Segment; from: Circle }>();
 
@@ -32,7 +23,8 @@ function routeSegments(
     while (queue.length > 0) {
         const u = queue.shift()!;
         if (u === v1) { break; }
-        for (const { seg, to } of adj.get(u) ?? []) {
+        for (const seg of adj.get(u) ?? []) {
+            const to = farEnd(seg, u);
             if (!seen.has(to)) {
                 seen.add(to);
                 prev.set(to, { seg, from: u });

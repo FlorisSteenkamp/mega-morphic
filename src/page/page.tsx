@@ -1,12 +1,16 @@
 declare var _debug_: Debug;
 import * as React from 'react';
 import type { Debug } from '../debug/debug.js';
-import type { ToDraw } from '../state/to-draw.js';
+import type { ToDrawKey } from '../state/to-draw.js';
+import { toDrawKeys } from '../state/to-draw.js';
 import type { ClickFor } from '../state/click-for.js';
 import type { Props } from './props.js';
 import type { PageData } from './page-data.js';
 import type { MorphEntry } from '../morph/morph-entry.js';
 import type { PathCostWeights } from '../morph/match-paths/path-cost-weights.js';
+import type { PageState } from '../state/page-state.js';
+import type { Mat } from 'flo-mat';
+import { btnStyleBlue, btnStyleBlueFlipped, toggleBtnStyle } from './btn-styles.js';
 import { defaultPathWeights } from '../morph/match-paths/path-cost-weights.js';
 import { useRef, useEffect } from 'react';
 import { Slider } from '../components/simple-slider.js';
@@ -42,33 +46,6 @@ const toDrawCheckboxStyles: CheckboxStyles = {
 }
 
 
-const showChangedStyles: CheckboxStyles = { 
-    div: { 
-        ...toDrawCheckboxStyles.div, 
-    }
-}
-
-
-const btnStyleBlue: React.CSSProperties = {
-    padding: '9px 20px',
-    fontSize: '14px',
-    fontWeight: 500,
-    lineHeight: '1',
-    borderRadius: '4px',
-    cursor: 'pointer',
-    color: '#fff',               // unflipped
-    backgroundColor: '#1976d2',  // ...
-    border: 'none',                // ...
-}
-
-
-const btnStyleBlueFlipped: React.CSSProperties = {
-    ...btnStyleBlue,
-    color: '#1976d2',             // flipped
-    backgroundColor: '#fff',      // ...
-    border: '1px solid #1976d2',  // ...
-}
-
 const getGlyphNames_ = await getGlyphNames();
 
 
@@ -102,7 +79,6 @@ function Page(props: Props) {
     // Props
     const { stateControl, pageState } = props;
     const { upd, transientState } = stateControl;
-    const { $svgs, $svgs2 } = transientState;
     const {
         toDraw, viewbox1, viewbox2, viewbox3, deduced, showSvgs, flipH, flipV,
         showWeights, glyph1Name, glyph2Name, clickFor,
@@ -136,47 +112,33 @@ function Page(props: Props) {
     useEffect(function() { lazyLoadDeduced(refPageData, false) }, []); // run only once
 
 
-    function toDrawChanged(key: keyof ToDraw) {
+    /** Updates the page state, then reloads the shapes (and everything deduced). */
+    function updAndReload(patch: Partial<PageState>, changeViewbox: boolean) {
+        upd(pageState, patch);
+        lazyLoadDeduced(refPageData, changeViewbox);
+    }
+
+    /** Updates the page state, then redraws the morph. */
+    function updAndRedrawMorph(patch: Partial<PageState>) {
+        upd(pageState, patch);
+        drawMorph(refPageData, morphT / 100);
+    }
+
+
+    function toDrawChanged(key: ToDrawKey) {
         return (shouldDraw: boolean) => {
             upd(pageState.toDraw, { [key]: shouldDraw });
-            drawElements(
-                pageState.satScale,
-                mats1,
-                stateControl.state.appState.pageState.toDraw,
-                svgRef1.current!, $svgs, viewbox1
-            );
-            drawElements(
-                pageState.satScale,
-                mats2,
-                stateControl.state.appState.pageState.toDraw,
-                svgRef2.current!, $svgs2, viewbox2
-            );
+            redrawElements(refPageData.current!, mats1, mats2, viewbox1, viewbox2);
         }
     }
 
 
-    function onViewMatChanged(viewMat: boolean) {
-        upd(pageState, { viewMat });
-        lazyLoadDeduced(refPageData, false);
+    function showDelayChanged(showDelay: number) {
+        upd(pageState, { showDelay });
     }
 
-    function onSimplifyChanged(simplify: boolean) {
-        upd(pageState, { simplify });
-        lazyLoadDeduced(refPageData, false);
-    }
-
-    function showDelayChanged(
-            event: Event, value: number | number[], activeThumb: number) {
-
-        upd(pageState, { showDelay: value as number });
-    }
-
-    function satScaleChanged(
-            event: Event, value: number | number[], activeThumb: number) {
-                
-        let satScale = value as number;
-        upd(pageState, { satScale });
-        lazyLoadDeduced(refPageData, false);
+    function satScaleChanged(satScale: number) {
+        updAndReload({ satScale }, false);
     }
 
     function onClickForChanged(key: ClickFor | 'spacer' | undefined): void {
@@ -185,44 +147,16 @@ function Page(props: Props) {
     }
 
 
-    function vector1Changed(vectorName: string) {
-        upd(pageState, { glyph1Name: vectorName });
-        lazyLoadDeduced(refPageData, true);
-    }
-
-    function vector2Changed(vectorName: string) {
-        upd(pageState, { glyph2Name: vectorName });
-        lazyLoadDeduced(refPageData, true);
-    }
-
     function toggleSvg(i: number) {
         const showSvgs = [...pageState.showSvgs] as [boolean, boolean, boolean];
         showSvgs[i] = !showSvgs[i];
         upd(pageState, { showSvgs });
     }
 
-    function morphChanged(
-            event: Event, value: number | number[], activeThumb: number) {
-
-        const t = value as number;
+    function morphChanged(t: number) {
         // setMorphT(t);
         upd(pageState, { morphT: t })
         drawMorph(refPageData, t / 100);
-    }
-
-    function onMorphFillOnlyChanged(morphFillOnly: boolean) {
-        upd(pageState, { morphFillOnly });
-        drawMorph(refPageData, morphT / 100);
-    }
-
-    function onShowMorphBoundsChanged(showMorphBounds: boolean) {
-        upd(pageState, { showMorphBounds });
-        drawMorph(refPageData, morphT / 100);
-    }
-
-    function onShowPoseChanged(showPose: boolean) {
-        upd(pageState, { showPose });
-        drawMorph(refPageData, morphT / 100);
     }
 
     function onShowMatchChanged(show: boolean) {
@@ -241,11 +175,11 @@ function Page(props: Props) {
     }
 
     function pathWeightChanged(key: keyof PathCostWeights) {
-        return (event: Event, value: number | number[]) => {
+        return (value: number) => {
             upd(pageState, {
                 pathWeights: {
                     ...pageState.pathWeights,
-                    [key]: value as number
+                    [key]: value
                 }
             });
         };
@@ -266,40 +200,31 @@ function Page(props: Props) {
 
     /** Rotate shape 1 a further 10° and rebuild everything (testing). */
     function onRotate10Clicked() {
-        upd(pageState, { rot1: (pageState.rot1 + 10) % 360 });
-        lazyLoadDeduced(refPageData, false);
+        updAndReload({ rot1: (pageState.rot1 + 10) % 360 }, false);
     }
 
     /** Toggle shape 1's horizontal mirror and rebuild everything (testing). */
     function onFlipHClicked() {
-        upd(pageState, { flipH: !flipH });
-        lazyLoadDeduced(refPageData, false);
+        updAndReload({ flipH: !flipH }, false);
     }
 
     /** Toggle shape 1's vertical mirror and rebuild everything (testing). */
     function onFlipVClicked() {
-        upd(pageState, { flipV: !flipV });
-        lazyLoadDeduced(refPageData, false);
+        updAndReload({ flipV: !flipV }, false);
     }
 
     return <>
         <div style={{ height: '100vh', boxSizing: 'border-box', padding: '10px', display: 'flex', flexDirection: 'column' }}>
             <div>
-            {Object
-            .keys(toDraw)
-            .filter(key => !!toDrawKeyToText[key as keyof ToDraw])
-            .map(_key => {
-                let key = _key as keyof ToDraw;
-                return (
-                    <Checkbox 
-                        key={key}
-                        checked={toDraw[key]} 
-                        styles={toDrawCheckboxStyles}
-                        text={toDrawKeyToText[key] as string}
-                        onChanged={toDrawChanged(key)} 
-                    />
-                );
-            })}
+            {toDrawKeys.map(key =>
+                <Checkbox
+                    key={key}
+                    checked={toDraw[key]}
+                    styles={toDrawCheckboxStyles}
+                    text={toDrawKeyToText[key]}
+                    onChanged={toDrawChanged(key)}
+                />
+            )}
             <Checkbox
                 checked={pageState.showMatch}
                 styles={toDrawCheckboxStyles}
@@ -347,7 +272,7 @@ function Page(props: Props) {
                         value={glyph1Name}
                         options={getGlyphNames_}
                         style={{ minWidth: '150px' }}
-                        onChanged={vector1Changed}
+                        onChanged={glyph1Name => updAndReload({ glyph1Name }, true)}
                     />
                 </div>
                 <div>
@@ -355,14 +280,14 @@ function Page(props: Props) {
                         value={glyph2Name}
                         options={getGlyphNames_}
                         style={{ minWidth: '150px' }}
-                        onChanged={vector2Changed}
+                        onChanged={glyph2Name => updAndReload({ glyph2Name }, true)}
                     />
                 </div>
-                <Checkbox checked={simplify} styles={showChangedStyles} text="simplify" onChanged={onSimplifyChanged} />
-                <Checkbox checked={viewMat} styles={showChangedStyles} text="mat/sat" onChanged={onViewMatChanged} />
-                <Checkbox checked={morphFillOnly} styles={showChangedStyles} text="fill only" onChanged={onMorphFillOnlyChanged} />
-                <Checkbox checked={pageState.showMorphBounds} styles={showChangedStyles} text="bounds" onChanged={onShowMorphBoundsChanged} />
-                <Checkbox checked={showPose} styles={showChangedStyles} text="pose" onChanged={onShowPoseChanged} />
+                <Checkbox checked={simplify} styles={toDrawCheckboxStyles} text="simplify" onChanged={simplify => updAndReload({ simplify }, false)} />
+                <Checkbox checked={viewMat} styles={toDrawCheckboxStyles} text="mat/sat" onChanged={viewMat => updAndReload({ viewMat }, false)} />
+                <Checkbox checked={morphFillOnly} styles={toDrawCheckboxStyles} text="fill only" onChanged={morphFillOnly => updAndRedrawMorph({ morphFillOnly })} />
+                <Checkbox checked={pageState.showMorphBounds} styles={toDrawCheckboxStyles} text="bounds" onChanged={showMorphBounds => updAndRedrawMorph({ showMorphBounds })} />
+                <Checkbox checked={showPose} styles={toDrawCheckboxStyles} text="pose" onChanged={showPose => updAndRedrawMorph({ showPose })} />
             </div>
             <div style={{ display: 'flex', gap: '16px', alignItems: 'flex-end', paddingBottom: '8px' }}>
                 <div style={{ minWidth: '225px'}}>
@@ -470,17 +395,7 @@ function Page(props: Props) {
                             <button
                                 key={i}
                                 onClick={() => toggleSvg(i)}
-                                style={{
-                                    padding: '9px 14px',
-                                    fontSize: '14px',
-                                    fontWeight: 500,
-                                    lineHeight: '1',
-                                    color: on ? '#fff' : '#1976d2',
-                                    backgroundColor: on ? '#1976d2' : '#fff',
-                                    border: '1px solid #1976d2',
-                                    borderRadius: '4px',
-                                    cursor: 'pointer',
-                                }}
+                                style={toggleBtnStyle(on, false)}
                             >
                                 {i + 1}
                             </button>
@@ -488,17 +403,7 @@ function Page(props: Props) {
                     })}
                     <button
                         onClick={() => upd(pageState, { showWeights: !showWeights })}
-                        style={{
-                            padding: '9px 14px',
-                            fontSize: '14px',
-                            fontWeight: 500,
-                            lineHeight: '1',
-                            color: showWeights ? '#fff' : '#1976d2',
-                            backgroundColor: showWeights ? '#1976d2' : '#fff',
-                            border: '1px solid #1976d2',
-                            borderRadius: '4px',
-                            cursor: 'pointer',
-                        }}
+                        style={toggleBtnStyle(showWeights, false)}
                     >
                         weights
                     </button>
@@ -527,35 +432,13 @@ function Page(props: Props) {
                     })}
                 <button
                     onClick={() => upd(pageState, { pathWeights: defaultPathWeights })}
-                    style={{
-                        padding: '6px 12px',
-                        fontSize: '13px',
-                        fontWeight: 500,
-                        lineHeight: '1',
-                        color: '#1976d2',
-                        backgroundColor: '#fff',
-                        border: '1px solid #1976d2',
-                        borderRadius: '4px',
-                        cursor: 'pointer',
-                        marginBottom: '8px',
-                    }}
+                    style={toggleBtnStyle(false, true)}
                 >
                     reset
                 </button>
                 <button
                     onClick={() => setShowNeedle(show => !show)}
-                    style={{
-                        padding: '6px 12px',
-                        fontSize: '13px',
-                        fontWeight: 500,
-                        lineHeight: '1',
-                        color: showNeedle ? '#fff' : '#1976d2',
-                        backgroundColor: showNeedle ? '#1976d2' : '#fff',
-                        border: '1px solid #1976d2',
-                        borderRadius: '4px',
-                        cursor: 'pointer',
-                        marginBottom: '8px',
-                    }}
+                    style={toggleBtnStyle(showNeedle, true)}
                 >
                     needle
                 </button>
@@ -632,18 +515,17 @@ async function lazyLoadDeduced(
     // Gather data
     //-------------
     const pageData = refPageData.current!;
-    const { props, svgRef1, svgRef2 } = pageData;
+    const { props } = pageData;
     const { stateControl } = props;
-    const { upd, upd$, state: { appState }, transientState } = stateControl;
-    const { $svgs, $svgs2 } = transientState;
+    const { upd, upd$, state: { appState } } = stateControl;
     const { pageState } = appState;
-    const { satScale, glyph1Name, glyph2Name, toDraw } = pageState;
+    const { glyph1Name, glyph2Name } = pageState;
 
     //------------
     // Load paths
     //------------
-    const { pathStr: pathStr1 } = await loadPath(glyph1Name);
-    const { pathStr: pathStr2 } = await loadPath(glyph2Name);
+    const pathStr1 = await loadPath(glyph1Name);
+    const pathStr2 = await loadPath(glyph2Name);
 
     const { bezierLoops1, bezierLoops2, mats1, mats2, viewbox1, viewbox2, timingAll } = 
         loadDeducedProps(stateControl, pathStr1, pathStr2);
@@ -660,20 +542,40 @@ async function lazyLoadDeduced(
 
     if (typeof _debug_ !== 'undefined') { logSomeStuff(timingAll); }
 
-    drawElements(
-        satScale, mats1, toDraw, svgRef1.current!, $svgs, viewbox1
-    );
-    drawElements(
-        satScale, mats2, toDraw, svgRef2.current!, $svgs2, viewbox2
-    );
+    redrawElements(pageData, mats1, mats2, viewbox1, viewbox2);
 
-    upd(stateControl.state.appState.pageState, {
-        ...(changeViewbox ? { viewbox1 } : {}),
-        ...(changeViewbox ? { viewbox2 } : {}),
-        ...(changeViewbox ? { viewbox3: unionViewbox(viewbox1, viewbox2) } : {}),
-    });
+    upd(stateControl.state.appState.pageState, changeViewbox
+        ? { viewbox1, viewbox2, viewbox3: unionViewbox(viewbox1, viewbox2) }
+        : {}
+    );
 
     onMorphClicked(refPageData);
+}
+
+
+/**
+ * Redraws the selected debug elements (`toDraw`) of both shapes.
+ *
+ * @param pageData
+ * @param mats1 shape 1's MATs
+ * @param mats2 shape 2's MATs
+ * @param viewbox1 shape 1's viewbox (sets the elements' scale)
+ * @param viewbox2 shape 2's viewbox
+ */
+function redrawElements(
+        pageData: PageData,
+        mats1: Mat[],
+        mats2: Mat[],
+        viewbox1: number[][],
+        viewbox2: number[][]) {
+
+    const { props, svgRef1, svgRef2 } = pageData;
+    const { state: { appState }, transientState } = props.stateControl;
+    const { $svgs, $svgs2 } = transientState;
+    const { satScale, toDraw } = appState.pageState;
+
+    drawElements(satScale, mats1, toDraw, svgRef1.current!, $svgs, viewbox1);
+    drawElements(satScale, mats2, toDraw, svgRef2.current!, $svgs2, viewbox2);
 }
 
 

@@ -8,11 +8,11 @@ import { StateControl } from '../../state-control/state-control';
 function createMoreFunctions(stateControl: StateControl) {
     return {
         cp: {
-            next: createCpNext(stateControl),
-            prev: createCpPrev(stateControl),
+            next: step(stateControl, 'next'),
+            prev: step(stateControl, 'prev'),
             nextAndAround: createNextAndAround(stateControl),
-            nextOnCircle: createCpNextOnCircle(stateControl),
-            prevOnCircle: createCpPrevOnCircle(stateControl),
+            nextOnCircle: step(stateControl, 'nextOnCircle'),
+            prevOnCircle: step(stateControl, 'prevOnCircle'),
             loop: createLoop(stateControl),
             use: use(stateControl),
             cur: cur(stateControl),
@@ -46,26 +46,40 @@ function use(stateControl: StateControl) {
 }
 
 
-function createNextAndAround(stateControl: StateControl) {
+/** the `CpNode` links the console helpers can step along */
+type CpLink = 'next' | 'prev' | 'nextOnCircle' | 'prevOnCircle';
+
+
+/**
+ * Returns a function that moves the current `CpNode` along `link`, shows
+ * and logs it, and returns it (`undefined` if there is no current node).
+ */
+function step(stateControl: StateControl, link: CpLink) {
+    const use_ = use(stateControl);
+
     return function() {
-        let { transientState } = stateControl;
-        let { current } = transientState;
-        let pageState = stateControl.state.appState.pageState;
+        const { current } = stateControl.transientState;
 
         if (current.cpNode === undefined) { return; }
 
-        let nextElseAround = !current.nextElseAround;
-        current.nextElseAround = nextElseAround; // Toggle
+        return use_(current.cpNode[link]);
+    }
+}
 
-        if (nextElseAround) {
-            let cpNode = current.cpNode.next;
-            current.cpNode = cpNode;
-            showAndLogCp(current.g, cpNode, pageState.showDelay);
-        } else {
-            let cpNode = current.cpNode.nextOnCircle;
-            current.cpNode = cpNode;
-            showAndLogCp(current.g, cpNode, pageState.showDelay);
-        }
+
+/** Like `step`, but alternating between `next` and `nextOnCircle`. */
+function createNextAndAround(stateControl: StateControl) {
+    const toNext = step(stateControl, 'next');
+    const toAround = step(stateControl, 'nextOnCircle');
+
+    return function() {
+        const { current } = stateControl.transientState;
+
+        if (current.cpNode === undefined) { return; }
+
+        current.nextElseAround = !current.nextElseAround;  // toggle
+
+        return current.nextElseAround ? toNext() : toAround();
     }
 }
 
@@ -91,74 +105,6 @@ function showLoop(g: SVGGElement, cps: CurvePiece[], showDelay = 5000) {
         drawFs.bezierPiece(
             g, cp.curve.ps, cp.ts, 'blue thin20 nofill', showDelay
         );
-    }
-}
-
-
-function createCpNextOnCircle(stateControl: StateControl) {
-    return function() {
-        let { transientState } = stateControl;
-        let { current } = transientState;
-        let pageState = stateControl.state.appState.pageState;
-
-        if (current.cpNode === undefined) { return; }
-
-        let cpNode = current.cpNode.nextOnCircle;
-
-        current.cpNode = cpNode;
-        showAndLogCp(current.g, cpNode, pageState.showDelay);
-    }
-}
-
-
-function createCpPrevOnCircle(stateControl: StateControl) {
-    return function() {
-        let { transientState } = stateControl;
-        let { current } = transientState;
-        let pageState = stateControl.state.appState.pageState;
-
-        if (current.cpNode === undefined) { return; }
-
-        let cpNode = current.cpNode.prevOnCircle;
-
-        current.cpNode = cpNode;
-        showAndLogCp(current.g, cpNode, pageState.showDelay);
-    }
-}
-
-
-function createCpNext(stateControl: StateControl) {
-    return function() {
-        let { transientState } = stateControl;
-        let { current } = transientState;
-        let pageState = stateControl.state.appState.pageState;
-
-        if (current.cpNode === undefined) { return; }
-
-        let cpNode = current.cpNode.next;
-
-        current.cpNode = cpNode;
-        showAndLogCp(current.g, cpNode, pageState.showDelay);
-
-        return cpNode;
-    }
-}
-
-
-function createCpPrev(stateControl: StateControl) {
-    return function() {
-        let { transientState } = stateControl;
-        let { current } = transientState;
-        let pageState = stateControl.state.appState.pageState;
-
-        if (current.cpNode === undefined) { return; }
-
-        let cpNode = current.cpNode.prev;
-        
-        current.cpNode = cpNode;
-        showAndLogCp(current.g, cpNode, pageState.showDelay);
-
-        return cpNode;
     }
 }
 

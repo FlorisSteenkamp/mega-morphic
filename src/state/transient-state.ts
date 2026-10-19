@@ -1,6 +1,6 @@
 import { CpNode, Mat } from "flo-mat";
 import { DebugElems } from "../debug/debug.js";
-import { ToDraw } from "./to-draw.js";
+import type { GeneratedSvgs } from "../page/fs-consts-types/create-empty-generated-svgs.js";
 
 
 interface TransientState {
@@ -17,8 +17,8 @@ interface TransientState {
             prevViewboxXY: number[];
             zoomRect: SVGRectElement;
     },
-    $svgs: { [T in keyof ToDraw]: SVGElement[][] };
-    $svgs2: { [T in keyof ToDraw]: SVGElement[][] };
+    $svgs: GeneratedSvgs;
+    $svgs2: GeneratedSvgs;
     // mats: Mat[];
 }
 

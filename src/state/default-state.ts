@@ -1,10 +1,10 @@
 import { AppState } from './app-state.js';
 import { TransientState } from './transient-state.js';
 import { PageState } from './page-state.js';
-import { createEmptyGeneratedSvgs, emptyDebugElems } from '../page/fs-consts-types/create-empty-generated-svgs.js';
+import { createEmptyGeneratedSvgs } from '../page/fs-consts-types/create-empty-generated-svgs.js';
 import { DeducedState } from './deduced-state.js';
-import { ToDraw } from './to-draw.js';
-import { mapObj } from '../utils/map-obj.js';
+import type { ToDraw } from './to-draw.js';
+import { toDrawKeys } from './to-draw.js';
 import { defaultPathWeights } from '../morph/match-paths/path-cost-weights.js';
 
 
@@ -23,10 +23,10 @@ const defaultTransientState: TransientState = {
 }
 
 
-const defaultToDraw: ToDraw = {
-    ...mapObj(() => false, emptyDebugElems),
-    mat: true,
-} as ToDraw;
+/** only the MAT is drawn initially */
+const defaultToDraw = Object.fromEntries(
+    toDrawKeys.map(k => [k, k === 'mat'])
+) as ToDraw;
 
 
 const defaultDeduced: DeducedState = {

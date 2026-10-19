@@ -5,7 +5,7 @@ import type { Pose } from './pose.js';
  * The desired pose path of a morph: centroid on a straight line, scale
  * geometric. Rotation needs no pin - the intrinsic skeleton lerp already
  * plays orientation out linearly, and whole-turn surplus is handled by the
- * no-net-rotation gauge (getMorphedSkeleton).
+ * no-net-rotation gauge (getMorphedSkeleton$).
  */
 interface PoseRamp {
     /** the measured pose at t=0 */

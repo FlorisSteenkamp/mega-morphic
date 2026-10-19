@@ -65,8 +65,7 @@ function drawMorph(
         for (let k = 0; k < outlines.length; k++) {
             const { classes } = entries[outlineEntry[k]];
             drawLoopsAsPath(g3, [outlines[k]],
-                classes.replace(/thin\d+/, 'thin10')
-                    .replace('fill25', 'nofill'));
+                classes.replace(/thin\d+/, 'thin10'));
         }
     }
 

@@ -1,7 +1,6 @@
 import type { Loop } from 'flo-boolean';
 import type { Mat } from 'flo-mat';
 import { drawFs } from 'flo-draw';
-import { evalDeCasteljau } from 'flo-bezier3';
 import { squaredDistanceBetweenPointAndLineSegment } from 'flo-vector2d';
 
 
@@ -21,7 +20,7 @@ function logNearestLoopSet(
             for (let loop of loops) {
                 for (let curve of loop.curves) {
                     let ps = curve.ps;
-                    let l = [evalDeCasteljau(ps,0), evalDeCasteljau(ps,1)];
+                    let l = [ps[0], ps[ps.length - 1]];
                     
                     let d = squaredDistanceBetweenPointAndLineSegment(p, l);
                     

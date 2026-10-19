@@ -2,6 +2,7 @@ import { StateControl } from "../../state-control/state-control.js";
 import { getViewboxXY } from "../fs-consts-types/get-viewbox-xy.js";
 import { flipViewboxXY } from "../fs-consts-types/viewbox.js";
 import { getG } from "../../draw/get-g.js";
+import { XMLNS } from "../../draw/xmlns.js";
 
 
 function mouseMove(
@@ -19,9 +20,7 @@ function mouseMove(
         let { pageState } = state.appState;
         let { zoomState } = transientState;
 
-        const viewbox = shapeIdx === 1 ? pageState.viewbox1
-            : shapeIdx === 2 ? pageState.viewbox2
-            : pageState.viewbox3;
+        const viewbox = pageState[`viewbox${shapeIdx}`];
 
         let [viewboxX,viewboxY] = flipViewboxXY(viewbox,
             getViewboxXY(svg$, event.clientX, event.clientY));
@@ -50,8 +49,6 @@ function mouseMove(
 
 
 function drawRect(g: SVGGElement, rect: number[][]) {
-    const XMLNS = 'http://www.w3.org/2000/svg';
-
     let [[x0,y0],[x1,y1]] = rect;
     let x = x0 < x1 ? x0 : x1;
     let y = y0 < y1 ? y0 : y1;

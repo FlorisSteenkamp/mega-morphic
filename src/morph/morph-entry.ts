@@ -9,9 +9,13 @@ import type { SleeveSide } from './anchored-sleeves.js';
  * for control point, optionally glued to a parent entry.
  */
 interface MorphEntry {
-    /** skeleton cubic Bézier control polygons at the start frame (t=0) */
+    /**
+     * skeleton Bézier control polygons at the start frame (t=0) -
+     * quadratics for matched entries; lines/quadratics for topology entries
+     * (their collapsed frame mirrors the real one)
+     */
     readonly skelPssA: number[][][];
-    /** skeleton cubic Bézier control polygons at the end frame (t=1), aligned with `a` */
+    /** skeleton Bézier control polygons at the end frame (t=1), aligned with `a` */
     readonly skelPssB: number[][][];
     readonly classes: string;
     /** optional attachment of this entry's junction end to parent entry boundaries */

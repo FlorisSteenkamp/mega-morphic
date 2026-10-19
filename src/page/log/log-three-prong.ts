@@ -1,5 +1,6 @@
 import type { Mat } from 'flo-mat';
-import { getNearestThreeProng } from '../get-nearest/get-nearest-three-prong.js';
+import { getRealProngCount } from 'flo-mat';
+import { getNearestVertex } from '../get-nearest/get-nearest-vertex.js';
 import { drawThreeProng } from '../../draw-elem/draw-three-prong.js';
 
 
@@ -11,7 +12,9 @@ function logThreeProng(
         mats: Mat[]) {
 
     return function(g: SVGGElement, p: number[], showDelay = 1000) {
-        const threeProng = getNearestThreeProng(mats, p).t;
+        const threeProng = getNearestVertex(
+            mats, p, cpNode => getRealProngCount(cpNode) >= 3
+        ).t;
         if (threeProng === undefined) { return; }
 
         console.log(threeProng);

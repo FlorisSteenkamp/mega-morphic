@@ -7,7 +7,7 @@ import { findMats, getPathsFromStr, MatOptions } from 'flo-mat';
 import { defaultPathWeights } from '../../src/morph/match-paths/path-cost-weights.js';
 import { segTreeWithLoop, loopOf } from '../helpers/seg-tree-with-loop.js';
 import type { Circle } from 'flo-mat';
-import { vertexIds$ } from '../../src/morph/segment-tree/vertex-ids.js';
+import { vertexIds$ } from '../../src/debug/segment-tree/vertex-ids.js';
 import { geomOf$ } from '../../src/morph/segment-tree/geom-of.js';
 import { getUnit$ } from '../../src/morph/segment-tree/get-unit.js';
 import { routeSegments } from '../../src/morph/segment-tree/route-segments.js';
@@ -43,7 +43,7 @@ function loadGraph(glyphName: string): Segment[] {
 }
 
 function meanAngleOf(route: RouteStep[]): number {
-    const { bz } = composeRouteGeom(route);
+    const { skelPss: bz } = composeRouteGeom(route);
     const ψs = unwrappedChordAngles(bz);
     let s = 0, total = 0;
     for (let i = 0; i < bz.length; i++) {
@@ -56,7 +56,7 @@ function meanAngleOf(route: RouteStep[]): number {
 /** piecewise-constant unwrapped angle by arc-length fraction */
 function angleProfile(route: RouteStep[]):
         { at: (u: number) => number; L: number } {
-    const { bz } = composeRouteGeom(route);
+    const { skelPss: bz } = composeRouteGeom(route);
     const ψs = unwrappedChordAngles(bz);
     const cum = [0];
     for (const b of bz) { cum.push(cum[cum.length - 1] + length$(b)); }
@@ -92,7 +92,7 @@ function localSway(rA: RouteStep[], rB: RouteStep[]): number {
 /** radius+angle profile by arc fraction */
 function fullProfile(route: RouteStep[]):
         { ψ: (u: number) => number; r: (u: number) => number } {
-    const { bz: skelPss, rd: radii } = composeRouteGeom(route);
+    const { skelPss, radii } = composeRouteGeom(route);
     const ψs = unwrappedChordAngles(skelPss);
     const cum = [0];
     for (const b of skelPss) {

@@ -1,7 +1,7 @@
 import type { MorphEntry } from '../morph-entry.js';
 import { getShapeArea } from 'flo-boolean';
 import { reverseShapeOrientation } from 'flo-boolean';
-import { getMorphedSkeleton } from './get-morphed-skeleton.js';
+import { getMorphedSkeleton$ } from './get-morphed-skeleton.js';
 import { getMorphedBoundary } from './get-morphed-boundary/get-morphed-boundary.js';
 
 
@@ -36,7 +36,7 @@ function resolveMorphAt(
         const rs = ra.map((r, k) => r*(1 - t) + rb[k]*t);
 
         // Boundary anchored to the drawn maximal disks, shape lerped on top.
-        const pss = getMorphedSkeleton(entries, t, i).pss;
+        const pss = getMorphedSkeleton$(entries, t, i).pss;
         drawn.push(pss);
         const loop = getMorphedBoundary(entries[i], pss, rs, t);
 

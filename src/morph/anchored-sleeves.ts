@@ -9,6 +9,7 @@ import { toChordFrame } from './fs/to-chord-frame.js';
 import { dirAtStart } from './fs/dir-at-start.js';
 import { dirAtEnd } from './fs/dir-at-end.js';
 import { cubicSection } from './fs/cubic-section.js';
+import { fillGaps } from './fs/fill-gaps.js';
 
 const { atan2, hypot, PI: π } = Math;
 
@@ -42,7 +43,7 @@ interface SleeveSide {
 /** Everything of one frame needed to anchor its boundary. */
 interface SleeveFrame {
     /** per original skeleton edge: boundary pieces per side (outline direction) */
-    readonly edges: { out: number[][][]; back: number[][][] }[];
+    readonly sleeves: readonly { out: number[][][]; back: number[][][] }[];
     /** normalized arc-length knots of the original skeleton edges */
     readonly knots: number[];
     /** this frame's breakpoints (monotone, may repeat for collapsed sections) */
@@ -77,8 +78,8 @@ function buildSide(
         B: SleeveFrame,
         side: 'out' | 'back'): SleeveSide {
 
-    const segsA = cutSide(A.edges, A.knots, A.us, side);
-    const segsB = cutSide(B.edges, B.knots, B.us, side);
+    const segsA = cutSide(A.sleeves, A.knots, A.us, side);
+    const segsB = cutSide(B.sleeves, B.knots, B.us, side);
     const TsA = boundaryTangents(A.bz);
     const TsB = boundaryTangents(B.bz);
 
@@ -113,18 +114,8 @@ function buildSide(
         const bidxFrom = isOut ? k : k + 1;
         const bidxTo = isOut ? k + 1 : k;
 
-        anchorsA.push([
-            ...polarAnchor(sA.from, bidxFrom, A, TsA),
-            ...polarAnchor(sA.to, bidxTo, A, TsA),
-            tangentAngle(dirAtStart(pA[0]), TsA[bidxFrom]),
-            tangentAngle(dirAtEnd(pA[pA.length - 1]), TsA[bidxTo])
-        ]);
-        anchorsB.push([
-            ...polarAnchor(sB.from, bidxFrom, B, TsB),
-            ...polarAnchor(sB.to, bidxTo, B, TsB),
-            tangentAngle(dirAtStart(pB[0]), TsB[bidxFrom]),
-            tangentAngle(dirAtEnd(pB[pB.length - 1]), TsB[bidxTo])
-        ]);
+        anchorsA.push(anchorRow(sA, pA, bidxFrom, bidxTo, A, TsA));
+        anchorsB.push(anchorRow(sB, pB, bidxFrom, bidxTo, B, TsB));
 
         // pieces in their anchors' chord frame
         piecesA.push(pA.map(ps => toChordFrame(ps, sA.from, sA.to)));
@@ -156,22 +147,14 @@ function unifySeamAnchors(
 
     const EPS_SEAM = 1e-4;
     for (let j = 1; j < anchors.length; j++) {
-        if (isOut) {
-            // seam at boundary index j: seg j-1's `to` ↔ seg j's `from`
-            const p = segs[j - 1].to;
-            const q = segs[j].from;
-            if (hypot(p[0] - q[0], p[1] - q[1]) < EPS_SEAM) {
-                anchors[j][0] = anchors[j - 1][2];
-                anchors[j][1] = anchors[j - 1][3];
-            }
-        } else {
-            // back side: seg j-1's `from` ↔ seg j's `to` (both at index j)
-            const p = segs[j - 1].from;
-            const q = segs[j].to;
-            if (hypot(p[0] - q[0], p[1] - q[1]) < EPS_SEAM) {
-                anchors[j - 1][0] = anchors[j][2];
-                anchors[j - 1][1] = anchors[j][3];
-            }
+        // the seam at boundary index j joins seg `p`'s `to` (in travel
+        // order) to seg `n`'s `from` - out: j-1 → j; back: j → j-1
+        const [p, n] = isOut ? [j - 1, j] : [j, j - 1];
+        const a = segs[p].to;
+        const b = segs[n].from;
+        if (hypot(a[0] - b[0], a[1] - b[1]) < EPS_SEAM) {
+            anchors[n][0] = anchors[p][2];
+            anchors[n][1] = anchors[p][3];
         }
     }
 }
@@ -185,7 +168,7 @@ function unifySeamAnchors(
  * back side since back pieces run against the skeleton).
  */
 function cutSide(
-        edges: { out: number[][][]; back: number[][][] }[],
+        sleeves: readonly { out: number[][][]; back: number[][][] }[],
         knots: number[],
         us: number[],
         side: 'out' | 'back'
@@ -205,8 +188,8 @@ function cutSide(
         const fB = span <= 0 ? 1 : clamp((uB - knots[j]) / span, 0, 1);
 
         const pieces = side === 'out'
-            ? cutByArcFraction(edges[j].out, fA, fB)
-            : cutByArcFraction(edges[j].back, 1 - fB, 1 - fA);
+            ? cutByArcFraction(sleeves[j].out, fA, fB)
+            : cutByArcFraction(sleeves[j].back, 1 - fB, 1 - fA);
 
         const from = pieces[0][0];
         const last = pieces[pieces.length - 1];
@@ -267,6 +250,35 @@ function cutByArcFraction(
  * `[θ, ρ]` with `c = p + ρ·r·(cos θ·T + sin θ·N)`. θ is NaN when the anchor
  * coincides with the center (filled in later from a neighbor).
  */
+/**
+ * A segment's anchor row (see `SleeveSide`): its two boundary anchors in
+ * polar disk-frame coordinates, then the travel-direction tangent angle of
+ * its boundary pieces at each anchor.
+ *
+ * @param seg the cut segment's two anchor points
+ * @param ps its boundary pieces (travel order)
+ * @param bidxFrom the skeleton boundary index of its `from` anchor
+ * @param bidxTo the skeleton boundary index of its `to` anchor
+ * @param F the frame
+ * @param Ts the frame's boundary tangents
+ */
+function anchorRow(
+        seg: { from: number[]; to: number[] },
+        ps: number[][][],
+        bidxFrom: number,
+        bidxTo: number,
+        F: SleeveFrame,
+        Ts: number[][]): number[] {
+
+    return [
+        ...polarAnchor(seg.from, bidxFrom, F, Ts),
+        ...polarAnchor(seg.to, bidxTo, F, Ts),
+        tangentAngle(dirAtStart(ps[0]), Ts[bidxFrom]),
+        tangentAngle(dirAtEnd(ps[ps.length - 1]), Ts[bidxTo])
+    ];
+}
+
+
 function polarAnchor(
         c: number[],
         bidx: number,
@@ -281,9 +293,7 @@ function polarAnchor(
 
     if (d < EPS_LEN) { return [NaN, 1]; }
 
-    const T = Ts[bidx];
-    const N = [-T[1], T[0]];
-    const theta = atan2(ux*N[0] + uy*N[1], ux*T[0] + uy*T[1]);
+    const theta = tangentAngle([ux, uy], Ts[bidx]);
     const rho = r > EPS_LEN ? clamp(d / r, 0, 2) : 1;
 
     return [theta, rho];
@@ -334,14 +344,8 @@ function boundaryTangents(bz: number[][][]): number[][] {
     dirs.push(dirAtEnd(bz[bz.length - 1]));
 
     const isZero = (v: number[]) => v[0] === 0 && v[1] === 0;
-    for (let k = 1; k < dirs.length; k++) {
-        if (isZero(dirs[k])) { dirs[k] = dirs[k - 1]; }
-    }
-    for (let k = dirs.length - 2; k >= 0; k--) {
-        if (isZero(dirs[k])) { dirs[k] = dirs[k + 1]; }
-    }
 
-    return dirs.map(unit);
+    return fillGaps(dirs, isZero).map(unit);
 }
 
 

@@ -2,21 +2,22 @@ import type { Circle } from 'flo-mat';
 import type { Segment, RouteStep } from '../segment.js';
 import type { PathCostWeights } from '../../match-paths/path-cost-weights.js';
 import type { SegChild } from './seg-child.js';
-import type { SegOp } from './seg-op.js';
 import type { SegMatchedPair } from './seg-matched-pair.js';
-import type { Ranked } from './ranked.js';
+import type { DualMap } from '../../../utils/dual-map.js';
+import { DualMapFs } from '../../../utils/dual-map.js';
 import { routeSegments } from '../route-segments.js';
 import { sampleSegTree } from '../sample-seg-tree.js';
 import { productDtw } from '../product-dtw.js';
-import { lenOfRoute$, lenOfSegs$ } from '../len-of.js';
-import { vertexIds$ } from '../vertex-ids.js';
+import { lenOfRoute$ } from '../len-of.js';
 import { getUnit$ } from '../get-unit.js';
 import { anisoOf } from './aniso-of.js';
-import { recordTrunkCands } from '../../../debug/record-trunk-cands.js';
+import { recordTrunkEval, recordTrunkCands } from '../../../debug/record-trunk-cands.js';
 import { buildPair } from './build-pair.js';
 import { cheapChildCost } from './cheap-child-cost.js';
 import { childrenOf } from './children-of.js';
-import { TARGET_SAMPLES, CAND_MARGIN, TRUNK_RECURSE_CANDS, TRUNK_CHEAP_CANDS } from './consts.js';
+import { rankTrunkCandidates } from './rank-trunk-candidates.js';
+import { pickBest } from './pick-best.js';
+import { TARGET_SAMPLES, TRUNK_RECURSE_CANDS, TRUNK_CHEAP_CANDS } from './consts.js';
 
 
 /**
@@ -49,10 +50,6 @@ function matchSegTrees(
 
     const cheapChildCost_ = cheapChildCost(unitA, unitB, weights);
 
-    // trunk-level sample spacing of trees
-    const δA = lenOfSegs$(gA) / TARGET_SAMPLES;
-    const δB = lenOfSegs$(gB) / TARGET_SAMPLES;
-
     // local-sway measurement factor (rides every DTW, measured along the
     // warp, not priced in it)
     const swayW = sway*aniso;
@@ -64,7 +61,7 @@ function matchSegTrees(
 
     const buildPair_ = buildPair(
         cheapChildCost_,
-        gA, gB, unitA, unitB, δA, δB, weights, swayW
+        gA, gB, unitA, unitB, weights, swayW
     );
 
     // Trunk candidates re-ranked by RECURSIVE cost too: orientation ties
@@ -79,110 +76,104 @@ function matchSegTrees(
     // sway INSIDE the DP objective lets the warp dodge it instead (gaps
     // around rotating material) - measurement must stay objective-neutral.
     // Sway stays out of the reported cost (children/shape stay intrinsic).
-
-    // vertices are objects - dense per-tree ids make the string keys below
-    const ids = { A: vertexIds$(gA), B: vertexIds$(gB) };
-    const idA = (v: Circle): number => ids.A.get(v)!;
-    const idB = (v: Circle): number => ids.B.get(v)!;
-
-    const routes = new Map<string, RouteStep[]>();
-    const routeOf_ = routeOf(routes, ids);
-
-    const seen = new Set<string>();
-
-    const ranked: Ranked[] = [];
-
-    for (const c of pd.candidates) {
-        // both-routes-reversed is the SAME end correspondence - dedupe
-        // (costs differ only via the posCost start/end asymmetry; the slot
-        // is worth more than that tie-break. Sway is invariant under double
-        // reversal: both φ's shift by π.)
-        const fwd = `${idA(c.startA)},${idA(c.endA)},${idB(c.startB)},${idB(c.endB)}`;
-        const rev = `${idA(c.endA)},${idA(c.startA)},${idB(c.endB)},${idB(c.startB)}`;
-        const key = fwd < rev ? fwd : rev;
-        if (seen.has(key)) { continue; }
-        seen.add(key);
-        ranked.push({
-            c,
-            rank: c.totalCost + c.swayCost,
-            cheap: 0
-        });
-    }
-    ranked.sort((x, y) => x.rank - y.rank);
+    const ranked = rankTrunkCandidates(pd.candidates);
 
     //-------------------------------------------------------------------
     // Stage 2: cheap child-consistency re-rank of the leaders (children
     // cached per unique route - the whole-tree scope is shared).
     //-------------------------------------------------------------------
-    const childCache = new Map<string, SegChild[]>();
-    const childrenFor = (tag: 'A' | 'B', s: Circle, e: Circle): SegChild[] => {
-        const k = `${tag}:${ids[tag].get(s)}:${ids[tag].get(e)}`;
-        let ch = childCache.get(k);
-        if (ch === undefined) {
-            const g = tag === 'A' ? gA : gB;
-            childCache.set(k, ch = childrenOf(g,
-                routeOf_(g, tag, s, e), tag === 'A' ? unitA : unitB));
-        }
-        return ch;
-    };
+
+    // routes cached per tree per unique (start, end)
+    const routesA: DualMap<Circle, Circle, RouteStep[]> = new Map();
+    const routesB: DualMap<Circle, Circle, RouteStep[]> = new Map();
+    const routeOfA = routeOf(routesA, gA);
+    const routeOfB = routeOf(routesB, gB);
+
+    const childrenCacheA: DualMap<Circle, Circle, SegChild[]> = new Map();
+    const childrenCacheB: DualMap<Circle, Circle, SegChild[]> = new Map();
+
+    const childrenForA = childrenFor(childrenCacheA, gA, routeOfA, unitA);
+    const childrenForB = childrenFor(childrenCacheB, gB, routeOfB, unitB);
+
+    //----------------------------------------------------
     const leaders = ranked.slice(0, TRUNK_CHEAP_CANDS);
-    for (const l of leaders) {
-        l.cheap = cheapChildCost_(
-            childrenFor('A', l.c.startA, l.c.endA),
-            childrenFor('B', l.c.startB, l.c.endB),
-            lenOfRoute$(routeOf_(gA, 'A', l.c.startA, l.c.endA)),
-            lenOfRoute$(routeOf_(gB, 'B', l.c.startB, l.c.endB)));
-        l.rank += l.cheap;
+    for (const leader of leaders) {
+        const { c: { startA, startB, endA, endB } } = leader;
+
+        leader.cheap = cheapChildCost_(
+            childrenForA(startA, endA),
+            childrenForB(startB, endB),
+            lenOfRoute$(routeOfA(startA, endA)),
+            lenOfRoute$(routeOfB(startB, endB))
+        );
+        leader.rank += leader.cheap;
     }
     leaders.sort((x, y) => x.rank - y.rank);
+    //----------------------------------------------------
 
-    let root: SegMatchedPair | undefined;
-    let rootSel = Infinity;
-    let chosen: Ranked | undefined;
 
-    const evaluated = new Map<Ranked, { recCost: number; sel: number; ops: SegOp[] }>();
+    const root = pickBest(leaders, TRUNK_RECURSE_CANDS, l => {
+        const { c: { startA, startB, endA, endB, shapeCost } } = l;
 
-    const limit = leaders[0].rank + CAND_MARGIN;
-    let evals = 0;
-    for (const l of leaders) {
-        const { c, rank } = l;
-        if (rank > limit || evals >= TRUNK_RECURSE_CANDS) { break; }
-        evals++;
+        const routeA = routeOfA(startA, endA);
+        const routeB = routeOfB(startB, endB);
         const pair = buildPair_(
-            gA, routeOf_(gA, 'A', c.startA, c.endA),
-            gB, routeOf_(gB, 'B', c.startB, c.endB),
-            c.shapeCost);
-        const sel = pair.cost + c.swayCost;
-        evaluated.set(l, { recCost: pair.cost, sel, ops: pair.ops });
-        if (sel < rootSel) {
-            rootSel = sel;
-            root = pair;
-            chosen = l;
-        }
-    }
-    recordTrunkCands(leaders, evaluated, chosen);
+            gA, routeA,
+            gB, routeB,
+            shapeCost
+        );
 
-    return root!;
+        // debug only: notes the evaluation for the trunk-candidate table
+        recordTrunkEval(l, pair);
+
+        return pair;
+    });
+
+    // debug only: stores the trunk-candidate table
+    recordTrunkCands(leaders);
+
+    return root;
 }
 
 
+/**
+ * Returns a function giving the route `s` → `e` in tree `g`, cached in
+ * `routes` per unique (start, end).
+ * @param routes
+ * @param g
+ */
 function routeOf(
-       routes: Map<string, RouteStep[]>,
-       ids: Record<'A' | 'B', Map<Circle, number>>) {
+        routes: DualMap<Circle, Circle, RouteStep[]>,
+        g: Segment[]) {
 
-    return function(
-            g: Segment[],
-            tag: 'A' | 'B', s: Circle, e: Circle): RouteStep[] {
+    return function(s: Circle, e: Circle): RouteStep[] {
+        return DualMapFs.getOrInsertComputed(
+            routes, s, e, () => routeSegments(g, s, e));
+    }
+}
 
-        const k = `${tag}:${ids[tag].get(s)}:${ids[tag].get(e)}`;
-        let r = routes.get(k);
-        if (r === undefined) {
-            routes.set(k, r = routeSegments(g, s, e));
-        }
 
-        return r;
+/**
+ * Returns a function giving the children hanging off the route `s` → `e`
+ * in tree `g`, cached in `cache` per unique (start, end).
+ * @param cache
+ * @param g
+ * @param routeOf_ the tree's (cached) route lookup
+ * @param unit the tree's length normalization
+ */
+function childrenFor(
+        cache: DualMap<Circle, Circle, SegChild[]>,
+        g: Segment[],
+        routeOf_: (s: Circle, e: Circle) => RouteStep[],
+        unit: number) {
+
+    return function(s: Circle, e: Circle): SegChild[] {
+        return DualMapFs.getOrInsertComputed(
+            cache, s, e, () => childrenOf(g, routeOf_(s, e), unit));
     }
 }
 
 
 export { matchSegTrees }
+
+// 186

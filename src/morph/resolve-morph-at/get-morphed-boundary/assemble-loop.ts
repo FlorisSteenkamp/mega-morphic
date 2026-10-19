@@ -29,7 +29,6 @@ function assembleLoop(
 
         const q = prev[prev.length - 1];
         const gap = hypot(ps[0][0] - q[0], ps[0][1] - q[1]);
-        // console.log(gap);
 
         if (ps.length === 1) {  // waypoint
             if (gap > MIN_LEN) { loop.push([q, ps[0]]); }

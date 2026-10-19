@@ -20,10 +20,17 @@ interface SegChild {
     readonly segs: Segment[];
     /** ≈ salience fraction of the subtree (Σ 2r̂ dŝ) */
     readonly material: number;
-    /** set for children at the route's end/start vertex: ordered by the
-     *  fork sweep (seam order) instead of dist/side */
+    /**
+     * set for children at the route's end/start vertex: ordered by the
+     * fork sweep (seam order) instead of dist/side
+     */
     readonly terminal?: 'start' | 'end';
-    /** sweep-order key within the terminal group */
+    /**
+     * sweep-order key within the terminal group
+     *
+     * * set only together with `terminal`, i.e. only for children at the
+     *   route's end/start vertex
+     */
     readonly sweep?: number;
 }
 
