@@ -1,19 +1,18 @@
 import type { PathCostWeights } from '../morph/match-paths/path-cost-weights.js';
 import type { PathAlignDebug } from '../morph/match-paths/path-align-debug.js';
-import type { Segment, RouteStep } from '../morph/segment-tree/segment.js';
+import type { Segment } from '../morph/segment-tree/segment.js';
 import type { SegMatchedPair } from '../morph/segment-tree/match-seg-trees/seg-matched-pair.js';
 import type { SegOp } from '../morph/segment-tree/match-seg-trees/seg-op.js';
 import type { SegChild } from '../morph/segment-tree/match-seg-trees/seg-child.js';
-import type { ProductDtwResult } from '../morph/segment-tree/product-dtw.js';
 import { matchSegTrees } from '../morph/segment-tree/match-seg-trees/match-seg-trees.js';
-import { subDtwOf } from '../morph/segment-tree/match-seg-trees/sub-dtw-of.js';
-import { isTerminalGated, calcChildPosCost, calcAngleCost, calcDropCost } from '../morph/segment-tree/match-seg-trees/child-costs.js';
-import { routeSegments } from '../morph/segment-tree/route-segments.js';
+import { calcChildPosCost, calcAngleCost, calcDropCost } from '../morph/segment-tree/match-seg-trees/child-costs.js';
 import { alignOfRoutes } from './align-of-routes.js';
 import { anisoOf } from '../morph/segment-tree/match-seg-trees/aniso-of.js';
 import { getUnit$ } from '../morph/segment-tree/get-unit.js';
-import { lenOfRoute$, lenOfSegs$ } from '../morph/segment-tree/len-of.js';
-import { TARGET_SAMPLES } from '../morph/segment-tree/match-seg-trees/consts.js';
+import { outlineLenOf } from '../morph/segment-tree/match-seg-trees/outline-len-of.js';
+import { buildPair } from '../morph/segment-tree/match-seg-trees/build-pair.js';
+import { scoreOf } from '../morph/segment-tree/match-seg-trees/score-of.js';
+import { cheapChildCost } from '../morph/segment-tree/match-seg-trees/cheap-child-cost.js';
 
 
 /**
@@ -40,8 +39,6 @@ interface ChildPairEval {
     readonly b?: ChildLocation;
     /** pooled on the same parent pair (else the DP never compares them) */
     readonly sameParent?: boolean;
-    /** in the same per-side alignment sequence (side/seam grouping) */
-    readonly sameSequence?: boolean;
     readonly price?: ChildPairPrice;
     /** viz alignment of the pinned-start sub-DTW's winning route pair */
     readonly align?: PathAlignDebug;
@@ -89,28 +86,21 @@ function evalChildPair(
 
     const price = priceChildPair(
         gA, gB, unitA, unitB,
-        lenOfRoute$(a.pair.routeA),
-        lenOfRoute$(b.pair.routeB),
+        outlineLenOf(a.pair.routeA),
+        outlineLenOf(b.pair.routeB),
         weights, weights.sway*aniso,
         a.child, b.child
     );
     const dropCost = price.deleteCost + price.insertCost;
 
     const sameParent = a.pair === b.pair;
-    const sameSequence =
-        sameParent && seqIdOf(a.child) === seqIdOf(b.child);
 
-    // the sub-DTW's winning route pair (start pinned at the attach vertex)
-    const cand = price.dtw.candidates[0];
-    const align = alignOfRoutes(
-        routeSegments(a.child.segs, cand.endA, a.child.attachV),
-        routeSegments(b.child.segs, cand.endB, b.child.attachV),
-        unitA, unitB, weights, false);
+    // the best sub-pair's routes (tip → junction)
+    const { routeA, routeB } = price.sub;
+    const align = alignOfRoutes(routeA, routeB, unitA, unitB, weights, false);
 
     const verdict =
-        (price.gated
-            ? 'drop (terminal↔regular gate: match cost = Infinity)'
-            : price.matchCost < dropCost
+        (price.matchCost < dropCost
             ? `match (relabel ${price.matchCost.toFixed(3)} < ` +
                 `drop ${dropCost.toFixed(3)})`
             : `drop (relabel ${price.matchCost.toFixed(3)} >= ` +
@@ -118,89 +108,77 @@ function evalChildPair(
         (!sameParent
             ? ' - HYPOTHETICAL: pooled on different parent pairs, ' +
                 'the DP never compares them'
-            : !sameSequence
-            ? ' - HYPOTHETICAL: different alignment sequences (side/seam), ' +
-                'the DP never compares them'
             : ' (in isolation; sequence order can override)');
 
-    return { a, b, sameParent, sameSequence, price, align, verdict, root };
+    return { a, b, sameParent, price, align, verdict, root };
 }
 
 
 /** One child pair priced by the matcher's actual economics. */
 interface ChildPairPrice {
-    /** terminal↔regular gate fired: `matchCost` = Infinity */
-    readonly gated: boolean;
     readonly positionCost: number;
     readonly angleCost: number;
-    /** pinned-start sub-DTW total incl. measured warp sway */
-    readonly dtwCost: number;
-    /** position + angle + dtw (the DP's relabel price; Infinity when gated) */
+    /** the best sub-pair's own (route-pair) shape cost */
+    readonly subShapeCost: number;
+    /** the best sub-pair's routes' measured warp sway */
+    readonly subSwayCost: number;
+    /** the best sub-pair's recursive child costs (matched + dropped) */
+    readonly subChildCost: number;
+    /** the best sub-pair's score = shape + children + sway (`scoreOf`) */
+    readonly subCost: number;
+    /** position + angle + sub (the DP's relabel price) */
     readonly matchCost: number;
     readonly deleteCost: number;
     readonly insertCost: number;
-    readonly dtw: ProductDtwResult;
+    /** the best fully built sub-pair (its routes run tip → junction) */
+    readonly sub: SegMatchedPair;
 }
 
 
 /**
  * Prices one child pair exactly as the matcher's `matchCost` / `delCost` /
  * `insCost` would (fresh, unmemoized) - the authoritative relabel-vs-drop
- * economics for the pair. Route lengths are the PARENT routes the children
- * are pooled on (position is a route fraction).
+ * economics for the pair. Outline lengths are those of the PARENT routes
+ * the children are pooled on (position is an outline fraction).
  */
 function priceChildPair(
         gA: Segment[],
         gB: Segment[],
         unitA: number,
         unitB: number,
-        routeLenA: number,
-        routeLenB: number,
+        outlineLenA: number,
+        outlineLenB: number,
         weights: PathCostWeights,
         sway: number,
         a: SegChild,
         b: SegChild): ChildPairPrice {
 
-    const dtw = subDtwOf(
-        gA, gB,
-        unitA, unitB,
-        // trunk-level sample spacing of a tree
-        lenOfSegs$(gA) / TARGET_SAMPLES,
-        lenOfSegs$(gB) / TARGET_SAMPLES,
-        weights, sway, a, b
+    const { evalBest } = buildPair(
+        cheapChildCost(unitA, unitB, weights),
+        gA, gB, unitA, unitB, weights, sway
     );
+    const sub = evalBest(a, b);
+    const { shapeCost, cost, sway: subSway } = sub;
+    const subCost = scoreOf(sub);
 
-    const gated = isTerminalGated(a, b);
     const positionCost = calcChildPosCost(unitA, unitB, weights)(
-        a, b, routeLenA, routeLenB);
+        a, b, outlineLenA, outlineLenB);
     const angleCost = calcAngleCost(weights)(a, b);
-    const dtwCost = dtw.totalCost + dtw.swayCost;
-    const matchCost = gated
-            ? Infinity
-            : positionCost + angleCost + dtwCost;
+    const matchCost = positionCost + angleCost + subCost;
     const calcDropCost_ = calcDropCost(weights);
 
     return {
-        gated,
         positionCost,
         angleCost,
-        dtwCost,
+        subShapeCost: shapeCost,
+        subSwayCost: subSway,
+        subChildCost: cost - shapeCost,
+        subCost,
         matchCost,
         deleteCost: calcDropCost_(a),
         insertCost: calcDropCost_(b),
-        dtw
+        sub
     };
-}
-
-
-/**
- * The per-side alignment sequence the child lands in (mirrors `getSeq`:
- * seam terminals join the out (+1) / back (-1) sequence by seam, not side).
- */
-function seqIdOf(c: SegChild): 1 | -1 {
-    return c.terminal !== undefined
-        ? (c.terminal === 'end' ? 1 : -1)
-        : c.side;
 }
 
 

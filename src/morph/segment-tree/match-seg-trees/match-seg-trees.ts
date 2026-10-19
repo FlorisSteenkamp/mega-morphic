@@ -8,7 +8,7 @@ import { DualMapFs } from '../../../utils/dual-map.js';
 import { routeSegments } from '../route-segments.js';
 import { sampleSegTree } from '../sample-seg-tree.js';
 import { productDtw } from '../product-dtw.js';
-import { lenOfRoute$ } from '../len-of.js';
+import { outlineLenOf } from './outline-len-of.js';
 import { getUnit$ } from '../get-unit.js';
 import { anisoOf } from './aniso-of.js';
 import { recordTrunkEval, recordTrunkCands } from '../../../debug/record-trunk-cands.js';
@@ -27,13 +27,15 @@ import { TARGET_SAMPLES, TRUNK_RECURSE_CANDS, TRUNK_CHEAP_CANDS } from './consts
  *   * DP states = (sample of A, sample of B) pairs
  *   * routes run leaf/fork to leaf/fork - terminal stretches beyond an end
  *     fork compete as ordinary children
- * * the subtrees hanging off the two routes are then Needleman-Wunsch-aligned per side
- *   * relabel cost = position + angle + a pinned-start product DTW
- *   * terminal children in fork-sweep seam order
+ * * the subtrees hanging off the two routes are then aligned around the
+ *   routes' outlines (cyclic Needleman-Wunsch)
+ *   * relabel cost = position (along the outline) + angle + the score
+ *     (`scoreOf`) of the child pair's best fully built sub-pair, from a
+ *     pinned-start product DTW and its own recursion
+ *   * terminal children in fork-sweep seam order, between the flanks
  * * matched child pairs recurse
- * * the score is diagnostic-grade: a matched child's deeper subtrees are
- *   priced as covered-or-dropped inside its DTW rather than by its own
- *   recursion
+ * * every decision (trunk, sub-route and child alignment) minimizes the
+ *   same score: recursive cost + measured sway
  */
 function matchSegTrees(
         gA: Segment[],
@@ -59,7 +61,7 @@ function matchSegTrees(
 
     const pd = productDtw(sA, sB, weights, swayW);
 
-    const buildPair_ = buildPair(
+    const { pairOf } = buildPair(
         cheapChildCost_,
         gA, gB, unitA, unitB, weights, swayW
     );
@@ -96,31 +98,34 @@ function matchSegTrees(
     const childrenForB = childrenFor(childrenCacheB, gB, routeOfB, unitB);
 
     //----------------------------------------------------
+    // rank = shape + sway + cheap: the routes' uncovered material is priced
+    // through their children only (the DP's `totalCost` would charge it a
+    // second time, as if dropped)
     const leaders = ranked.slice(0, TRUNK_CHEAP_CANDS);
     for (const leader of leaders) {
-        const { c: { startA, startB, endA, endB } } = leader;
+        const { c: { startA, startB, endA, endB, shapeCost, swayCost } } = leader;
 
         leader.cheap = cheapChildCost_(
             childrenForA(startA, endA),
             childrenForB(startB, endB),
-            lenOfRoute$(routeOfA(startA, endA)),
-            lenOfRoute$(routeOfB(startB, endB))
+            outlineLenOf(routeOfA(startA, endA)),
+            outlineLenOf(routeOfB(startB, endB))
         );
-        leader.rank += leader.cheap;
+        leader.rank = shapeCost + swayCost + leader.cheap;
     }
     leaders.sort((x, y) => x.rank - y.rank);
     //----------------------------------------------------
 
 
     const root = pickBest(leaders, TRUNK_RECURSE_CANDS, l => {
-        const { c: { startA, startB, endA, endB, shapeCost } } = l;
+        const { c: { startA, startB, endA, endB, shapeCost, swayCost } } = l;
 
         const routeA = routeOfA(startA, endA);
         const routeB = routeOfB(startB, endB);
-        const pair = buildPair_(
+        const pair = pairOf(
             gA, routeA,
             gB, routeB,
-            shapeCost
+            shapeCost, swayCost
         );
 
         // debug only: notes the evaluation for the trunk-candidate table
@@ -177,3 +182,4 @@ function childrenFor(
 export { matchSegTrees }
 
 // 186
+// angleCost, positionCost, subChildCost, subCost, subShapeCost, subSwayCost, total match cost

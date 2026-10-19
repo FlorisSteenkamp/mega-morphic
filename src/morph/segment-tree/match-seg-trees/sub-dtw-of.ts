@@ -9,7 +9,16 @@ import { lenOfSegs$ } from '../len-of.js';
 const { max, min, round } = Math;
 
 
-/** Pinned-start sub-DTW of a child pair - the relabel core of `matchCost`. */
+/**
+ * Returns the pinned-start sub-DTW of a child pair - the relabel core of
+ * `matchCost`.
+ *
+ * * B's travel directions are rotated into A's parent frame (by the
+ *   difference of the parent routes' directions at the attach vertices), so
+ *   the measured sway is the child's rotation RELATIVE to its parent - the
+ *   morph carries a glued child along with its parent's rotation, which the
+ *   parent pairing has already paid for
+ */
 function subDtwOf(
         gA: Segment[],
         gB: Segment[],
@@ -34,7 +43,11 @@ function subDtwOf(
         b.attachV
     );
 
-    return productDtw(ssgA, ssgB, weights, sway);
+    // φ only feeds the sway measurement
+    const Δψ = a.routeDir - b.routeDir;
+    const ssgBInA = { ...ssgB, φ: ssgB.φ.map(φ => φ + Δψ) };
+
+    return productDtw(ssgA, ssgBInA, weights, sway);
 }
 
 

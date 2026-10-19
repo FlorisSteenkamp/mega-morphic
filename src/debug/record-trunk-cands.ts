@@ -4,6 +4,7 @@ import type { Circle } from 'flo-mat';
 import type { Ranked } from '../morph/segment-tree/match-seg-trees/ranked.js';
 import type { SegOp } from '../morph/segment-tree/match-seg-trees/seg-op.js';
 import type { SegMatchedPair } from '../morph/segment-tree/match-seg-trees/seg-matched-pair.js';
+import { scoreOf } from '../morph/segment-tree/match-seg-trees/score-of.js';
 
 
 /**
@@ -22,13 +23,13 @@ interface TrunkCandDebug {
     readonly cheap: number;
     /** local sway measured along the candidate's intrinsic warp */
     readonly sway: number;
-    /** stage-2 rank = dp + sway + cheap */
+    /** stage-2 rank = shape + sway + cheap */
     readonly rank: number;
     /** the candidate that became the trunk */
     readonly chosen: boolean;
     /** full recursive cost (buildPair) */
     readonly recCost?: number;
-    /** selection value = recCost + sway */
+    /** selection value = recCost + sway (`scoreOf`) */
     readonly sel?: number;
     readonly ops?: SegOp[];
 }
@@ -59,8 +60,8 @@ function recordTrunkEval(
 
     if (!isRecording()) { return; }
 
-    // selection value, as in `pickBest`: recursive cost + measured sway
-    const sel = pair.cost + l.c.swayCost;
+    // selection value, as in `pickBest`
+    const sel = scoreOf(pair);
 
     evaluated.set(l, { recCost: pair.cost, sel, ops: pair.ops });
 }

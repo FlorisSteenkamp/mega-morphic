@@ -12,9 +12,20 @@ interface SegMatchedPair {
     readonly shapeCost: number;
     /** shape + child ops, recursive */
     readonly cost: number;
+    /**
+     * measured warp sway of the routes themselves
+     *
+     * * never part of `cost`, but part of every decision (`scoreOf`)
+     *
+     * * not summed over the children: it is a mean over the routes'
+     *   corresponded material (size-independent), so a sum would charge
+     *   every matched part a full share however small - each child's own
+     *   sway already priced its match, one level up
+     */
+    readonly sway: number;
     readonly ops: SegOp[];
-    /** set only when `_debug_` is active: per-side child-alignment DP */
-    readonly dp?: SegDp[];
+    /** set only when `_debug_` is active: the child-alignment DP */
+    readonly dp?: SegDp;
     /**
      * set only when `_debug_` is active: full-resolution profile alignment
      * of the routes (attached by `recordPathMatch`)

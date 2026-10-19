@@ -1,8 +1,7 @@
 import type { PathCostWeights } from '../../match-paths/path-cost-weights.js';
 import type { SegChild } from './seg-child.js';
-import { calcChildPosCost, calcAngleCost, calcDropCost, isTerminalGated } from './child-costs.js';
-import { alignSides } from './align-sides.js';
-import { sum } from '../../../utils/sum.js';
+import { calcChildPosCost, calcAngleCost, calcDropCost } from './child-costs.js';
+import { alignOutline } from './align-outline.js';
 
 const { abs } = Math;
 
@@ -11,8 +10,8 @@ const { abs } = Math;
 type CalcCheapChildCost = (
     chA: SegChild[],
     chB: SegChild[],
-    lenRA: number,
-    lenRB: number) => number;
+    outlineLenA: number,
+    outlineLenB: number) => number;
 
 
 /**
@@ -35,18 +34,16 @@ function cheapChildCost(
     return function(
             chA: SegChild[],
             chB: SegChild[],
-            lenRA: number,
-            lenRB: number): number {
+            outlineLenA: number,
+            outlineLenB: number): number {
 
         function cheapMatch(a: SegChild, b: SegChild): number {
-            return isTerminalGated(a, b)
-                ? Infinity
-                : calcChildPosCost_(a, b, lenRA, lenRB) +
-                  calcAngleCost_(a, b) +
-                  weights.del*abs(a.material - b.material);
+            return calcChildPosCost_(a, b, outlineLenA, outlineLenB) +
+                calcAngleCost_(a, b) +
+                weights.del*abs(a.material - b.material);
         }
 
-        return sum(alignSides(chA, chB, cheapMatch, calcDropCost_).map(s => s.cost));
+        return alignOutline(chA, chB, cheapMatch, calcDropCost_).cost;
     }
 }
 

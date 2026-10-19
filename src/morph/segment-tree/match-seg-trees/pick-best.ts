@@ -1,5 +1,6 @@
 import type { SegMatchedPair } from './seg-matched-pair.js';
 import { CAND_MARGIN } from './consts.js';
+import { scoreOf } from './score-of.js';
 
 
 /**
@@ -7,15 +8,15 @@ import { CAND_MARGIN } from './consts.js';
  *
  * * leaders are evaluated in rank order, stopping at the first one ranked
  *   more than `CAND_MARGIN` above the best, or after `maxEvals` evaluations
- * * selection value = recursive cost + the candidate's measured warp sway
- *   (sway selects but is never part of the pair's `cost`); the first
- *   leader of minimum selection value wins
+ * * selection value = the built pair's `scoreOf` (recursive cost + the
+ *   routes' measured sway); the first leader of minimum selection value
+ *   wins
  *
  * @param leaders the leaders, sorted by rank (best first, at least one)
  * @param maxEvals the maximum number of full evaluations
  * @param build fully builds a leader's pair (the costly recursion)
  */
-function pickBest<L extends { rank: number; c: { swayCost: number } }>(
+function pickBest<L extends { rank: number }>(
         leaders: L[],
         maxEvals: number,
         build: (l: L) => SegMatchedPair): SegMatchedPair {
@@ -30,7 +31,7 @@ function pickBest<L extends { rank: number; c: { swayCost: number } }>(
         evals++;
 
         const pair = build(l);
-        const sel = pair.cost + l.c.swayCost;
+        const sel = scoreOf(pair);
         if (sel < bestSel) {
             bestSel = sel;
             best = pair;

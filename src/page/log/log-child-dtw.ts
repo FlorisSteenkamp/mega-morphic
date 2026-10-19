@@ -252,8 +252,12 @@ function evaluate(
         // the matcher's decision inputs: matchCost vs delCost + insCost
         cost: price === undefined ? undefined : {
             match: {
-                // pinned-start sub product-DTW total (coverage-priced)
-                dtwCost: price.dtwCost,
+                // the best fully built sub-pair's score: shape + its
+                // recursive child costs + its routes' sway
+                subCost: price.subCost,
+                subShapeCost: price.subShapeCost,
+                subSwayCost: price.subSwayCost,
+                subChildCost: price.subChildCost,
                 // quadratic in the normalized dist mismatch
                 positionCost: price.positionCost,
                 angleCost: price.angleCost,
@@ -268,10 +272,8 @@ function evaluate(
         verdict: r.verdict,
         selectionA: describeLoc(r.a),
         selectionB: describeLoc(r.b),
-        // the DP only ever compares children pooled on the same parent
-        // pair AND in the same per-side sequence
+        // the DP only ever compares children pooled on the same parent pair
         sameParent: r.sameParent,
-        sameSequence: r.sameSequence,
         // the fresh winning match (current weights), for digging
         root: r.root
     });

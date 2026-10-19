@@ -94,9 +94,7 @@ function needleContent() {
         <span style={{ background: opColors.match }}> match </span>
         <span style={{ background: opColors.delete }}> delete </span>
         <span style={{ background: opColors.insert }}> insert </span>
-        {dp.map(dp => (
-            <DpTable key={dp.side} dp={dp} idsA={idsA} idsB={idsB} />
-        ))}
+        <DpTable dp={dp} idsA={idsA} idsB={idsB} />
     </div>;
 }
 
@@ -123,7 +121,7 @@ function DpTable(props: {
 
     return <div style={{ marginTop: '10px' }}>
         <div style={{ fontWeight: 700 }}>
-            side {dp.side > 0 ? '+1 (out)' : '−1 (back)'}
+            around the outline (cyclic: A shown from its best cut)
             &nbsp;— A: {as.length}, B: {bs.length} children
         </div>
         <table style={{ borderCollapse: 'collapse', marginTop: '4px' }}>
