@@ -12,6 +12,8 @@ interface OutlineFrame {
     readonly len: number;
     /** the end anchor's position as an outline fraction (`endAnchorOf`) */
     readonly end: number;
+    /** the route's (skeleton) length */
+    readonly routeLen: number;
 }
 
 
@@ -24,7 +26,7 @@ function outlineFrameOf(
 
     const len = outlineLenOf(route);
 
-    return { len, end: endAnchorOf(route)/len };
+    return { len, end: endAnchorOf(route)/len, routeLen: lenOfRoute$(route) };
 }
 
 

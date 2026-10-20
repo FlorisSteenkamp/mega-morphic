@@ -71,8 +71,11 @@ function calcChildPosCost(
  *   both glyphs (`calcGapFracs`) - so no stretch between landmarks is longer
  *   than half the outline, and drift cannot carry past the far end
  *
- * * gaps are outline fractions, rescaled by the mean normalized outline
- *   length into glyph units; each (part of a) link costs
+ * * gaps are measured along the skeleton (`calcSkelGapFracs` - children at
+ *   the same fork are `0` apart whatever their side), as route fractions
+ *   rescaled by the mean normalized route length into glyph units; whether
+ *   a link passes the end anchor comes from the outline order
+ *   (`calcGapFracs`); each (part of a) link costs
  *   `w.spacing·e / (g + r̄)`, where `e` is the gaps' difference, `g` the
  *   smaller gap and `r̄` the moved child pair's mean normalized attach radius
  *   (of `q`, or of `p` for the link back to the start):
@@ -107,15 +110,22 @@ function calcSpacingCost(
         if (moved === undefined) { return 0; }
         const [a, b] = moved;
 
-        const λ = (frameA.len/unitA + frameB.len/unitB) / 2;
+        const λ = (frameA.routeLen/unitA + frameB.routeLen/unitB) / 2;
         const r = (a.attachV.radius/unitA + b.attachV.radius/unitB) / 2;
-        const gsA = calcGapFracs(p?.[0], q?.[0], frameA);
-        const gsB = calcGapFracs(p?.[1], q?.[1], frameB);
+
+        // whether the link passes the end anchor: from the outline order
+        const passesEnd =
+            calcGapFracs(p?.[0], q?.[0], frameA).passesEnd ||
+            calcGapFracs(p?.[1], q?.[1], frameB).passesEnd;
+
+        // the gaps themselves: along the skeleton
+        const gsA = calcSkelGapFracs(p?.[0], q?.[0], frameA);
+        const gsB = calcSkelGapFracs(p?.[1], q?.[1], frameB);
 
         const cost = (fA: number, fB: number) =>
             w.spacing*calcRelMismatch(λ*fA, λ*fB, r);
 
-        return gsA.passesEnd || gsB.passesEnd
+        return passesEnd
             ? cost(gsA.toEnd, gsB.toEnd) + cost(gsA.fromEnd, gsB.fromEnd)
             : cost(gsA.gap, gsB.gap);
     }
@@ -180,6 +190,34 @@ function calcGapFracs(
     const fromEnd = gap - toEnd;
 
     return { gap, toEnd, fromEnd, passesEnd: toEnd > 0 && toEnd <= gap };
+}
+
+
+/**
+ * Returns the skeleton fractions (of the route's length) of the link from
+ * child `p` on to child `q` (`undefined` = the start anchor, at `dist` 0):
+ *
+ * * `gap` - the signed change in `dist` - children at the same fork have
+ *   gap `0` whichever side of the route they hang off (along the outline
+ *   they would be a whole cap apart)
+ *
+ * * `toEnd` / `fromEnd` - the link split at the route's end (`dist` = the
+ *   route length)
+ *
+ * @param p the child the link starts at
+ * @param q the child the link ends at
+ * @param frame the route's outline
+ */
+function calcSkelGapFracs(
+        p: SegChild | undefined,
+        q: SegChild | undefined,
+        frame: OutlineFrame) {
+
+    const { routeLen } = frame;
+    const dp = p === undefined ? 0 : p.dist/routeLen;
+    const dq = q === undefined ? 0 : q.dist/routeLen;
+
+    return { gap: dq - dp, toEnd: 1 - dp, fromEnd: dq - 1 };
 }
 
 
