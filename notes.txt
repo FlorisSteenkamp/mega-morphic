@@ -13,6 +13,18 @@ Info
 npm account name: floris / florissteenkamp
 
 
+Checkpoints
+-----------
+* a8779ad (2026-10-19) - child matching BEFORE spacing/anchors: cyclic outline
+  alignment, exact recursive scores, absolute position cost (quadratic,
+  weight 0.5), no `spacing` weight. Go back here if the spacing chain
+  (start + end anchors, linear position/spacing costs) turns out wrong.
+* 25b58c3 (2026-10-19) - spacing chain anchored at the route start + end
+  cap, linear absolute position (0.15) + linear spacing (0.025). Better than
+  a8779ad (M/N perfect, incl. SAT 1.5). Starting point for option 3
+  (warp-relative position) / fork events inside the DTW.
+
+
 TODO
 ----
 * shapes to recheck:
