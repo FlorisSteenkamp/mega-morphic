@@ -27,8 +27,16 @@ interface PathCostWeights {
     readonly del: number;
     /** flat delete/insert floor (small branches aren't free to drop) */
     readonly delFloor: number;
-    /** fork position mismatch along the paths */
+    /**
+     * fork position mismatch along the whole outline (linear - the absolute
+     * reference that keeps local spacing errors from drifting)
+     */
     readonly position: number;
+    /**
+     * spacing mismatch between consecutive matched children (relative to
+     * the gap, floored by the stroke width - see `calcSpacingCost`)
+     */
+    readonly spacing: number;
     /** fork emanating-angle mismatch */
     readonly angle: number;
 
@@ -48,7 +56,8 @@ interface PathCostWeights {
 const defaultPathWeights: PathCostWeights = {
     radius: 1,
     turning: 0.15,
-    position: 0.5,
+    position: 0.15,
+    spacing: 0.025,
     angle: 0.25,
     del: 3,
     delFloor: 0.15,

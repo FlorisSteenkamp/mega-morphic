@@ -69,6 +69,7 @@ const weightRanges: Record<
     del: { max: 10, step: 0.1, group: 'children' },
     delFloor: { max: 1, step: 0.01, group: 'children' },
     position: { max: 2, step: 0.05, group: 'children' },
+    spacing: { max: 0.5, step: 0.005, group: 'children' },
     angle: { max: 2, step: 0.05, group: 'children' },
     sway: { max: 4, step: 0.05, group: 'trunk' }
 };

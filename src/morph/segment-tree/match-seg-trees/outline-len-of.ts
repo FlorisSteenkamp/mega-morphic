@@ -1,8 +1,31 @@
+import type { Circle } from 'flo-mat';
 import type { RouteStep } from '../segment.js';
 import { geomOf$ } from '../geom-of.js';
 import { lenOfRoute$ } from '../len-of.js';
 
 const { PI: π } = Math;
+
+
+/** a route's idealized sleeve outline, as children's positions refer to it */
+interface OutlineFrame {
+    /** the outline's length (`outlineLenOf`) */
+    readonly len: number;
+    /** the end anchor's position as an outline fraction (`endAnchorOf`) */
+    readonly end: number;
+}
+
+
+/**
+ * Returns the route's idealized sleeve outline frame (its length and end
+ * anchor).
+ */
+function outlineFrameOf(
+        route: RouteStep[]): OutlineFrame {
+
+    const len = outlineLenOf(route);
+
+    return { len, end: endAnchorOf(route)/len };
+}
 
 
 /**
@@ -14,15 +37,40 @@ const { PI: π } = Math;
 function outlineLenOf(
         route: RouteStep[]): number {
 
-    const first = route[0];
-    const last = route[route.length - 1];
-    const { vertS: s0, vertE: e0 } = geomOf$(first.seg);
-    const { vertS: s1, vertE: e1 } = geomOf$(last.seg);
-    const vStart = first.reversed ? e0 : s0;
-    const vEnd = last.reversed ? s1 : e1;
+    const [vStart, vEnd] = routeEndsOf(route);
 
     return 2*lenOfRoute$(route) + π*(vStart.radius + vEnd.radius);
 }
 
 
-export { outlineLenOf }
+/**
+ * Returns the outline position (as `outlinePos`) of the route's end anchor:
+ * the middle of its end cap, where the outline turns from the out flank to
+ * the back flank.
+ */
+function endAnchorOf(
+        route: RouteStep[]): number {
+
+    const [, vEnd] = routeEndsOf(route);
+
+    return lenOfRoute$(route) + π*vEnd.radius/2;
+}
+
+
+/**
+ * Returns the route's start and end vertices.
+ */
+function routeEndsOf(
+        route: RouteStep[]): [Circle, Circle] {
+
+    const first = route[0];
+    const last = route[route.length - 1];
+    const { vertS: s0, vertE: e0 } = geomOf$(first.seg);
+    const { vertS: s1, vertE: e1 } = geomOf$(last.seg);
+
+    return [first.reversed ? e0 : s0, last.reversed ? s1 : e1];
+}
+
+
+export { outlineLenOf, endAnchorOf, outlineFrameOf }
+export type { OutlineFrame }

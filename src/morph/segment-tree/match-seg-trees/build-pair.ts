@@ -13,12 +13,12 @@ import { lenOfSegs$ } from '../len-of.js';
 import { childrenOf } from './children-of.js';
 import { subDtwOf } from './sub-dtw-of.js';
 import {
-    calcChildPosCost, calcAngleCost, calcDropCost
+    calcChildPosCost, calcSpacingCost, calcAngleCost, calcDropCost
 } from './child-costs.js';
 import { pickBest } from './pick-best.js';
 import { scoreOf } from './score-of.js';
-import { alignOutline } from './align-outline.js';
-import { outlineLenOf } from './outline-len-of.js';
+import { alignOutlineLinked } from './align-outline.js';
+import { outlineFrameOf } from './outline-len-of.js';
 import { MAX_RECURSE_CANDS, TARGET_SAMPLES } from './consts.js';
 
 
@@ -57,6 +57,7 @@ function buildPair(
     const δB = lenOfSegs$(gB) / TARGET_SAMPLES;
 
     const calcChildPosCost_ = calcChildPosCost(unitA, unitB, weights);
+    const calcSpacingCost_ = calcSpacingCost(unitA, unitB, weights);
     const calcAngleCost_ = calcAngleCost(weights);
     const calcDropCost_ = calcDropCost(weights);
 
@@ -117,9 +118,12 @@ function buildPair(
      * * finds the children (subtrees) hanging off each route within its scope
      *
      * * aligns the two children sequences around the routes' outlines
-     *   (cyclic Needleman-Wunsch, `alignOutline`):
-     *   * match: position + angle + the `scoreOf` of the pair's best fully
-     *     built sub-pair (`evalBest`)
+     *   (cyclic, linked Needleman-Wunsch, `alignOutlineLinked`):
+     *   * match: absolute position (against drift) + angle + the `scoreOf`
+     *     of the pair's best fully built sub-pair (`evalBest`)
+     *   * link between consecutive matches (and the start anchor, split at
+     *     the end anchor): their spacing mismatch (`calcSpacingCost` -
+     *     position relative to the neighbouring matches and landmarks)
      *   * delete / insert: the dropped child's drop cost
      *
      * * the alignment is exact but lazy: a pair not yet built is priced at a
@@ -129,15 +133,16 @@ function buildPair(
      *   the result is optimal for the fully built scores, while building
      *   only pairs that were picked at some point
      *
-     * * a match is skipped (`Infinity`) when position + angle alone already
-     *   cost as much as dropping both children - it can never beat delete +
-     *   insert
+     * * a match is skipped (`Infinity`) when its position + angle alone
+     *   already cost as much as dropping both children - it can never beat
+     *   delete + insert
      *
      * * child routes run tip → junction (from the sub-DTW's end vertex to
      *   the child's attach vertex)
      *
-     * * `cost` = `shapeCost` + per matched child: position + angle + its
-     *   recursive `cost`; per dropped child: its drop cost
+     * * `cost` = `shapeCost` + the links' spacing costs + per matched child:
+     *   position + angle + its recursive `cost`; per dropped child: its drop
+     *   cost
      *
      * * `sway` = `swayCost`, the routes' own (never part of `cost`, but of
      *   every decision - each child's sway already priced its own match
@@ -162,17 +167,26 @@ function buildPair(
 
         const chA = childrenOf(scopeA, rA, unitA);
         const chB = childrenOf(scopeB, rB, unitB);
-        const olA = outlineLenOf(rA);
-        const olB = outlineLenOf(rB);
+        const frameA = outlineFrameOf(rA);
+        const frameB = outlineFrameOf(rB);
+        const { len: olA } = frameA;
+        const { len: olB } = frameB;
+
+        /** position (absolute, against drift) + angle */
+        function calcPlaceCost(
+                a: SegChild,
+                b: SegChild): number {
+
+            return calcChildPosCost_(a, b, olA, olB) + calcAngleCost_(a, b);
+        }
 
         function matchCost(
                 a: SegChild,
                 b: SegChild): number {
 
-            const placeCost = calcChildPosCost_(a, b, olA, olB) +
-                calcAngleCost_(a, b);
-            // scores are never negative, so the match can't beat delete +
-            // insert - skip the (costly) sub-DTW
+            const placeCost = calcPlaceCost(a, b);
+            // scores (and links) are never negative, so the match can't
+            // beat delete + insert - skip the (costly) sub-DTW
             if (placeCost >= calcDropCost_(a) + calcDropCost_(b)) {
                 return Infinity;
             }
@@ -182,7 +196,15 @@ function buildPair(
                 : calcScoreFloor(leadersOf(a, b)));
         }
 
-        let aligned = alignOutline(chA, chB, matchCost, calcDropCost_);
+        function link(
+                p: [SegChild, SegChild] | undefined,
+                q: [SegChild, SegChild] | undefined): number {
+
+            return calcSpacingCost_(p, q, frameA, frameB);
+        }
+
+        let aligned = alignOutlineLinked(
+            chA, chB, olA, olB, matchCost, calcDropCost_, link);
         for (;;) {
             const unbuilt = aligned.ops.filter(
                 op => op.type === 'match' && !isBuilt(op.a, op.b));
@@ -191,18 +213,17 @@ function buildPair(
             for (const op of unbuilt) {
                 if (op.type === 'match') { evalBest(op.a, op.b); }
             }
-            aligned = alignOutline(chA, chB, matchCost, calcDropCost_);
+            aligned = alignOutlineLinked(
+                chA, chB, olA, olB, matchCost, calcDropCost_, link);
         }
 
         const ops: SegOp[] = [];
-        let cost = shapeCost;
+        let cost = shapeCost + aligned.linkCost;
 
         for (const op of aligned.ops) {
             if (op.type === 'match') {
                 const subPair = evalBest(op.a, op.b);
-                cost += calcChildPosCost_(op.a, op.b, olA, olB) +
-                    calcAngleCost_(op.a, op.b) +
-                    subPair.cost;
+                cost += calcPlaceCost(op.a, op.b) + subPair.cost;
                 ops.push({
                     type: 'match', a: op.a, b: op.b, sub: subPair });
             } else if (op.type === 'delete') {

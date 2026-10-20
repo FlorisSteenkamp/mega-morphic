@@ -108,7 +108,8 @@ function evalChildPair(
         (!sameParent
             ? ' - HYPOTHETICAL: pooled on different parent pairs, ' +
                 'the DP never compares them'
-            : ' (in isolation; sequence order can override)');
+            : ' (in isolation, before spacing; sequence order and the ' +
+                'spacing to neighbouring matches can override)');
 
     return { a, b, sameParent, price, align, verdict, root };
 }
@@ -116,6 +117,11 @@ function evalChildPair(
 
 /** One child pair priced by the matcher's actual economics. */
 interface ChildPairPrice {
+    /**
+     * absolute (whole-outline) position price - the alignment adds the
+     * spacing to the neighbouring matches (`calcSpacingCost`) on top, which
+     * depends on the whole alignment
+     */
     readonly positionCost: number;
     readonly angleCost: number;
     /** the best sub-pair's own (route-pair) shape cost */
@@ -126,7 +132,7 @@ interface ChildPairPrice {
     readonly subChildCost: number;
     /** the best sub-pair's score = shape + children + sway (`scoreOf`) */
     readonly subCost: number;
-    /** position + angle + sub (the DP's relabel price) */
+    /** position + angle + sub (the DP's relabel price, before spacing) */
     readonly matchCost: number;
     readonly deleteCost: number;
     readonly insertCost: number;

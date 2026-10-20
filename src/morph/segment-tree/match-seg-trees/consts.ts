@@ -18,7 +18,15 @@ const TRUNK_CHEAP_CANDS = 64;
 const SUB_CHEAP_CANDS = 16;
 
 
+/**
+ * how far past a route's start anchor (as an outline fraction) a child may
+ * lie and still be matched across it (as crossing the start, not as going
+ * all the way round)
+ */
+const MAX_CROSS = 0.25;
+
+
 export {
     TARGET_SAMPLES, MAX_RECURSE_CANDS, CAND_MARGIN, TRUNK_RECURSE_CANDS,
-    TRUNK_CHEAP_CANDS, SUB_CHEAP_CANDS
+    TRUNK_CHEAP_CANDS, SUB_CHEAP_CANDS, MAX_CROSS
 }

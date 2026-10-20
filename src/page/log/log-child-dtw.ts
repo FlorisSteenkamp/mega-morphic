@@ -258,7 +258,8 @@ function evaluate(
                 subShapeCost: price.subShapeCost,
                 subSwayCost: price.subSwayCost,
                 subChildCost: price.subChildCost,
-                // quadratic in the normalized dist mismatch
+                // absolute (whole-outline); the alignment adds the spacing
+                // to the neighbouring matches on top
                 positionCost: price.positionCost,
                 angleCost: price.angleCost,
                 "total match cost": price.matchCost

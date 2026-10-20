@@ -21,7 +21,12 @@ function getInitialState(): AppState {
         pageState: { 
             // Defaults first so fields added since the state was stored exist
             ...pageStateDefaults,
-            ...storedState.pageState, 
+            ...storedState.pageState,
+            // likewise for weights added since
+            pathWeights: {
+                ...pageStateDefaults.pathWeights,
+                ...storedState.pageState.pathWeights
+            },
             deduced: defaultDeduced
         } 
     };
