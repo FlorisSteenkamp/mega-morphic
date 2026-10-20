@@ -4,6 +4,12 @@ const { atan2, tan, cos, sin, abs, ceil, PI: π } = Math;
 
 const MIN_LEN = 1e-6;
 
+/**
+ * a sweep (in the winding direction) within this of a full turn is taken
+ * as near-coincident endpoints, crossed slightly backwards
+ */
+const NEAR_FULL_TURN = π/4;
+
 
 /**
  * The arc of the disk at `p` from `from` to `to` as TRUE cubic bezier
@@ -11,6 +17,14 @@ const MIN_LEN = 1e-6;
  * in the direction given by the outline winding `sign`. Endpoints lie on
  * the circle of radius `r`; sub-MIN_LEN mismatches with the neighboring
  * pieces are welded by `assembleLoop`.
+ *
+ * * a sweep within `NEAR_FULL_TURN` of a full turn sweeps the short way
+ *   back instead: the endpoints nearly coincide (as when the sides meet at
+ *   the cap) and `to` has merely drifted behind `from` - a full circle
+ *   there would pop in the moment t leaves 0 (where the endpoints coincide
+ *   exactly and the arc is empty), and with it the measured pose
+ *   (`poseCorrectionAt` would rescale the whole shape). A real cap never
+ *   sweeps that far: the route's own prong always takes part of the disk.
  */
 function capArcBeziers(
         p: number[],
@@ -25,7 +39,10 @@ function capArcBeziers(
     const a1 = atan2(to[1] - p[1], to[0] - p[0]);
 
     const ccw = ((a1 - a0) % (2*π) + 2*π) % (2*π);
-    const sweep = sign > 0 ? ccw : ccw - 2*π;
+    const forward = sign > 0 ? ccw : ccw - 2*π;
+    const sweep = abs(forward) > 2*π - NEAR_FULL_TURN
+        ? forward - sign*2*π
+        : forward;
     if (abs(sweep) < 1e-9) { return []; }
 
     // ≥ 1 since |sweep| ≥ 1e-9
