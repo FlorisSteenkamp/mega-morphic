@@ -2,6 +2,7 @@ import type { MorphEntry } from '../morph-entry.js';
 import type { Pose } from './pose.js';
 import { calcProcrustes$ } from './calc-procrustes.js';
 import { resolveMorphAt } from '../resolve-morph-at/resolve-morph-at.js';
+import { mainOutlinesOf } from './main-outlines-of.js';
 
 
 /**
@@ -19,12 +20,17 @@ import { resolveMorphAt } from '../resolve-morph-at/resolve-morph-at.js';
  * 
  * * Measured on the UNALIGNED entries: resolving is translation/scale
  * equivariant, so the aligned entries' t=1 pose is just this one mapped.
+ *
+ * * Measured over the matched components only (`mainOutlinesOf`) - the
+ * same loops the live correction measures.
  */
 function calcPoseAt(
         entries: MorphEntry[],
         t: number): Pose {
 
-    return calcProcrustes$(resolveMorphAt(entries, t).outlines.flat());
+    const resolved = resolveMorphAt(entries, t);
+
+    return calcProcrustes$(mainOutlinesOf(entries, resolved).flat());
 }
 
 

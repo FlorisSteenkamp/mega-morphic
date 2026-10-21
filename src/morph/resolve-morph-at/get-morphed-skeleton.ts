@@ -63,6 +63,19 @@ const getMorphedSkeleton$ = memoize(function(
             pss = pss.map(ps => rotateAbout(ps, ρ, c));
             α += ρ;
         }
+
+        // A component without a partner rides its tether point's drawn
+        // motion (zero in its own frame's t).
+        const { tether } = entries[i];
+        if (tether !== undefined) {
+            const { e, k, side } = tether;
+            const { skelPssA: pssA, skelPssB: pssB } = entries[e];
+            const own = pAtIndex(side === 'a' ? pssA : pssB, k);
+            const now = pAtIndex(getMorphedSkeleton$(entries, t, e).pss, k);
+
+            pss = pss.map(ps => translate(ps, [now[0] - own[0], now[1] - own[1]]));
+        }
+
         return { alpha: α, pss };
     }
 

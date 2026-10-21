@@ -32,6 +32,14 @@ Checkpoints
 
 TODO
 ----
+* component merge/split (e.g. A -> H: A's one body vs H's two halves, so
+  one half grows from a point): let the component matching pair one
+  component with a GROUP of nearby components (priced on the group's
+  union), then bridge the group into one shape with a hair-width connector
+  between nearest boundary points, so it gets a single MAT and the
+  matcher runs unchanged - the bridge grows/retracts like any branch.
+  Hard parts: a bridge thin enough not to show but stable for the MAT, and
+  matched material routing through it oddly mid-morph.
 * shapes to recheck:
   - testO -> plus (branches move too far along trunk)
   - seven -> three

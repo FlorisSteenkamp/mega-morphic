@@ -1,13 +1,11 @@
 import type { PageData } from '../page-data.js';
 import type { PoseRamp } from '../../morph/procrustes/pose-ramp.js';
-import { buildMorphEntries } from '../../morph/build-morph-entries/build-morph-entries.js';
+import { buildGlyphMorphEntries } from '../../morph/build-morph-entries/build-glyph-morph-entries.js';
 import { alignEntriesBToA } from '../../morph/procrustes/align-entries-b-to-a.js';
 import { drawMorph } from '../../morph/draw-morph/draw-morph.js';
-import { segTreeFromCp } from '../../morph/segment-tree/seg-tree-from-cp.js';
 import { drawMatch } from './draw-match.js';
 import { showVertexNums } from './show-vertex-nums.js';
 import { calcPoseAt } from '../../morph/procrustes/calc-pose-at.js';
-import { outlineLoopOf } from '../../morph/segment-tree/outline-loop.js';
 import { drawTrunkStartCrosses } from './draw-trunk-start-crosses.js';
 
 
@@ -28,21 +26,12 @@ function onMorphClicked(
     } = pageState;
     const { mats1, mats2 } = deduced;
 
-    //----------------------------------------------
-    // Cut the segment trees directly off the MATs
-    //----------------------------------------------
-    const cpA = mats1[0].cpNode;
-    const cpB = mats2[0].cpNode;
-    const sgA = segTreeFromCp(cpA);
-    const sgB = segTreeFromCp(cpB);
-
-    const loopA = outlineLoopOf(cpA);
-    const loopB = outlineLoopOf(cpB);
-
-    //--------------------------------------------
-    // Match the trees and build morph entries
-    //--------------------------------------------
-    const morphEntries = buildMorphEntries(sgA, sgB, loopA, loopB, pathWeights);
+    //------------------------------------------------------------------
+    // Match the glyphs' components (one MAT each), then each matched
+    // pair's trees, and build the morph entries
+    //------------------------------------------------------------------
+    const morphEntries = buildGlyphMorphEntries(
+        mats1.map(m => m.cpNode), mats2.map(m => m.cpNode), pathWeights);
 
     //----------------------------------------
     // Pose-align shape B's frame onto shape A

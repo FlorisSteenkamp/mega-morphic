@@ -35,7 +35,32 @@ interface MorphEntry {
      * angles are meaningless fill
      */
     readonly collapsed?: 'a' | 'b';
+    /**
+     * part of a component without a partner (it shrinks to / grows from a
+     * point) - left out of the pose measurement (it takes no part in the
+     * matched components' blend)
+     */
+    readonly lone?: true;
+    /**
+     * a free `lone` entry's tie to the matched shape: it is carried along by
+     * the drawn motion of a point on a matched entry's skeleton
+     */
+    readonly tether?: Tether;
 }
 
 
-export type { MorphEntry, Glue }
+/**
+ * Where a component without a partner is tied to the matched shape: the
+ * point at fractional segment-boundary index `k` of entry `e`'s skeleton
+ * (index for index the same point in both frames). Its whole component is
+ * translated by how far that point has moved, at the drawn `t`, from where
+ * it is in the component's own frame (`side`).
+ */
+interface Tether {
+    readonly e: number;
+    readonly k: number;
+    readonly side: 'a' | 'b';
+}
+
+
+export type { MorphEntry, Glue, Tether }

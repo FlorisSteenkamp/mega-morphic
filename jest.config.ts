@@ -15,6 +15,7 @@ const esModules = [
     'flo-memoize',
     'flo-ll-rb-tree',
     'flo-lines-intersections',
+    'munkres-ts',
     'squares-rng'
 ].join('|');
 

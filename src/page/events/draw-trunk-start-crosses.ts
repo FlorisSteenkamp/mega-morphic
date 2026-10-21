@@ -12,11 +12,12 @@ const CROSS_CLASSES = 'purple thin50 nofill trunk-start';
 
 
 /**
- * Marks the matched trunk's start with a thickish purple cross (×) on both
+ * Marks each matched trunk's start with a thickish purple cross (×) on both
  * glyphs - the two points the matcher corresponds as the trunk routes'
  * starts (replacing the previous morph's crosses).
  *
- * * the trunk is the first morph entry (`buildMorphEntries` builds it first)
+ * * a trunk is an entry glued to nothing - one per matched component pair
+ *   (a component without a partner, marked `collapsed`, has none)
  *
  * @param refPageData the page data
  * @param entries the morph entries, UNALIGNED (each glyph's frame in its
@@ -27,12 +28,15 @@ function drawTrunkStartCrosses(
         entries: MorphEntry[]): void {
 
     const gs = clearOverlay(refPageData.current!, 'trunk-start');
-    if (gs === undefined || entries.length === 0) { return; }
+    if (gs === undefined) { return; }
     const [g1, g2] = gs;
 
-    const { skelPssA, skelPssB } = entries[0];
-    drawCross(g1, skelPssA[0][0], CROSS_SIZE, CROSS_CLASSES);
-    drawCross(g2, skelPssB[0][0], CROSS_SIZE, CROSS_CLASSES);
+    for (const { skelPssA, skelPssB, glue, collapsed } of entries) {
+        if (glue !== undefined || collapsed !== undefined) { continue; }
+
+        drawCross(g1, skelPssA[0][0], CROSS_SIZE, CROSS_CLASSES);
+        drawCross(g2, skelPssB[0][0], CROSS_SIZE, CROSS_CLASSES);
+    }
 }
 
 

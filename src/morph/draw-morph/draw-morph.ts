@@ -7,6 +7,7 @@ import { drawBeziersAsSinglePath } from "../../draw/draw-beziers-as-single-path.
 import { drawLoopsAsPath } from './draw-loops-as-path.js';
 import { drawPoseGizmo } from './draw-pose-gizmo.js';
 import { mapDeep } from "../../utils/map-deep.js";
+import { mainOutlinesOf } from "../procrustes/main-outlines-of.js";
 import { getG } from "../../draw/get-g.js";
 import { drawCross } from "../../draw/draw-cross.js";
 import { CROSS_SIZE, CROSS_CLASSES } from "../../page/events/draw-trunk-start-crosses.js";
@@ -28,13 +29,18 @@ function drawMorph(
     const entries = morphRef.current;
     if (!entries) { return; }
 
-    let { drawn, outlines, outlineEntry } = resolveMorphAt(entries, t);
+    const resolved = resolveMorphAt(entries, t);
+    let { drawn, outlines } = resolved;
+    const { outlineEntry } = resolved;
 
     // Pin the drawn shape's MEASURED pose onto the interpolated pose path
     // (procrustes): straight centroid line, constant angular rate,
-    // geometric scale - the shape blend alone wanders off the path.
-    if (outlines.length > 0) {
-        const measured = calcProcrustes$(outlines.flat());
+    // geometric scale - the shape blend alone wanders off the path. Only
+    // the matched components are measured (the ones without a partner
+    // shrink or grow, and ride the matched shape via their tethers).
+    const mainOutlines = mainOutlinesOf(entries, resolved);
+    if (mainOutlines.length > 0) {
+        const measured = calcProcrustes$(mainOutlines.flat());
         const tf = poseCorrectionAt(morphPose, t, measured);
 
         drawn = mapDeep(3, drawn, tf);
@@ -53,7 +59,8 @@ function drawMorph(
     if (showPose) {
         // Tisserand readout: the trunk gauge's whole-turn count + current
         // gauge rotation.
-        const trunk = entries.find(e => e.glue === undefined);
+        const trunk = entries.find(
+            e => e.glue === undefined && e.collapsed === undefined);
         drawPoseGizmo(g3, outlines, {
             m: trunk !== undefined ? entryNetTurns(trunk) : 0,
             t
