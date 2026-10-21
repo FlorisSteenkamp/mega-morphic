@@ -13,7 +13,8 @@ import { routeEndsOf } from './outline-len-of.js';
  * prices a route pair - but restricted to the two routes, so any route pair
  * can be priced, not only the DTW's winners.
  *
- * * `undefined` if the routes can't be aligned end to end
+ * * `undefined` if the routes can't be aligned end to end (including when
+ *   either has no length)
  *
  * @param rA the route in A
  * @param rB the route in B
@@ -43,11 +44,17 @@ function routePairCostsOf(
     const segsB = rB.map(st => st.seg);
     const [startA, endA] = routeEndsOf(rA);
     const [startB, endB] = routeEndsOf(rB);
+    const lenA = lenOfSegs$(segsA);
+    const lenB = lenOfSegs$(segsB);
+
+    // a route of no length (e.g. a degenerate tip sitting on its fork) has
+    // nothing to align - and can't be sampled (zero spacing)
+    if (!(lenA > 0) || !(lenB > 0)) { return undefined; }
 
     const ssgA = sampleSegTree(
-        segsA, unitA, sampleCountFor(lenOfSegs$(segsA), δA), startA);
+        segsA, unitA, sampleCountFor(lenA, δA), startA);
     const ssgB = sampleSegTree(
-        segsB, unitB, sampleCountFor(lenOfSegs$(segsB), δB), startB);
+        segsB, unitB, sampleCountFor(lenB, δB), startB);
     // φ only feeds the sway measurement
     const ssgBInA = { ...ssgB, φ: ssgB.φ.map(φ => φ + rotB) };
 
