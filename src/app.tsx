@@ -1,4 +1,3 @@
-import * as React from 'react';
 import type { StateControl } from './state-control/state-control.js';
 import type { State } from './state/state.js';
 import { useState } from 'react';

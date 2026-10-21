@@ -1,5 +1,4 @@
 declare var _debug_: Debug;
-import * as React from 'react';
 import type { Debug } from '../debug/debug.js';
 import type { ToDrawKey } from '../state/to-draw.js';
 import { toDrawKeys } from '../state/to-draw.js';
@@ -10,9 +9,10 @@ import type { MorphEntry } from '../morph/morph-entry.js';
 import type { PathCostWeights } from '../morph/match-paths/path-cost-weights.js';
 import type { PageState } from '../state/page-state.js';
 import type { Mat } from 'flo-mat';
+import type { GlyphPreset } from '../state/glyph-preset.js';
 import { btnStyleBlue, btnStyleBlueFlipped, toggleBtnStyle } from './btn-styles.js';
 import { defaultPathWeights } from '../morph/match-paths/path-cost-weights.js';
-import { useRef, useEffect } from 'react';
+import { useRef, useEffect, useState } from 'react';
 import { Slider } from '../components/simple-slider.js';
 import { SimpleSelect } from '../components/simple-select.js';
 import { ButtonGroup } from '../components/simple-button-group.js';
@@ -31,6 +31,7 @@ import { getGlyphNames, loadPath } from './fs-consts-types/load-path.js';
 import { drawMatch } from './events/draw-match.js';
 import { showVertexNums } from './events/show-vertex-nums.js';
 import { NeedleWindow } from './components/needle-window.js';
+import { PresetSelect } from './components/preset-select.js';
 import { onMorphClicked } from './events/on-morph-clicked.js';
 import { drawMorph } from '../morph/draw-morph/draw-morph.js';
 import { beziersToSvgPathStr } from 'flo-boolean';
@@ -82,7 +83,7 @@ function Page(props: Props) {
     const { upd, transientState } = stateControl;
     const {
         toDraw, viewbox1, viewbox2, viewbox3, deduced, showSvgs, flipH, flipV,
-        showWeights, glyph1Name, glyph2Name, clickFor,
+        showWeights, glyph1Name, glyph2Name, glyphPresets, clickFor,
         simplify, viewMat, morphFillOnly,
         showPose, satScale, showDelay, pathWeights,
         morphT,
@@ -103,7 +104,7 @@ function Page(props: Props) {
     // of its attachment point (a is collapsed). Entries may be glued to a
     // parent entry so their junction stays attached throughout the morph.
     const morphRef = useRef<MorphEntry[] | null>(null);
-    const [showNeedle, setShowNeedle] = React.useState(false);
+    const [showNeedle, setShowNeedle] = useState(false);
 
     const refPageData = useRef<PageData>(null);
     refPageData.current = {
@@ -184,6 +185,28 @@ function Page(props: Props) {
                 }
             });
         };
+    }
+
+    /** Load the preset's glyph pair. */
+    function onPresetSelected(
+            preset: GlyphPreset) {
+
+        const [glyph1Name, glyph2Name] = preset;
+        updAndReload({ glyph1Name, glyph2Name }, true);
+    }
+
+    /** Save the given glyph pair as a new preset. */
+    function onPresetAdded(
+            preset: GlyphPreset) {
+
+        upd(pageState, { glyphPresets: [...glyphPresets, preset] });
+    }
+
+    /** Delete the preset at the given index. */
+    function onPresetDeleted(
+            idx: number) {
+
+        upd(pageState, { glyphPresets: glyphPresets.filter((_, i) => i !== idx) });
     }
 
     /** Zoom the morph svg out 2x around its current center. */
@@ -269,10 +292,20 @@ function Page(props: Props) {
             />
             <div style={{ display: 'flex', gap: '16px', alignItems: 'center', marginTop: '10px', marginBottom: '2px' }}>
                 <div>
+                    <PresetSelect
+                        presets={glyphPresets}
+                        glyph1Name={glyph1Name}
+                        glyph2Name={glyph2Name}
+                        onSelected={onPresetSelected}
+                        onAdded={onPresetAdded}
+                        onDeleted={onPresetDeleted}
+                    />
+                </div>
+                <div>
                     <SimpleSelect
                         value={glyph1Name}
                         options={getGlyphNames_}
-                        style={{ minWidth: '150px' }}
+                        style={{ minWidth: '187px' }}
                         onChanged={glyph1Name => updAndReload({ glyph1Name }, true)}
                     />
                 </div>
@@ -280,12 +313,12 @@ function Page(props: Props) {
                     <SimpleSelect
                         value={glyph2Name}
                         options={getGlyphNames_}
-                        style={{ minWidth: '150px' }}
+                        style={{ minWidth: '187px' }}
                         onChanged={glyph2Name => updAndReload({ glyph2Name }, true)}
                     />
                 </div>
                 <Checkbox checked={simplify} styles={toDrawCheckboxStyles} text="simplify" onChanged={simplify => updAndReload({ simplify }, false)} />
-                <Checkbox checked={viewMat} styles={toDrawCheckboxStyles} text="mat/sat" onChanged={viewMat => updAndReload({ viewMat }, false)} />
+                <Checkbox checked={!viewMat} styles={toDrawCheckboxStyles} text="SAT enabled" onChanged={satEnabled => updAndReload({ viewMat: !satEnabled }, false)} />
                 <Checkbox checked={morphFillOnly} styles={toDrawCheckboxStyles} text="fill only" onChanged={morphFillOnly => updAndRedrawMorph({ morphFillOnly })} />
                 <Checkbox checked={pageState.showMorphBounds} styles={toDrawCheckboxStyles} text="bounds" onChanged={showMorphBounds => updAndRedrawMorph({ showMorphBounds })} />
                 <Checkbox checked={showPose} styles={toDrawCheckboxStyles} text="pose" onChanged={showPose => updAndRedrawMorph({ showPose })} />

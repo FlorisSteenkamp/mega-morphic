@@ -25,9 +25,11 @@ function showVertexNums(
 
     if (!show) { return; }
 
-    const { props } = pageData;
-
-    const { mats1, mats2 } = props.pageState.deduced;
+    // the LIVE state, not the props snapshot: right after a reload (e.g. SAT
+    // toggled) the new MATs are only there - the props still hold the old
+    // trees until React re-renders
+    const { stateControl } = pageData.props;
+    const { mats1, mats2 } = stateControl.state.appState.pageState.deduced;
     if (mats1.length === 0 || mats2.length === 0) { return; }
 
     drawNums(g1, segTreeFromCp(mats1[0].cpNode));

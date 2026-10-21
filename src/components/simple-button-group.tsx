@@ -1,6 +1,3 @@
-import * as React from 'react';
-
-
 interface Props<T extends string> {
     readonly options: { [K in T]?: { text: string } };
     /** undefined = nothing selected */

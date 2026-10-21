@@ -2,6 +2,7 @@ import type { ToDraw } from './to-draw.js';
 import type { DeducedState } from './deduced-state.js';
 import type { ClickFor } from './click-for.js';
 import type { PathCostWeights } from '../morph/match-paths/path-cost-weights.js';
+import type { GlyphPreset } from './glyph-preset.js';
 
 
 interface PageState {
@@ -9,6 +10,8 @@ interface PageState {
     readonly deduced: DeducedState;
     readonly glyph1Name: string;
     readonly glyph2Name: string;
+    /** saved glyph pairs, selectable from the presets dropdown */
+    readonly glyphPresets: readonly GlyphPreset[];
     readonly viewbox1: number[][];
     readonly viewbox2: number[][];
     readonly viewbox3: number[][];

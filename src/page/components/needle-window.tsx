@@ -1,5 +1,4 @@
 declare var _debug_: Debug;
-import * as React from 'react';
 import type { Debug } from '../../debug/debug.js';
 import type { Circle } from 'flo-mat';
 import type { SegDp } from '../../morph/segment-tree/match-seg-trees/seg-dp.js';

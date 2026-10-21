@@ -1,4 +1,3 @@
-import * as React from 'react';
 import { useState, useRef, useEffect } from 'react';
 
 const { min, max } = Math;
@@ -136,6 +135,7 @@ function SimpleSelect(props: Props) {
                 display: 'inline-block',
                 textAlign: 'left',
                 verticalAlign: 'middle',
+                minWidth: '220px',
                 ...style,
             }}
         >
@@ -149,7 +149,6 @@ function SimpleSelect(props: Props) {
                 onClick={toggleOpen}
                 onKeyDown={onButtonKeyDown}
                 style={{
-                    minWidth: '220px',
                     width: '100%',
                     display: 'flex',
                     alignItems: 'center',

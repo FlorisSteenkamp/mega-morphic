@@ -41,8 +41,8 @@ module.exports = {
             options: {
                 jsc: {
                     parser: { syntax: 'typescript', tsx: true },
-                    // tsconfig `"jsx": "react"` (React.createElement)
-                    transform: { react: { runtime: 'classic' } },
+                    // tsconfig `"jsx": "react-jsx"` (automatic runtime)
+                    transform: { react: { runtime: 'automatic' } },
                     target: 'esnext'
                 },
                 sourceMaps: true
