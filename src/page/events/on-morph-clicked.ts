@@ -8,6 +8,7 @@ import { drawMatch } from './draw-match.js';
 import { showVertexNums } from './show-vertex-nums.js';
 import { calcPoseAt } from '../../morph/procrustes/calc-pose-at.js';
 import { outlineLoopOf } from '../../morph/segment-tree/outline-loop.js';
+import { drawTrunkStartCrosses } from './draw-trunk-start-crosses.js';
 
 
 function onMorphClicked(
@@ -55,6 +56,9 @@ function onMorphClicked(
 
     morphRef.current = entries;
     upd(deduced, { morphPose: poseRamp });
+
+    // × at the matched trunk's start on both glyphs
+    drawTrunkStartCrosses(refPageData, morphEntries);
 
     drawMorph(refPageData, morphT / 100);
 

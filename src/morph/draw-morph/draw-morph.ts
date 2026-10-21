@@ -8,6 +8,8 @@ import { drawLoopsAsPath } from './draw-loops-as-path.js';
 import { drawPoseGizmo } from './draw-pose-gizmo.js';
 import { mapDeep } from "../../utils/map-deep.js";
 import { getG } from "../../draw/get-g.js";
+import { drawCross } from "../../draw/draw-cross.js";
+import { CROSS_SIZE, CROSS_CLASSES } from "../../page/events/draw-trunk-start-crosses.js";
 
 
 /** Interpolate every morph drawable at `t` ∈ [0,1] and draw. */
@@ -74,6 +76,11 @@ function drawMorph(
         const { classes } = entries[i];
 
         drawBeziersAsSinglePath(g3, pss, classes);
+    }
+
+    // × at the trunk's start (entry 0), where both glyphs' trunk starts meet
+    if (drawn.length > 0) {
+        drawCross(g3, drawn[0][0][0], CROSS_SIZE, CROSS_CLASSES);
     }
 }
 
