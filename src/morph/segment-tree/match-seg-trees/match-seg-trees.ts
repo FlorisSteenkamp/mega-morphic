@@ -9,6 +9,9 @@ import { routeSegments } from '../route-segments.js';
 import { sampleSegTree } from '../sample-seg-tree.js';
 import { productDtw } from '../product-dtw.js';
 import { outlineLenOf } from './outline-len-of.js';
+import { lenOfSegs$ } from '../len-of.js';
+import { endVariantsOf } from './end-variants-of.js';
+import { routePairCostsOf } from './route-pair-costs-of.js';
 import { getUnit$ } from '../get-unit.js';
 import { anisoOf } from './aniso-of.js';
 import { recordTrunkEval, recordTrunkCands } from '../../../debug/record-trunk-cands.js';
@@ -116,8 +119,17 @@ function matchSegTrees(
     leaders.sort((x, y) => x.rank - y.rank);
     //----------------------------------------------------
 
+    // Route ends disagreeing in kind (fork vs leaf across a short tip) are
+    // a near-tie to the DP - let the recursion try the alternatives.
+    const δA = lenOfSegs$(gA) / TARGET_SAMPLES;
+    const δB = lenOfSegs$(gB) / TARGET_SAMPLES;
+    const evaluable = leaders.slice(0, TRUNK_RECURSE_CANDS).flatMap(l =>
+        endVariantsOf(l, gA, gB, (startA, endA, startB, endB) =>
+            routePairCostsOf(
+                routeOfA(startA, endA), routeOfB(startB, endB),
+                unitA, unitB, δA, δB, weights, swayW)));
 
-    const root = pickBest(leaders, TRUNK_RECURSE_CANDS, l => {
+    const root = pickBest(evaluable, evaluable.length, l => {
         const { c: { startA, startB, endA, endB, shapeCost, swayCost } } = l;
 
         const routeA = routeOfA(startA, endA);
@@ -135,7 +147,7 @@ function matchSegTrees(
     });
 
     // debug only: stores the trunk-candidate table
-    recordTrunkCands(leaders);
+    recordTrunkCands([...evaluable, ...leaders.slice(TRUNK_RECURSE_CANDS)]);
 
     return root;
 }

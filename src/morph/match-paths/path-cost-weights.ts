@@ -28,8 +28,9 @@ interface PathCostWeights {
     /** flat delete/insert floor (small branches aren't free to drop) */
     readonly delFloor: number;
     /**
-     * fork position mismatch along the whole outline (linear - the absolute
-     * reference that keeps local spacing errors from drifting)
+     * fork position mismatch through the routes' profile correspondence,
+     * per feature interval moved (`calcWarpPosCost`; the cheap estimate
+     * still uses the whole-outline position)
      */
     readonly position: number;
     /**
@@ -56,7 +57,7 @@ interface PathCostWeights {
 const defaultPathWeights: PathCostWeights = {
     radius: 1,
     turning: 0.15,
-    position: 0.15,
+    position: 0.3,
     spacing: 0.025,
     angle: 0.25,
     del: 3,

@@ -74,5 +74,5 @@ function routeEndsOf(
 }
 
 
-export { outlineLenOf, endAnchorOf, outlineFrameOf }
+export { outlineLenOf, endAnchorOf, outlineFrameOf, routeEndsOf }
 export type { OutlineFrame }

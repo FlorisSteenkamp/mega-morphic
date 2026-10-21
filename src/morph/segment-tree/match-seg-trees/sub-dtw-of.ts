@@ -57,4 +57,4 @@ function sampleCountFor(len: number, δ: number): number {
 }
 
 
-export { subDtwOf }
+export { subDtwOf, sampleCountFor }

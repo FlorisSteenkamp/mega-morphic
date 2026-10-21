@@ -9,16 +9,17 @@ import type { SegMatchedPair } from './seg-matched-pair.js';
 import type { CalcCheapChildCost } from './cheap-child-cost.js';
 import type { SubLeader } from './sub-leaders-of.js';
 import { subLeadersOf } from './sub-leaders-of.js';
-import { lenOfSegs$ } from '../len-of.js';
+import { lenOfSegs$, lenOfRoute$ } from '../len-of.js';
 import { childrenOf } from './children-of.js';
 import { subDtwOf } from './sub-dtw-of.js';
 import {
-    calcChildPosCost, calcSpacingCost, calcAngleCost, calcDropCost
+    calcWarpPosCost, calcAngleCost, calcDropCost
 } from './child-costs.js';
 import { pickBest } from './pick-best.js';
 import { scoreOf } from './score-of.js';
-import { alignOutlineLinked } from './align-outline.js';
-import { outlineFrameOf } from './outline-len-of.js';
+import { alignOutline } from './align-outline.js';
+import { routeWarpOf } from './route-warp-of.js';
+import { routeFeaturesOf } from './route-features-of.js';
 import { MAX_RECURSE_CANDS, TARGET_SAMPLES } from './consts.js';
 
 
@@ -56,8 +57,7 @@ function buildPair(
     const δA = lenOfSegs$(gA) / TARGET_SAMPLES;
     const δB = lenOfSegs$(gB) / TARGET_SAMPLES;
 
-    const calcChildPosCost_ = calcChildPosCost(unitA, unitB, weights);
-    const calcSpacingCost_ = calcSpacingCost(unitA, unitB, weights);
+    const calcWarpPosCost_ = calcWarpPosCost(weights);
     const calcAngleCost_ = calcAngleCost(weights);
     const calcDropCost_ = calcDropCost(weights);
 
@@ -96,7 +96,8 @@ function buildPair(
             .getOrInsertComputed(b, () => pickBest(
                 leadersOf(a, b), MAX_RECURSE_CANDS,
                 l => _buildPair(
-                    a.segs, l.rA, b.segs, l.rB, l.c.shapeCost, l.c.swayCost)));
+                    a.segs, l.rA, b.segs, l.rB,
+                    l.c.shapeCost, l.c.swayCost)));
     }
 
 
@@ -118,12 +119,13 @@ function buildPair(
      * * finds the children (subtrees) hanging off each route within its scope
      *
      * * aligns the two children sequences around the routes' outlines
-     *   (cyclic, linked Needleman-Wunsch, `alignOutlineLinked`):
-     *   * match: absolute position (against drift) + angle + the `scoreOf`
-     *     of the pair's best fully built sub-pair (`evalBest`)
-     *   * link between consecutive matches (and the start anchor, split at
-     *     the end anchor): their spacing mismatch (`calcSpacingCost` -
-     *     position relative to the neighbouring matches and landmarks)
+     *   (cyclic Needleman-Wunsch, `alignOutline`):
+     *   * match: position + angle + the `scoreOf` of the pair's best fully
+     *     built sub-pair (`evalBest`)
+     *   * position: through the routes' profile correspondence (`warp`),
+     *     in units of the local feature spacing (`calcWarpPosCost`) - a
+     *     child landing on the neighbouring fork costs about as much as one
+     *     slid within its stretch costs little
      *   * delete / insert: the dropped child's drop cost
      *
      * * the alignment is exact but lazy: a pair not yet built is priced at a
@@ -140,9 +142,8 @@ function buildPair(
      * * child routes run tip → junction (from the sub-DTW's end vertex to
      *   the child's attach vertex)
      *
-     * * `cost` = `shapeCost` + the links' spacing costs + per matched child:
-     *   position + angle + its recursive `cost`; per dropped child: its drop
-     *   cost
+     * * `cost` = `shapeCost` + per matched child: position + angle + its
+     *   recursive `cost`; per dropped child: its drop cost
      *
      * * `sway` = `swayCost`, the routes' own (never part of `cost`, but of
      *   every decision - each child's sway already priced its own match
@@ -167,17 +168,21 @@ function buildPair(
 
         const chA = childrenOf(scopeA, rA, unitA);
         const chB = childrenOf(scopeB, rB, unitB);
-        const frameA = outlineFrameOf(rA);
-        const frameB = outlineFrameOf(rB);
-        const { len: olA } = frameA;
-        const { len: olB } = frameB;
+        const featsA = routeFeaturesOf(chA, lenOfRoute$(rA));
+        const featsB = routeFeaturesOf(chB, lenOfRoute$(rB));
 
-        /** position (absolute, against drift) + angle */
+        // the routes' profile correspondence - only needed to place children
+        const warp = chA.length > 0 && chB.length > 0
+            ? routeWarpOf(rA, rB, unitA, unitB)
+            : undefined;
+
+        /** position (through the warp) + angle */
         function calcPlaceCost(
                 a: SegChild,
                 b: SegChild): number {
 
-            return calcChildPosCost_(a, b, olA, olB) + calcAngleCost_(a, b);
+            return calcWarpPosCost_(a, b, warp!, featsA, featsB) +
+                calcAngleCost_(a, b);
         }
 
         function matchCost(
@@ -185,8 +190,8 @@ function buildPair(
                 b: SegChild): number {
 
             const placeCost = calcPlaceCost(a, b);
-            // scores (and links) are never negative, so the match can't
-            // beat delete + insert - skip the (costly) sub-DTW
+            // scores are never negative, so the match can't beat delete +
+            // insert - skip the (costly) sub-DTW
             if (placeCost >= calcDropCost_(a) + calcDropCost_(b)) {
                 return Infinity;
             }
@@ -196,15 +201,7 @@ function buildPair(
                 : calcScoreFloor(leadersOf(a, b)));
         }
 
-        function link(
-                p: [SegChild, SegChild] | undefined,
-                q: [SegChild, SegChild] | undefined): number {
-
-            return calcSpacingCost_(p, q, frameA, frameB);
-        }
-
-        let aligned = alignOutlineLinked(
-            chA, chB, olA, olB, matchCost, calcDropCost_, link);
+        let aligned = alignOutline(chA, chB, matchCost, calcDropCost_);
         for (;;) {
             const unbuilt = aligned.ops.filter(
                 op => op.type === 'match' && !isBuilt(op.a, op.b));
@@ -213,12 +210,11 @@ function buildPair(
             for (const op of unbuilt) {
                 if (op.type === 'match') { evalBest(op.a, op.b); }
             }
-            aligned = alignOutlineLinked(
-                chA, chB, olA, olB, matchCost, calcDropCost_, link);
+            aligned = alignOutline(chA, chB, matchCost, calcDropCost_);
         }
 
         const ops: SegOp[] = [];
-        let cost = shapeCost + aligned.linkCost;
+        let cost = shapeCost;
 
         for (const op of aligned.ops) {
             if (op.type === 'match') {

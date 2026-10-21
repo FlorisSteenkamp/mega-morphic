@@ -9,7 +9,7 @@ import { meanDir } from './mean-dir.js';
 import { collectSubtree } from './collect-subtree.js';
 import { clamp } from '../../../utils/clamp.js';
 
-const { atan2, PI: π } = Math;
+const { atan2, min, PI: π } = Math;
 
 
 /**
@@ -33,10 +33,12 @@ function childrenOf(
         }
     }
 
-    // route vertex sequence + cumulative dist + local travel direction
+    // route vertex sequence + cumulative dist + local travel direction (+ at
+    // interior vertices the arriving and leaving directions themselves)
     const verts: Circle[] = [];
     const dists: number[] = [];
     const dirs: number[][] = [];
+    const prongs: ([number[], number[]] | undefined)[] = [];
     let d = 0;
     for (let i = 0; i < route.length; i++) {
         const { seg, reversed } = route[i];
@@ -45,16 +47,19 @@ function childrenOf(
         const dirOutV = chordDir(seg, reversed ? 'endRev' : 'start');
         if (i === 0) {
             verts.push(v); dists.push(d); dirs.push(dirOutV);
+            prongs.push(undefined);
         } else {
             // interior vertex: mean of arriving and leaving directions
             const prev = route[i - 1];
             const dirIn = chordDir(prev.seg, prev.reversed ? 'startRev' : 'end');
             dirs[dirs.length - 1] = meanDir(dirIn, dirOutV);
+            prongs[prongs.length - 1] = [dirIn, dirOutV];
         }
         d += skelLen;
         verts.push(reversed ? vertS : vertE);
         dists.push(d);
         dirs.push(chordDir(seg, reversed ? 'startRev' : 'end'));
+        prongs.push(undefined);
     }
 
     const segChildren: SegChild[] = [];
@@ -66,12 +71,17 @@ function childrenOf(
 
     for (let i = 0; i < verts.length; i++) {
         const v = verts[i];
-        for (const entry of adj.get(v) ?? []) {
-            if (claimed.has(entry)) { continue; }
-            const segs = collectSubtree(entry, v, adj);
+        const branches = (adj.get(v) ?? [])
+            .filter(entry => !claimed.has(entry))
+            .flatMap(entry => expandBranch(entry, v, adj, claimed));
+
+        for (const { entry, at, via } of branches) {
+            // the connectors back to the route vertex keep the child's
+            // junction on its parent
+            const segs = [...via, ...collectSubtree(entry, at, adj)];
             for (const s of segs) { claimed.add(s); }
 
-            const cd = chordDir(entry, geomOf$(entry).vertS === v ? 'start' : 'endRev');
+            const cd = chordDir(entry, geomOf$(entry).vertS === at ? 'start' : 'endRev');
             const rd = dirs[i];
             const cr = cross(rd, cd);
             const θ = atan2(cr, dot(rd, cd));
@@ -86,7 +96,7 @@ function childrenOf(
             const sweep = terminal !== undefined
                 ? calcSweep(terminal, θ)
                 : undefined;
-            const side = cr >= 0 ? 1 : -1;
+            const side = calcSide(prongs[i], cr, cd);
 
             // The idealized outline (`outlineLenOf`): out flank, end cap,
             // back flank, start cap. A terminal sweeping past its cap's far
@@ -113,6 +123,88 @@ function childrenOf(
     }
 
     return segChildren;
+}
+
+
+/**
+ * Returns the branches a child entering through `entry` at route vertex
+ * `v` stands for: each with its own first segment (`entry`), the vertex it
+ * leaves from (`at`) and the connectors leading there from `v` (`via`).
+ *
+ * * normally just itself, at `v`, with no connectors
+ *
+ * * but if `entry` is only a connector to another fork - no longer than
+ *   half the stroke width (the smaller radius at its two ends) - the two
+ *   forks are one junction the MAT happened to split, and the branches
+ *   beyond the far fork (expanded likewise) hang off the route themselves:
+ *   whether a branch of a four-way junction ends up a child or a grandchild
+ *   then no longer depends on how the MAT ordered the junction's two forks
+ *
+ * * each expanded branch carries the connectors (so its route still ends on
+ *   the parent - a branch sharing a connector with a sibling draws that
+ *   sliver twice)
+ *
+ * @param entry the child's first segment
+ * @param v the vertex `entry` leaves from
+ * @param adj vertex → incident segments (off the route)
+ * @param claimed the segments already given to a child (connectors are
+ * added)
+ */
+function expandBranch(
+        entry: Segment,
+        v: Circle,
+        adj: Map<Circle, Segment[]>,
+        claimed: Set<Segment>): { entry: Segment; at: Circle; via: Segment[] }[] {
+
+    const { vertS, vertE, skelLen } = geomOf$(entry);
+    const u = vertS === v ? vertE : vertS;
+    const beyond = (adj.get(u) ?? []).filter(s => s !== entry);
+
+    if (beyond.length < 2 || skelLen > min(v.radius, u.radius)/2) {
+        return [{ entry, at: v, via: [] }];
+    }
+
+    claimed.add(entry);
+
+    return beyond.flatMap(s => expandBranch(s, u, adj, claimed)
+        .map(b => ({ ...b, via: [entry, ...b.via] })));
+}
+
+
+/**
+ * Returns the side of the route a child hangs off: `1` (left of the travel
+ * direction) or `-1` (right).
+ *
+ * * at an interior route vertex, by the sector between the route's own two
+ *   prongs the child lies in: left is anticlockwise from the leaving
+ *   direction round to the arriving one reversed - correct at a sharp
+ *   corner too, where the mean travel direction may point right along the
+ *   child (making the sign of its cross product with the child noise)
+ *
+ * * at a route end (no second prong), by the sign of the cross product of
+ *   the travel direction with the child (`cr`)
+ *
+ * @param prongs the arriving and leaving travel directions at the vertex
+ * (`undefined` at a route end)
+ * @param cr the cross product of the (mean) travel direction with the child
+ * @param cd the child's direction
+ */
+function calcSide(
+        prongs: [number[], number[]] | undefined,
+        cr: number,
+        cd: number[]): 1 | -1 {
+
+    if (prongs === undefined) { return cr >= 0 ? 1 : -1; }
+
+    const [dirIn, dirOut] = prongs;
+    const aOut = atan2(dirOut[1], dirOut[0]);
+    const aBack = atan2(-dirIn[1], -dirIn[0]);
+    const aChild = atan2(cd[1], cd[0]);
+
+    // anticlockwise angle from the leaving direction
+    const ccw = (a: number) => ((a - aOut) % (2*π) + 2*π) % (2*π);
+
+    return ccw(aChild) < ccw(aBack) ? 1 : -1;
 }
 
 
