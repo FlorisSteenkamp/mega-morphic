@@ -6,7 +6,7 @@ import type { RouteFeatures } from './route-features-of.js';
 import { wrapAngle } from '../../intrinsic-skeleton/wrap-angle.js';
 import { MAX_CROSS } from './consts.js';
 
-const { abs, round, floor, min, PI: π } = Math;
+const { abs, round, floor, min, max, PI: π } = Math;
 
 
 /**
@@ -144,8 +144,11 @@ function calcSpacingCost(
  *   landing on the neighbouring feature costs `1`, crossing two `2`, a
  *   slide within the same stretch only its fraction
  *
- * * likewise b's position onto a's route; the cost is the mean of both,
- *   times `w.position`
+ * * likewise b's position onto a's route; the cost is the larger of both,
+ *   times `w.position` - a move is as visible as it is in the glyph where
+ *   it crosses the most of a stretch (a child leaving a tip that sits at
+ *   the end of a short stretch in one glyph but of a long one in the
+ *   other is not cheap for it)
  *
  * * features closer together than the child's stroke width are one (a
  *   double fork) - finer differences are not visible
@@ -181,7 +184,7 @@ function calcWarpPosCost(
         const shiftA = calcFeatureShift(
             warp.mapBA(b.dist/lenB)*lenA, a, featsA, viaEnd);
 
-        return w.position*(shiftA + shiftB)/2;
+        return w.position*max(shiftA, shiftB);
     }
 }
 
