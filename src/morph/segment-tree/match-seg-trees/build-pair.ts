@@ -8,6 +8,9 @@ import type { SegDp } from './seg-dp.js';
 import type { SegMatchedPair } from './seg-matched-pair.js';
 import type { CalcCheapChildCost } from './cheap-child-cost.js';
 import type { SubLeader } from './sub-leaders-of.js';
+import type { Circle } from 'flo-mat';
+import type { RouteWarp } from './route-warp-of.js';
+import { routeEndsOf } from './outline-len-of.js';
 import { subLeadersOf } from './sub-leaders-of.js';
 import { lenOfSegs$, lenOfRoute$ } from '../len-of.js';
 import { childrenOf } from './children-of.js';
@@ -72,10 +75,16 @@ function buildPair(
     const calcSizeFactor_ = calcSizeFactor(weights);
     const calcDropCost_ = calcDropCost(weights);
 
-    // per child pair, memoized for the whole match (`childrenOf` makes new
-    // children per route, so the keys never collide across routes)
-    const leadersMemo = new Map<SegChild, Map<SegChild, Leaders>>();
-    const bestMemo = new Map<SegChild, Map<SegChild, SegMatchedPair>>();
+    // memoized for the whole match, keyed by what the results depend on
+    // (`calcChildPairKey`, `calcRoutePairKey`) - not by the child objects,
+    // which `childrenOf` makes anew for every route: the same subtree pair
+    // recurs under every parent route (trunk candidate, variant, sub-route)
+    // that reaches it
+    const leadersMemo = new Map<string, Leaders>();
+    const bestMemo = new Map<string, SegMatchedPair>();
+    const routePairCostsMemo =
+        new Map<string, { shapeCost: number; swayCost: number } | undefined>();
+    const warpMemo = new Map<string, RouteWarp>();
 
     return { pairOf: _buildPair, evalBest };
 
@@ -93,8 +102,7 @@ function buildPair(
             a: SegChild,
             b: SegChild): Leaders {
 
-        return leadersMemo.getOrInsertComputed(a, () => new Map())
-            .getOrInsertComputed(b, () => {
+        return leadersMemo.getOrInsertComputed(calcChildPairKey(a, b), () => {
                 const sizeFactor = calcSizeFactor_(a, b);
                 const ls = subLeadersOf(
                     subDtwOf(gA, gB, unitA, unitB, δA, δB, weights, swayW, a, b),
@@ -105,10 +113,13 @@ function buildPair(
                 const rotB = a.routeDir - b.routeDir;
                 const head = ls.slice(0, MAX_RECURSE_CANDS).flatMap(l =>
                     endVariantsOf(l.c, gA, gB, (startA, endA, startB, endB) =>
-                        routePairCostsOf(
-                            routeSegments(a.segs, startA, endA),
-                            routeSegments(b.segs, startB, endB),
-                            unitA, unitB, δA, δB, weights, swayW, rotB)
+                        routePairCostsMemo.getOrInsertComputed(
+                            calcRoutePairKey(startA, endA, startB, endB) +
+                                `|${rotB}`,
+                            () => routePairCostsOf(
+                                routeSegments(a.segs, startA, endA),
+                                routeSegments(b.segs, startB, endB),
+                                unitA, unitB, δA, δB, weights, swayW, rotB))
                     ).map(c => c === l.c ? l : {
                         c,
                         // tip → junction
@@ -135,8 +146,8 @@ function buildPair(
 
         const { leaders, evals } = leadersOf(a, b);
 
-        return bestMemo.getOrInsertComputed(a, () => new Map())
-            .getOrInsertComputed(b, () => pickBest(
+        return bestMemo.getOrInsertComputed(calcChildPairKey(a, b), () =>
+            pickBest(
                 leaders, evals,
                 l => _buildPair(
                     a.segs, l.rA, b.segs, l.rB,
@@ -151,7 +162,23 @@ function buildPair(
             a: SegChild,
             b: SegChild): boolean {
 
-        return bestMemo.get(a)?.has(b) === true;
+        return bestMemo.has(calcChildPairKey(a, b));
+    }
+
+
+    /**
+     * Returns the correspondence of the route pair (memoized by its ends).
+     */
+    function warpOf(
+            rA: RouteStep[],
+            rB: RouteStep[]): RouteWarp {
+
+        const [startA, endA] = routeEndsOf(rA);
+        const [startB, endB] = routeEndsOf(rB);
+
+        return warpMemo.getOrInsertComputed(
+            calcRoutePairKey(startA, endA, startB, endB),
+            () => routeWarpOf(rA, rB, unitA, unitB));
     }
 
 
@@ -216,7 +243,7 @@ function buildPair(
 
         // the routes' profile correspondence - only needed to place children
         const warp = chA.length > 0 && chB.length > 0
-            ? routeWarpOf(rA, rB, unitA, unitB)
+            ? warpOf(rA, rB)
             : undefined;
 
         /** position (through the warp) + angle, scaled by the pair's size */
@@ -285,6 +312,59 @@ function buildPair(
             ...(dp !== undefined ? { dp } : {})
         };
     }
+}
+
+
+/** small numeric ids of objects, for memo keys */
+const objIds = new WeakMap<object, number>();
+let nextObjId = 0;
+
+
+/**
+ * Returns a small numeric id for the object, the same on every call.
+ */
+function idOf(
+        o: object): number {
+
+    let id = objIds.get(o);
+    if (id === undefined) { id = nextObjId++; objIds.set(o, id); }
+
+    return id;
+}
+
+
+/**
+ * Returns the memo key of a child pair: everything its sub-match depends on.
+ *
+ * * a child's subtree is fixed by its attach vertex and entry segment (with
+ *   the connectors of a merged junction between them), the rest (units,
+ *   weights, spacing) by the match - only the parents' relative direction
+ *   at the attach vertices (`routeDir`, the frame sway is measured in)
+ *   remains
+ *
+ * * so the same subtree pair under different parent routes shares one key
+ *   (`childrenOf` makes new child objects for every route)
+ */
+function calcChildPairKey(
+        a: SegChild,
+        b: SegChild): string {
+
+    return `${idOf(a.attachV)},${idOf(a.entry)},` +
+        `${idOf(b.attachV)},${idOf(b.entry)}|${a.routeDir - b.routeDir}`;
+}
+
+
+/**
+ * Returns the memo key of a route pair given by its end vertices - in a
+ * tree the route between two vertices is unique.
+ */
+function calcRoutePairKey(
+        startA: Circle,
+        endA: Circle,
+        startB: Circle,
+        endB: Circle): string {
+
+    return `${idOf(startA)},${idOf(endA)},${idOf(startB)},${idOf(endB)}`;
 }
 
 
