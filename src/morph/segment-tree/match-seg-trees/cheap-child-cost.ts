@@ -1,6 +1,6 @@
 import type { PathCostWeights } from '../../match-paths/path-cost-weights.js';
 import type { SegChild } from './seg-child.js';
-import { calcChildPosCost, calcAngleCost, calcDropCost } from './child-costs.js';
+import { calcChildPosCost, calcAngleCost, calcSizeFactor, calcDropCost } from './child-costs.js';
 import { alignOutline } from './align-outline.js';
 
 const { abs } = Math;
@@ -29,6 +29,7 @@ function cheapChildCost(
 
     const calcChildPosCost_ = calcChildPosCost(unitA, unitB, weights);
     const calcAngleCost_ = calcAngleCost(weights);
+    const calcSizeFactor_ = calcSizeFactor(weights);
     const calcDropCost_ = calcDropCost(weights);
 
     return function(
@@ -37,9 +38,12 @@ function cheapChildCost(
             outlineLenA: number,
             outlineLenB: number): number {
 
+        // placement scaled by the pair's size, as in the full match
         function cheapMatch(a: SegChild, b: SegChild): number {
-            return calcChildPosCost_(a, b, outlineLenA, outlineLenB) +
-                calcAngleCost_(a, b) +
+            return calcSizeFactor_(a, b)*(
+                    calcChildPosCost_(a, b, outlineLenA, outlineLenB) +
+                    calcAngleCost_(a, b)
+                ) +
                 weights.del*abs(a.material - b.material);
         }
 

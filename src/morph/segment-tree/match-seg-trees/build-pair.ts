@@ -13,14 +13,24 @@ import { lenOfSegs$, lenOfRoute$ } from '../len-of.js';
 import { childrenOf } from './children-of.js';
 import { subDtwOf } from './sub-dtw-of.js';
 import {
-    calcWarpPosCost, calcAngleCost, calcDropCost
+    calcWarpPosCost, calcAngleCost, calcSizeFactor, calcDropCost
 } from './child-costs.js';
 import { pickBest } from './pick-best.js';
 import { scoreOf } from './score-of.js';
 import { alignOutline } from './align-outline.js';
 import { routeWarpOf } from './route-warp-of.js';
 import { routeFeaturesOf } from './route-features-of.js';
+import { endVariantsOf } from './end-variants-of.js';
+import { routePairCostsOf } from './route-pair-costs-of.js';
+import { routeSegments } from '../route-segments.js';
 import { MAX_RECURSE_CANDS, TARGET_SAMPLES } from './consts.js';
+
+
+/** a child pair's sub-route leaders, and how many get a full evaluation */
+interface Leaders {
+    readonly leaders: SubLeader[];
+    readonly evals: number;
+}
 
 
 /**
@@ -59,11 +69,12 @@ function buildPair(
 
     const calcWarpPosCost_ = calcWarpPosCost(weights);
     const calcAngleCost_ = calcAngleCost(weights);
+    const calcSizeFactor_ = calcSizeFactor(weights);
     const calcDropCost_ = calcDropCost(weights);
 
     // per child pair, memoized for the whole match (`childrenOf` makes new
     // children per route, so the keys never collide across routes)
-    const leadersMemo = new Map<SegChild, Map<SegChild, SubLeader[]>>();
+    const leadersMemo = new Map<SegChild, Map<SegChild, Leaders>>();
     const bestMemo = new Map<SegChild, Map<SegChild, SegMatchedPair>>();
 
     return { pairOf: _buildPair, evalBest };
@@ -71,16 +82,46 @@ function buildPair(
 
     /**
      * Returns the pinned-start sub-DTW's route leaders of the child pair,
-     * ranked by estimated recursive cost (memoized).
+     * ranked by estimated recursive cost, and how many get a full
+     * evaluation (memoized).
+     *
+     * * the first `MAX_RECURSE_CANDS` come with their tip-end variants
+     *   (`endVariantsOf` - fork against leaf across a short tip), and are
+     *   the ones evaluated in full
      */
     function leadersOf(
             a: SegChild,
-            b: SegChild): SubLeader[] {
+            b: SegChild): Leaders {
 
         return leadersMemo.getOrInsertComputed(a, () => new Map())
-            .getOrInsertComputed(b, () => subLeadersOf(
-                subDtwOf(gA, gB, unitA, unitB, δA, δB, weights, swayW, a, b),
-                a, b, unitA, unitB, cheapChildCost_));
+            .getOrInsertComputed(b, () => {
+                const sizeFactor = calcSizeFactor_(a, b);
+                const ls = subLeadersOf(
+                    subDtwOf(gA, gB, unitA, unitB, δA, δB, weights, swayW, a, b),
+                    a, b, unitA, unitB, cheapChildCost_, sizeFactor);
+
+                // variants priced junction → tip, as the sub-DTW runs, in
+                // the parent's frame
+                const rotB = a.routeDir - b.routeDir;
+                const head = ls.slice(0, MAX_RECURSE_CANDS).flatMap(l =>
+                    endVariantsOf(l.c, gA, gB, (startA, endA, startB, endB) =>
+                        routePairCostsOf(
+                            routeSegments(a.segs, startA, endA),
+                            routeSegments(b.segs, startB, endB),
+                            unitA, unitB, δA, δB, weights, swayW, rotB)
+                    ).map(c => c === l.c ? l : {
+                        c,
+                        // tip → junction
+                        rA: routeSegments(a.segs, c.endA, c.startA),
+                        rB: routeSegments(b.segs, c.endB, c.startB),
+                        rank: l.rank
+                    }));
+
+                return {
+                    leaders: [...head, ...ls.slice(MAX_RECURSE_CANDS)],
+                    evals: head.length
+                };
+            });
     }
 
 
@@ -92,12 +133,14 @@ function buildPair(
             a: SegChild,
             b: SegChild): SegMatchedPair {
 
+        const { leaders, evals } = leadersOf(a, b);
+
         return bestMemo.getOrInsertComputed(a, () => new Map())
             .getOrInsertComputed(b, () => pickBest(
-                leadersOf(a, b), MAX_RECURSE_CANDS,
+                leaders, evals,
                 l => _buildPair(
                     a.segs, l.rA, b.segs, l.rB,
-                    l.c.shapeCost, l.c.swayCost)));
+                    l.c.shapeCost, calcSizeFactor_(a, b)*l.c.swayCost)));
     }
 
 
@@ -176,13 +219,15 @@ function buildPair(
             ? routeWarpOf(rA, rB, unitA, unitB)
             : undefined;
 
-        /** position (through the warp) + angle */
+        /** position (through the warp) + angle, scaled by the pair's size */
         function calcPlaceCost(
                 a: SegChild,
                 b: SegChild): number {
 
-            return calcWarpPosCost_(a, b, warp!, featsA, featsB) +
-                calcAngleCost_(a, b);
+            return calcSizeFactor_(a, b)*(
+                calcWarpPosCost_(a, b, warp!, featsA, featsB) +
+                calcAngleCost_(a, b)
+            );
         }
 
         function matchCost(
@@ -198,7 +243,7 @@ function buildPair(
 
             return placeCost + (isBuilt(a, b)
                 ? scoreOf(evalBest(a, b))
-                : calcScoreFloor(leadersOf(a, b)));
+                : calcScoreFloor(leadersOf(a, b).leaders, calcSizeFactor_(a, b)));
         }
 
         let aligned = alignOutline(chA, chB, matchCost, calcDropCost_);
@@ -245,15 +290,20 @@ function buildPair(
 
 /**
  * Returns a lower bound of the score (`scoreOf`) of a child pair's best
- * fully built sub-pair: the least shape + sway among its sub-route leaders.
+ * fully built sub-pair: the least shape + scaled sway among its sub-route
+ * leaders.
  *
  * * the built sub-pair is one of these leaders, and its children's costs
  *   only add to its own shape
+ *
+ * @param leaders the pair's sub-route leaders
+ * @param swayScale the factor its sway is priced at (its size factor)
  */
 function calcScoreFloor(
-        leaders: SubLeader[]): number {
+        leaders: SubLeader[],
+        swayScale: number): number {
 
-    return Math.min(...leaders.map(l => l.c.shapeCost + l.c.swayCost));
+    return Math.min(...leaders.map(l => l.c.shapeCost + swayScale*l.c.swayCost));
 }
 
 

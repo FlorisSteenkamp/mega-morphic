@@ -5,11 +5,15 @@ import type { SegMatchedPair } from '../morph/segment-tree/match-seg-trees/seg-m
 import type { SegOp } from '../morph/segment-tree/match-seg-trees/seg-op.js';
 import type { SegChild } from '../morph/segment-tree/match-seg-trees/seg-child.js';
 import { matchSegTrees } from '../morph/segment-tree/match-seg-trees/match-seg-trees.js';
-import { calcChildPosCost, calcAngleCost, calcDropCost } from '../morph/segment-tree/match-seg-trees/child-costs.js';
+import type { RouteWarp } from '../morph/segment-tree/match-seg-trees/route-warp-of.js';
+import type { RouteFeatures } from '../morph/segment-tree/match-seg-trees/route-features-of.js';
+import { calcWarpPosCost, calcAngleCost, calcSizeFactor, calcDropCost } from '../morph/segment-tree/match-seg-trees/child-costs.js';
 import { alignOfRoutes } from './align-of-routes.js';
 import { anisoOf } from '../morph/segment-tree/match-seg-trees/aniso-of.js';
 import { getUnit$ } from '../morph/segment-tree/get-unit.js';
-import { outlineLenOf } from '../morph/segment-tree/match-seg-trees/outline-len-of.js';
+import { lenOfRoute$ } from '../morph/segment-tree/len-of.js';
+import { routeWarpOf } from '../morph/segment-tree/match-seg-trees/route-warp-of.js';
+import { routeFeaturesOf } from '../morph/segment-tree/match-seg-trees/route-features-of.js';
 import { buildPair } from '../morph/segment-tree/match-seg-trees/build-pair.js';
 import { scoreOf } from '../morph/segment-tree/match-seg-trees/score-of.js';
 import { cheapChildCost } from '../morph/segment-tree/match-seg-trees/cheap-child-cost.js';
@@ -84,10 +88,17 @@ function evalChildPair(
         };
     }
 
+    // the parent routes' correspondence and features (every child of a
+    // pair appears in its ops: matched, deleted or inserted)
+    const { pair: pairA } = a;
+    const { pair: pairB } = b;
+    const childrenA = pairA.ops.flatMap(op => op.type !== 'insert' ? [op.a] : []);
+    const childrenB = pairB.ops.flatMap(op => op.type !== 'delete' ? [op.b] : []);
     const price = priceChildPair(
         gA, gB, unitA, unitB,
-        outlineLenOf(a.pair.routeA),
-        outlineLenOf(b.pair.routeB),
+        routeWarpOf(pairA.routeA, pairB.routeB, unitA, unitB),
+        routeFeaturesOf(childrenA, lenOfRoute$(pairA.routeA)),
+        routeFeaturesOf(childrenB, lenOfRoute$(pairB.routeB)),
         weights, weights.sway*aniso,
         a.child, b.child
     );
@@ -118,12 +129,14 @@ function evalChildPair(
 /** One child pair priced by the matcher's actual economics. */
 interface ChildPairPrice {
     /**
-     * absolute (whole-outline) position price - the alignment adds the
-     * spacing to the neighbouring matches (`calcSpacingCost`) on top, which
-     * depends on the whole alignment
+     * position price through the parent routes' correspondence, in feature
+     * intervals (`calcWarpPosCost`), scaled by the pair's size factor
      */
     readonly positionCost: number;
+    /** angle price, scaled by the pair's size factor */
     readonly angleCost: number;
+    /** the pair's size factor (`calcSizeFactor`) */
+    readonly sizeFactor: number;
     /** the best sub-pair's own (route-pair) shape cost */
     readonly subShapeCost: number;
     /** the best sub-pair's routes' measured warp sway */
@@ -144,16 +157,17 @@ interface ChildPairPrice {
 /**
  * Prices one child pair exactly as the matcher's `matchCost` / `delCost` /
  * `insCost` would (fresh, unmemoized) - the authoritative relabel-vs-drop
- * economics for the pair. Outline lengths are those of the PARENT routes
- * the children are pooled on (position is an outline fraction).
+ * economics for the pair. The warp and features are those of the PARENT
+ * routes the children are pooled on.
  */
 function priceChildPair(
         gA: Segment[],
         gB: Segment[],
         unitA: number,
         unitB: number,
-        outlineLenA: number,
-        outlineLenB: number,
+        warp: RouteWarp,
+        featsA: RouteFeatures,
+        featsB: RouteFeatures,
         weights: PathCostWeights,
         sway: number,
         a: SegChild,
@@ -167,15 +181,17 @@ function priceChildPair(
     const { shapeCost, cost, sway: subSway } = sub;
     const subCost = scoreOf(sub);
 
-    const positionCost = calcChildPosCost(unitA, unitB, weights)(
-        a, b, outlineLenA, outlineLenB);
-    const angleCost = calcAngleCost(weights)(a, b);
+    const sizeFactor = calcSizeFactor(weights)(a, b);
+    const positionCost = sizeFactor*calcWarpPosCost(weights)(
+        a, b, warp, featsA, featsB);
+    const angleCost = sizeFactor*calcAngleCost(weights)(a, b);
     const matchCost = positionCost + angleCost + subCost;
     const calcDropCost_ = calcDropCost(weights);
 
     return {
         positionCost,
         angleCost,
+        sizeFactor,
         subShapeCost: shapeCost,
         subSwayCost: subSway,
         subChildCost: cost - shapeCost,

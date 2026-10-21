@@ -386,6 +386,24 @@ function calcAngleCost(
 }
 
 
+/**
+ * Returns a function returning the size factor of a child pair: the mean
+ * drop price of the two children's material, `del × (mA + mB)/2`.
+ *
+ * * the placement terms of a match (position, angle, sway) are scaled by
+ *   it, so they are priced in the same units as dropping - a fraction of
+ *   what the branches are worth - and a small branch and a big one are
+ *   judged alike by how well they fit relative to their size
+ */
+function calcSizeFactor(
+        w: PathCostWeights) {
+
+    return function(a: SegChild, b: SegChild): number {
+        return w.del*(a.material + b.material)/2;
+    }
+}
+
+
 function calcDropCost(
         w: PathCostWeights) {
 
@@ -397,5 +415,5 @@ function calcDropCost(
 
 export {
     calcChildPosCost, calcSpacingCost, calcWarpPosCost, calcAngleCost,
-    calcDropCost
+    calcSizeFactor, calcDropCost
 }

@@ -23,6 +23,10 @@ import { routeEndsOf } from './outline-len-of.js';
  * @param δB tree B's trunk-level sample spacing
  * @param weights the path cost weights
  * @param swayW local-sway measurement factor
+ * @param rotB the rotation taking B's directions into A's frame (for a
+ * child pair, the difference of the parents' directions at the attach
+ * vertices - sway is measured relative to the parent, as `subDtwOf` does;
+ * `0` for the trunk)
  */
 function routePairCostsOf(
         rA: RouteStep[],
@@ -32,7 +36,8 @@ function routePairCostsOf(
         δA: number,
         δB: number,
         weights: PathCostWeights,
-        swayW: number): { shapeCost: number; swayCost: number } | undefined {
+        swayW: number,
+        rotB: number): { shapeCost: number; swayCost: number } | undefined {
 
     const segsA = rA.map(st => st.seg);
     const segsB = rB.map(st => st.seg);
@@ -43,8 +48,10 @@ function routePairCostsOf(
         segsA, unitA, sampleCountFor(lenOfSegs$(segsA), δA), startA);
     const ssgB = sampleSegTree(
         segsB, unitB, sampleCountFor(lenOfSegs$(segsB), δB), startB);
+    // φ only feeds the sway measurement
+    const ssgBInA = { ...ssgB, φ: ssgB.φ.map(φ => φ + rotB) };
 
-    const c = productDtw(ssgA, ssgB, weights, swayW).candidates
+    const c = productDtw(ssgA, ssgBInA, weights, swayW).candidates
         .find(c => c.endA === endA && c.endB === endB);
 
     return c === undefined

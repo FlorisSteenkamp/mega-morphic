@@ -57,11 +57,11 @@ interface PathCostWeights {
 const defaultPathWeights: PathCostWeights = {
     radius: 1,
     turning: 0.15,
-    position: 0.3,
+    position: 2,
     spacing: 0.025,
     angle: 0.25,
     del: 3,
-    delFloor: 0.15,
+    delFloor: 0,
     tail: 0.5,
     sway: 1,
     gapOpen: 0.15,

@@ -1,34 +1,36 @@
 import type { Circle } from 'flo-mat';
 import type { Segment } from '../segment.js';
-import type { Ranked } from './ranked.js';
+import type { ProductDtwResult_Candidate } from '../product-dtw.js';
 import { adjOf$ } from '../adj-of.js';
 import { geomOf$ } from '../geom-of.js';
 
 
 /**
- * Returns a trunk leader together with its end variants, all priced alike.
+ * Returns a DTW route candidate together with its end variants, all priced
+ * alike (for the trunk and for child pairs).
  *
- * * where the leader's route ends disagree in kind - a fork in one glyph,
- *   a leaf in the other - the fork end may instead extend into one of its
- *   short terminal tips (`calcEndAlts`), or the leaf end retract to its fork
- *   if it is such a tip: the DTW decides that choice on a near-tie (a tiny
- *   tip is about as cheap to align as to skip), while the full recursion,
- *   which sees the children, can tell which way the two glyphs correspond
+ * * where the candidate's route ends disagree in kind - a fork in one
+ *   glyph, a leaf in the other - the fork end may instead extend into one of
+ *   its short terminal tips (`calcEndAlts`), or the leaf end retract to its
+ *   fork if it is such a tip: the DTW decides that choice on a near-tie (a
+ *   tiny tip is about as cheap to align as to skip), while the full
+ *   recursion, which sees the children, can tell which way the two glyphs
+ *   correspond
  *
- * * a variant keeps its source's rank; every route pair (the leader's too,
- *   when it has variants) is priced by `costsOf`, so they compare like with
- *   like - variants that can't be priced are left out
+ * * every route pair (the candidate's too, when it has variants) is priced
+ *   by `costsOf`, so they compare like with like - variants that can't be
+ *   priced are left out
  *
- * * without disagreeing ends, just the leader
+ * * without disagreeing ends, just the candidate
  *
- * @param l the trunk leader
+ * @param c the route candidate
  * @param gA tree A's segments
  * @param gB tree B's segments
  * @param costsOf the shape and sway costs of the route pair startA → endA ↔
  * startB → endB (`undefined` if they can't be aligned)
  */
 function endVariantsOf(
-        l: Ranked,
+        c: ProductDtwResult_Candidate,
         gA: Segment[],
         gB: Segment[],
         costsOf: (
@@ -36,24 +38,20 @@ function endVariantsOf(
             endA: Circle,
             startB: Circle,
             endB: Circle) => { shapeCost: number; swayCost: number } | undefined
-        ): Ranked[] {
+        ): ProductDtwResult_Candidate[] {
 
-    const { c } = l;
     const starts = calcEndPairs(gA, gB, c.startA, c.startB);
     const ends = calcEndPairs(gA, gB, c.endA, c.endB);
-    if (starts.length === 1 && ends.length === 1) { return [l]; }
+    if (starts.length === 1 && ends.length === 1) { return [c]; }
 
-    const out: Ranked[] = [];
+    const out: ProductDtwResult_Candidate[] = [];
     for (const [startA, startB] of starts) {
         for (const [endA, endB] of ends) {
             if (startA === endA || startB === endB) { continue; }
             const costs = costsOf(startA, endA, startB, endB);
             if (costs === undefined) { continue; }
 
-            out.push({
-                ...l,
-                c: { ...c, startA, startB, endA, endB, ...costs }
-            });
+            out.push({ ...c, startA, startB, endA, endB, ...costs });
         }
     }
 

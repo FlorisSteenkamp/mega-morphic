@@ -258,10 +258,11 @@ function evaluate(
                 subShapeCost: price.subShapeCost,
                 subSwayCost: price.subSwayCost,
                 subChildCost: price.subChildCost,
-                // absolute (whole-outline); the alignment adds the spacing
-                // to the neighbouring matches on top
+                // feature intervals through the parent routes' warp; it and
+                // the angle are scaled by the pair's size factor
                 positionCost: price.positionCost,
                 angleCost: price.angleCost,
+                sizeFactor: price.sizeFactor,
                 "total match cost": price.matchCost
             },
             drop: {

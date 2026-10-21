@@ -38,6 +38,8 @@ interface SubLeader {
  * @param unitA tree A's length normalization
  * @param unitB tree B's length normalization
  * @param cheapChildCost_ the cheap child-alignment estimate
+ * @param swayScale the factor the sway is priced at (the pair's size
+ * factor, as in the full match)
  */
 function subLeadersOf(
         dtw: ProductDtwResult,
@@ -45,7 +47,8 @@ function subLeadersOf(
         b: SegChild,
         unitA: number,
         unitB: number,
-        cheapChildCost_: CalcCheapChildCost): SubLeader[] {
+        cheapChildCost_: CalcCheapChildCost,
+        swayScale: number): SubLeader[] {
 
     const leaders = dtw.candidates.slice(0, SUB_CHEAP_CANDS).map(c => {
         // tip → junction (the DTW runs junction → tip)
@@ -58,7 +61,7 @@ function subLeadersOf(
             outlineLenOf(rB)
         );
 
-        return { c, rA, rB, rank: c.shapeCost + c.swayCost + cheap };
+        return { c, rA, rB, rank: c.shapeCost + swayScale*c.swayCost + cheap };
     });
 
     return leaders.sort((x, y) => x.rank - y.rank);

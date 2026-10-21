@@ -124,10 +124,11 @@ function matchSegTrees(
     const δA = lenOfSegs$(gA) / TARGET_SAMPLES;
     const δB = lenOfSegs$(gB) / TARGET_SAMPLES;
     const evaluable = leaders.slice(0, TRUNK_RECURSE_CANDS).flatMap(l =>
-        endVariantsOf(l, gA, gB, (startA, endA, startB, endB) =>
+        endVariantsOf(l.c, gA, gB, (startA, endA, startB, endB) =>
             routePairCostsOf(
                 routeOfA(startA, endA), routeOfB(startB, endB),
-                unitA, unitB, δA, δB, weights, swayW)));
+                unitA, unitB, δA, δB, weights, swayW, 0)
+        ).map(c => ({ ...l, c })));
 
     const root = pickBest(evaluable, evaluable.length, l => {
         const { c: { startA, startB, endA, endB, shapeCost, swayCost } } = l;
