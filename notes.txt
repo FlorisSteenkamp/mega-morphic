@@ -23,6 +23,11 @@ Checkpoints
   cap, linear absolute position (0.15) + linear spacing (0.025). Better than
   a8779ad (M/N perfect, incl. SAT 1.5). Starting point for option 3
   (warp-relative position) / fork events inside the DTW.
+* branch fork-pull-warp (2026-10-21) - parked experiment: a soft
+  fork-to-fork pull in the matcher's warp (`alignBranches` fork profiles,
+  W_FORK 0.5; the morph passes none). No structural difference on T/A, so
+  left out - keep in mind if child positions ever suffer from a warp that
+  ignores the forks.
 
 
 TODO

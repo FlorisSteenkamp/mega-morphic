@@ -139,7 +139,7 @@ interface ChildPairPrice {
     readonly sizeFactor: number;
     /** the best sub-pair's own (route-pair) shape cost */
     readonly subShapeCost: number;
-    /** the best sub-pair's routes' measured warp sway */
+    /** the best sub-pair's routes' measured warp sway, times the size factor */
     readonly subSwayCost: number;
     /** the best sub-pair's recursive child costs (matched + dropped) */
     readonly subChildCost: number;

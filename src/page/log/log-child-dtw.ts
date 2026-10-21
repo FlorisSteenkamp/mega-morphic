@@ -251,19 +251,23 @@ function evaluate(
     console.log('child pair dtw:', {
         // the matcher's decision inputs: matchCost vs delCost + insCost
         cost: price === undefined ? undefined : {
+            // the plain entries are the summands of the total; bracketed
+            // ones are for reference only (not to be added)
             match: {
-                // the best fully built sub-pair's score: shape + its
-                // recursive child costs + its routes' sway
-                subCost: price.subCost,
+                // feature intervals through the parent routes' warp, and
+                // the angle - both already times the size factor
+                positionCost: price.positionCost,
+                angleCost: price.angleCost,
+                // the best fully built sub-pair: its routes' shape, its
+                // routes' sway (already times the size factor) and its
+                // recursive child costs
                 subShapeCost: price.subShapeCost,
                 subSwayCost: price.subSwayCost,
                 subChildCost: price.subChildCost,
-                // feature intervals through the parent routes' warp; it and
-                // the angle are scaled by the pair's size factor
-                positionCost: price.positionCost,
-                angleCost: price.angleCost,
-                sizeFactor: price.sizeFactor,
-                "total match cost": price.matchCost
+                "total match cost": price.matchCost,
+                "(sub-pair subtotal: shape + sway + children)": price.subCost,
+                "(sizeFactor: already applied to position, angle and sub sway)":
+                    price.sizeFactor
             },
             drop: {
                 deleteCost: price.deleteCost,

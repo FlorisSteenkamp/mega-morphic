@@ -11,9 +11,9 @@ import { geomOf$ } from '../geom-of.js';
  *
  * * where the candidate's route ends disagree in kind - a fork in one
  *   glyph, a leaf in the other - the fork end may instead extend into one of
- *   its short terminal tips (`calcEndAlts`), or the leaf end retract to its
- *   fork if it is such a tip: the DTW decides that choice on a near-tie (a
- *   tiny tip is about as cheap to align as to skip), while the full
+ *   its terminal tips (`calcEndAlts`), or the leaf end retract to its fork
+ *   if it is such a tip: the DTW decides that choice on a near-tie (a tip
+ *   is about as cheap to align as to skip), while the full
  *   recursion, which sees the children, can tell which way the two glyphs
  *   correspond
  *
@@ -89,13 +89,13 @@ function calcEndPairs(
 
 
 /**
- * Returns the alternative route ends for `v` across a short terminal tip -
- * a single segment between a fork and a leaf, no longer than twice the
- * fork's radius (a serif tip):
+ * Returns the alternative route ends for `v` across a terminal tip - a
+ * single segment between a fork and a leaf, of any length (e.g. a serif
+ * half):
  *
- * * `v` a fork: the leaves of its short tips
+ * * `v` a fork: the leaves of its tips
  *
- * * `v` a leaf at the end of a short tip: the tip's fork
+ * * `v` a leaf at the end of a tip: the tip's fork
  *
  * @param g the tree's segments
  * @param v the route end
@@ -109,7 +109,7 @@ function calcEndAlts(
 
     const out: Circle[] = [];
     for (const s of segs) {
-        const { vertS, vertE, skelLen } = geomOf$(s);
+        const { vertS, vertE } = geomOf$(s);
         const u = vertS === v ? vertE : vertS;
         const degV = segs.length;
         const degU = adj.get(u)!.length;
@@ -117,7 +117,7 @@ function calcEndAlts(
         const fork = degV >= 3 && degU === 1 ? v
             : degV === 1 && degU >= 3 ? u
             : undefined;
-        if (fork !== undefined && skelLen <= 2*fork.radius) { out.push(u); }
+        if (fork !== undefined) { out.push(u); }
     }
 
     return out;
