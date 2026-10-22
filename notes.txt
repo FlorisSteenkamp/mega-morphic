@@ -37,6 +37,12 @@ Checkpoints
   within 5% of gapOpen decided by value + λ·sway), gap extension priced
   by material, default sway 3. Trunks of M/N now match correctly at high
   sway; staggered SAT is the mode to work in from here.
+* b99e517 (2026-10-22) - reference before the "chainsaw" skeleton (each
+  route as a loop: out flank, end cap, back flank, start cap; per-flank
+  warps, shear priced in local radii, leaves free to go round the cap onto
+  a flank). Children still slide along a single-sided parent warp here;
+  split route junctions share one frame (k->x serifs right) and segment
+  areas are over closed loops. Go back here if the chainsaw fails.
 * branch fork-pull-warp (2026-10-21) - parked experiment: a soft
   fork-to-fork pull in the matcher's warp (`alignBranches` fork profiles,
   W_FORK 0.5; the morph passes none). No structural difference on T/A, so
