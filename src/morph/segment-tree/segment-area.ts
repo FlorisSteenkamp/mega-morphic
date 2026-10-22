@@ -34,14 +34,41 @@ function segmentArea(
     const backEnd = getLastP(back);
     const outStart = out[0][0];
 
-    const loop = [
+    const loop = closeGaps([
         ...out,
         ...wedge(outEnd, vertE.center, backStart),
         ...back,
         ...wedge(backEnd, vertS.center, outStart)
-    ];
+    ]);
 
     return abs(getShapeArea(loop));
+}
+
+
+/**
+ * Returns the loop with a straight piece bridging every gap between a piece
+ * and the next (the last piece's next being the first).
+ *
+ * * the sleeves need not be continuous: at a leaf the SAT cut (a split
+ *   disk, see `markSplitDisks`) the twin of the last step can start
+ *   elsewhere on the boundary
+ *
+ * * Green's theorem over an open loop depends on where the origin is (each
+ *   gap drops a term of the order of its length times its distance from the
+ *   origin), so even a small gap far from the origin can swamp the area
+ */
+function closeGaps(loop: number[][][]): number[][][] {
+    const closed: number[][][] = [];
+    for (let i = 0; i < loop.length; i++) {
+        const ps = loop[i];
+        const p = getLastP([ps]);
+        const q = loop[(i + 1) % loop.length][0];
+
+        closed.push(ps);
+        if (p[0] !== q[0] || p[1] !== q[1]) { closed.push([p, q]); }
+    }
+
+    return closed;
 }
 
 

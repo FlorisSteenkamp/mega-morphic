@@ -62,6 +62,8 @@ function childrenOf(
         prongs.push(undefined);
     }
 
+    mergeJunctionFrames(route, verts, dirs, prongs);
+
     const segChildren: SegChild[] = [];
     const claimed = new Set<Segment>();
 
@@ -123,6 +125,82 @@ function childrenOf(
     }
 
     return segChildren;
+}
+
+
+/**
+ * Gives every run of route vertices joined by connectors one frame: the
+ * travel direction and prongs of the junction they make up together.
+ *
+ * * a connector is a route segment no longer than half the stroke width
+ *   (the smaller radius at its two ends), as in `expandBranch` - the MAT
+ *   happened to split one junction into several forks
+ *
+ * * without this, each fork of the run is measured against only the prongs
+ *   it sees: a connector's chord is (near) zero, so `meanDir` falls back on
+ *   the other prong - children of one junction would then sit at angles
+ *   measured in different frames (e.g. both at -90° when the route turns
+ *   90° at the junction, one measured against the arriving direction, the
+ *   other against the leaving one)
+ *
+ * * the junction's prongs are the direction arriving at the run's first
+ *   vertex and the one leaving its last; at a route end (no arriving or no
+ *   leaving direction) the run has no prongs and the one it has is its
+ *   travel direction
+ *
+ * * `dirs` and `prongs` are updated in place
+ *
+ * @param route the route
+ * @param verts the route's vertices
+ * @param dirs the travel direction at each route vertex
+ * @param prongs the arriving and leaving directions at each route vertex
+ * (`undefined` at a route end)
+ */
+function mergeJunctionFrames(
+        route: RouteStep[],
+        verts: Circle[],
+        dirs: number[][],
+        prongs: ([number[], number[]] | undefined)[]): void {
+
+    let j = 0;
+    while (j < route.length) {
+        let k = j;
+        while (k < route.length && isConnector(route[k], verts[k], verts[k + 1])) {
+            k++;
+        }
+
+        if (k > j) {
+            const dirIn = prongs[j]?.[0];
+            const dirOut = prongs[k]?.[1];
+            const dir = dirIn === undefined ? dirOut ?? dirs[j]
+                : dirOut === undefined ? dirIn
+                : meanDir(dirIn, dirOut);
+            const prong: [number[], number[]] | undefined =
+                dirIn !== undefined && dirOut !== undefined
+                    ? [dirIn, dirOut]
+                    : undefined;
+
+            for (let i = j; i <= k; i++) {
+                dirs[i] = dir;
+                prongs[i] = prong;
+            }
+        }
+
+        j = k + 1;
+    }
+}
+
+
+/**
+ * Returns `true` if the route step joining `v1` and `v2` is a connector: no
+ * longer than half the smaller radius at its two ends.
+ */
+function isConnector(
+        step: RouteStep,
+        v1: Circle,
+        v2: Circle): boolean {
+
+    return geomOf$(step.seg).skelLen <= min(v1.radius, v2.radius)/2;
 }
 
 
