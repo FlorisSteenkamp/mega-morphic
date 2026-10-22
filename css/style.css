@@ -156,9 +156,13 @@ h1 > a:hover {
 .thin10 { stroke-width: 0.10%; }
 .thin20 { stroke-width: 0.20%; }
 .thin35 { stroke-width: 0.35%; }
+.thin40 { stroke-width: 0.40%; }
 .thin50 { stroke-width: 0.50%; }
+.thin80  { stroke-width: 0.80%; }
 .thin100 { stroke-width: 1%; }
+.thin140 { stroke-width: 1.4%; }
 .thin200 { stroke-width: 2%; }
+.thin400 { stroke-width: 4%; }
 .thin500 { stroke-width: 5%; }
 .thin1k { stroke-width: 10%; }
 .thin2k { stroke-width: 20%; }

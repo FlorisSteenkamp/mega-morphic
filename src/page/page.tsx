@@ -223,9 +223,9 @@ function Page(props: Props) {
         });
     }
 
-    /** Rotate shape 1 a further 10° and rebuild everything (testing). */
-    function onRotate10Clicked() {
-        updAndReload({ rot1: (pageState.rot1 + 10) % 360 }, false);
+    /** Rotate shape 1 a further 15° and rebuild everything (testing). */
+    function onRotate15Clicked() {
+        updAndReload({ rot1: (pageState.rot1 + 15) % 360 }, false);
     }
 
     /** Toggle shape 1's horizontal mirror and rebuild everything (testing). */
@@ -372,10 +372,10 @@ function Page(props: Props) {
                         {pageState.rot1}°
                     </span>
                     <button
-                        onClick={onRotate10Clicked}
+                        onClick={onRotate15Clicked}
                         style={btnStyleBlue}
                     >
-                        rotate 10
+                        rotate 15
                     </button>
                 </div>
                 <div style={{ display: 'flex' }}>

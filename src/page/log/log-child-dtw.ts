@@ -17,6 +17,7 @@ import { matchColors } from '../events/match-colors.js';
 import { lenOf$ } from '../../morph/segment-tree/len-of.js';
 import type { PairInTree } from '../../morph/segment-tree/match-seg-trees/pairs-of.js';
 import { pairsOf } from '../../morph/segment-tree/match-seg-trees/pairs-of.js';
+import { scoreOf } from '../../morph/segment-tree/match-seg-trees/score-of.js';
 
 
 /** One side's selection: a segment, or the trunk-pair route. */
@@ -25,6 +26,9 @@ type Sel = { seg?: Segment; trunk?: boolean };
 /** Two-click selection state (debug tool - module scope suffices). */
 let selA: Sel | undefined;
 let selB: Sel | undefined;
+
+/** tags the first click's selection highlight, for removal */
+const SEL_CLASS = 'dtw-sel';
 
 
 /**
@@ -82,17 +86,6 @@ function logChildDtw(
             : { seg: nearest };
         if (shapeIdx === 1) { selA = sel; } else { selB = sel; }
 
-        const color = shapeIdx === 1 ? 'red' : 'green';
-        if (hitPair !== undefined) {
-            // the pair's whole matched route (covered segments only)
-            const route = shapeIdx === 1
-                ? hitPair.mp.routeA : hitPair.mp.routeB;
-            drawBeziersAsSinglePath(g, route.flatMap(st => geomOf$(st.seg).skelPss),
-                `thin35 ${color} nofill`, showDelay);
-        } else if (nearest !== undefined) {
-            drawBeziersAsSinglePath(g, geomOf$(nearest).skelPss, `thin20 ${color} nofill`, showDelay);
-        }
-
         const what = hitPair !== undefined
             ? hitPair.idx === 0
                 ? 'the TRUNK pair route'
@@ -101,11 +94,27 @@ function logChildDtw(
             : 'an uncovered segment';
 
         if (selA === undefined || selB === undefined) {
+            // the selection is shown only while the other side is still
+            // to be picked - once both are, the alignment shows it
+            const color = shapeIdx === 1 ? 'red' : 'green';
+            if (hitPair !== undefined) {
+                // the pair's whole matched route (covered segments only)
+                const route = shapeIdx === 1
+                    ? hitPair.mp.routeA : hitPair.mp.routeB;
+                drawBeziersAsSinglePath(g, route.flatMap(st => geomOf$(st.seg).skelPss),
+                    `thin35 ${color} nofill ${SEL_CLASS}`, showDelay);
+            } else if (nearest !== undefined) {
+                drawBeziersAsSinglePath(g, geomOf$(nearest).skelPss,
+                    `thin20 ${color} nofill ${SEL_CLASS}`, showDelay);
+            }
+
             console.log(`selected ${what} on svg${shapeIdx} - ` +
                 `now click a segment on svg${shapeIdx === 1 ? 2 : 1}`);
             return;
         }
         console.log(`selected ${what} on svg${shapeIdx}`);
+
+        clearSelection();
 
         if (selA.trunk === true && selB.trunk === true) {
             logTrunkPair(pm, showDelay);
@@ -119,6 +128,14 @@ function logChildDtw(
 
         evaluate(pm, selA.seg, selB.seg, weights, showDelay);
     };
+}
+
+
+/** Removes the selection highlight from both svgs. */
+function clearSelection(): void {
+    for (const id of ['svg', 'svg2']) {
+        svgGroup(id)?.querySelectorAll(`.${SEL_CLASS}`).forEach($ => $.remove());
+    }
 }
 
 
@@ -277,6 +294,11 @@ function evaluate(
             }
         },
         verdict: r.verdict,
+        // which sub-pair the alignment shows: the match's own (a staggered
+        // match keeps a coarse pair's sub-routes, which the free pricing
+        // above may not pick) or, when the two aren't matched together,
+        // the priced best one
+        drawn: describeDrawn(r.actualSub, price?.sub),
         selectionA: describeLoc(r.a),
         selectionB: describeLoc(r.b),
         // the DP only ever compares children pooled on the same parent pair
@@ -284,6 +306,37 @@ function evaluate(
         // the morph's winning match, for digging
         root: r.root
     });
+}
+
+
+/** Which sub-pair the alignment shows, and how it compares to the priced. */
+function describeDrawn(
+        actual: SegMatchedPair | undefined,
+        priced: SegMatchedPair | undefined): string {
+
+    if (actual === undefined) {
+        return 'the priced best sub-pair (the two are not matched together)';
+    }
+    const same = priced !== undefined &&
+        isSameRoute(actual.routeA, priced.routeA) &&
+        isSameRoute(actual.routeB, priced.routeB);
+
+    return `the match's own sub-pair (score ${scoreOf(actual).toFixed(3)}) - ` +
+        (same
+            ? 'the same routes as the priced one'
+            : `NOT the priced one (score ${
+                priced === undefined ? '-' : scoreOf(priced).toFixed(3)}): ` +
+                'kept from the coarse match');
+}
+
+
+/** Returns `true` if the two routes run through the same segments. */
+function isSameRoute(
+        r1: RouteStep[],
+        r2: RouteStep[]): boolean {
+
+    return r1.length === r2.length &&
+        r1.every((st, k) => st.seg === r2[k].seg);
 }
 
 

@@ -5,14 +5,14 @@ import { clearOverlay } from './clear-overlay.js';
 
 
 /** half-size of the trunk-start cross */
-const CROSS_SIZE = 14;
+const CROSS_SIZE = 7;
 
 /** classes of the trunk-start cross (`trunk-start` tags it for removal) */
-const CROSS_CLASSES = 'purple thin50 nofill trunk-start';
+const CROSS_CLASSES = 'purple thin10 nofill trunk-start';
 
 
 /**
- * Marks each matched trunk's start with a thickish purple cross (×) on both
+ * Marks each matched trunk's start with a small thin purple cross (×) on both
  * glyphs - the two points the matcher corresponds as the trunk routes'
  * starts (replacing the previous morph's crosses).
  *

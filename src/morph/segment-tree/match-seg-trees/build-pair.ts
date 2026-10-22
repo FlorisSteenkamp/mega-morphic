@@ -236,11 +236,14 @@ function buildPair(
      *   the child's attach vertex)
      *
      * * `cost` = `shapeCost` + per matched child: position + angle + its
-     *   recursive `cost`; per dropped child: its drop cost
+     *   score (`scoreOf`: its recursive `cost` + its sway); per dropped
+     *   child: its drop cost - exactly the prices the alignment decided
+     *   with, so the children's sway counts in every choice above them too
+     *   (a trunk whose children swing round loses to one whose children
+     *   stay put)
      *
-     * * `sway` = `swayCost`, the routes' own (never part of `cost`, but of
-     *   every decision - each child's sway already priced its own match
-     *   in this alignment, through its score)
+     * * `sway` = `swayCost`, the routes' own (not in `cost` - it enters
+     *   the parent's `cost`, or the trunk's score, through `scoreOf`)
      *
      * * when `_debug_` is active, the final alignment DP is attached as `dp`
      *   (only without `fixedOf`)
@@ -341,14 +344,14 @@ function buildPair(
         let cost = shapeCost;
 
         for (const { a, b, sub } of fixed?.matches ?? []) {
-            cost += calcPlaceCost(a, b) + sub.cost;
+            cost += calcPlaceCost(a, b) + scoreOf(sub);
             ops.push({ type: 'match', a, b, sub });
         }
 
         for (const op of freeOps) {
             if (op.type === 'match') {
                 const subPair = evalBest(op.a, op.b);
-                cost += calcPlaceCost(op.a, op.b) + subPair.cost;
+                cost += calcPlaceCost(op.a, op.b) + scoreOf(subPair);
                 ops.push({
                     type: 'match', a: op.a, b: op.b, sub: subPair });
             } else if (op.type === 'delete') {

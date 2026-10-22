@@ -46,6 +46,19 @@ Checkpoints
 
 TODO
 ----
+* sway, two parked ideas (2026-10-22) - children's sway already counts in
+  the trunk score (each matched child adds its full score), but:
+  - weight the trunk's own sway by its size like a child's:
+    del × (route A material + route B material)/2 - keep the trunk
+    pre-ranking unweighted (else the long trunk is cut before the full
+    evaluation: the cheap child estimate has no child sway) and weight it
+    only in the final choice among evaluated candidates
+  - make dropping not sway-free: a dropped child costs
+    swayW × ρ × del × its material, ρ = 0.5 (a drop counts as a quarter
+    turn: matches turning < 90° beat drops, flipped ones lose) - so a high
+    sway setting means "turn less", not "drop more" (six -> seven at sway
+    10 drops its big stroke)
+  - do both together; compare staggered at sway 3 and 10 (six/seven, C/B)
 * component merge/split (e.g. A -> H: A's one body vs H's two halves, so
   one half grows from a point): let the component matching pair one
   component with a GROUP of nearby components (priced on the group's

@@ -31,7 +31,12 @@ interface ChildLocation {
     /** 'inside subtree': the segment is buried in `child`'s hanging subtree */
     readonly role: 'direct' | 'inside subtree';
     /** the winning match's actual decision for this child */
-    readonly outcome: { type: SegOp['type']; partner?: SegChild };
+    readonly outcome: {
+        type: SegOp['type'];
+        partner?: SegChild;
+        /** the match's sub-pair (for a match) */
+        sub?: SegMatchedPair;
+    };
 }
 
 
@@ -44,7 +49,13 @@ interface ChildPairEval {
     /** pooled on the same parent pair (else the DP never compares them) */
     readonly sameParent?: boolean;
     readonly price?: ChildPairPrice;
-    /** viz alignment of the pinned-start sub-DTW's winning route pair */
+    /**
+     * the match's own sub-pair, when the two children are matched with
+     * each other - drawn instead of the priced one (`price.sub`), which a
+     * staggered match may not have used
+     */
+    readonly actualSub?: SegMatchedPair;
+    /** viz alignment of the drawn sub-pair's routes */
     readonly align?: PathAlignDebug;
     readonly verdict: string;
     /** the winning match the pair was located in */
@@ -105,8 +116,15 @@ function evalChildPair(
 
     const sameParent = a.pair === b.pair;
 
-    // the best sub-pair's routes (tip → junction)
-    const { routeA, routeB } = price.sub;
+    // the drawn sub-pair: the match's own when the two are matched with
+    // each other (in a staggered match a pair kept from the coarse match
+    // keeps its coarse sub-routes, which the free pricing may not pick),
+    // else the priced best one - routes tip → junction
+    const { outcome } = a;
+    const actualSub = outcome.type === 'match' && outcome.partner === b.child
+        ? outcome.sub
+        : undefined;
+    const { routeA, routeB } = actualSub ?? price.sub;
     // aligned as the matcher aligned them: a child pair's weights
     const align = alignOfRoutes(
         routeA, routeB, unitA, unitB,
@@ -124,7 +142,10 @@ function evalChildPair(
             : ' (in isolation, before spacing; sequence order and the ' +
                 'spacing to neighbouring matches can override)');
 
-    return { a, b, sameParent, price, align, verdict, root };
+    return {
+        a, b, sameParent, price, align, verdict, root,
+        ...(actualSub !== undefined ? { actualSub } : {})
+    };
 }
 
 
@@ -143,7 +164,8 @@ interface ChildPairPrice {
     readonly subShapeCost: number;
     /** the best sub-pair's routes' measured warp sway, times the size factor */
     readonly subSwayCost: number;
-    /** the best sub-pair's recursive child costs (matched + dropped) */
+    /** the best sub-pair's recursive child costs (matched, incl. their
+     *  sway, + dropped) */
     readonly subChildCost: number;
     /** the best sub-pair's score = shape + children + sway (`scoreOf`) */
     readonly subCost: number;
@@ -231,7 +253,8 @@ function locate(
                 const outcome: ChildLocation['outcome'] =
                     op.type === 'match'
                         ? { type: 'match',
-                            partner: key === 'a' ? op.b : op.a }
+                            partner: key === 'a' ? op.b : op.a,
+                            sub: op.sub }
                         : { type: op.type };
                 const loc: ChildLocation = { child: c, pair, role, outcome };
 

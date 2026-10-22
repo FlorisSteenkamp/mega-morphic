@@ -10,17 +10,18 @@ interface SegMatchedPair {
     readonly routeA: RouteStep[];
     readonly routeB: RouteStep[];
     readonly shapeCost: number;
-    /** shape + child ops, recursive */
+    /** shape + child ops, recursive - a matched child at its full score
+     *  (`scoreOf`: its cost + its sway) */
     readonly cost: number;
     /**
      * measured warp sway of the routes themselves
      *
-     * * never part of `cost`, but part of every decision (`scoreOf`)
+     * * not part of the pair's own `cost`, but of every decision
+     *   (`scoreOf`) - and of its parent's `cost`, through the parent's
+     *   child price
      *
-     * * not summed over the children: it is a mean over the routes'
-     *   corresponded material (size-independent), so a sum would charge
-     *   every matched part a full share however small - each child's own
-     *   sway already priced its match, one level up
+     * * a child pair's sway is scaled by its size (`calcSizeFactor`), so
+     *   summed up the tree it charges each matched part by its material
      */
     readonly sway: number;
     readonly ops: SegOp[];
