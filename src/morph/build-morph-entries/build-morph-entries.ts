@@ -43,6 +43,30 @@ function buildMorphEntries(
     // covered continuations) - they retract via the usual piece-stub
     // semantics.
     const trunk = matchSegTrees(gA, gB, loopA, loopB, fullWeights);
+
+    return buildMorphEntriesOfMatch(trunk, gA, gB, loopA, loopB, fullWeights);
+}
+
+
+/**
+ * Returns the morph entries of a ready match of the two segment trees
+ * (`buildMorphEntries` after its matching).
+ *
+ * @param trunk the match
+ * @param gA tree A (the one the match is of)
+ * @param gB tree B
+ * @param loopA glyph A's outline loop
+ * @param loopB glyph B's outline loop
+ * @param fullWeights the path cost weights
+ */
+function buildMorphEntriesOfMatch(
+        trunk: SegMatchedPair,
+        gA: Segment[],
+        gB: Segment[],
+        loopA: number[][][],
+        loopB: number[][][],
+        fullWeights: PathCostWeights): MorphEntry[] {
+
     recordPathMatch(trunk, gA, gB, loopA, loopB, fullWeights);
 
     // The sleeves walk the outline in its global direction - the glyph
@@ -177,4 +201,4 @@ function coveredSegsOf(
 }
 
 
-export { buildMorphEntries, coveredSegsOf }
+export { buildMorphEntries, buildMorphEntriesOfMatch, coveredSegsOf }

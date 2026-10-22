@@ -18,6 +18,7 @@ import { SimpleSelect } from '../components/simple-select.js';
 import { ButtonGroup } from '../components/simple-button-group.js';
 import { Checkbox, CheckboxStyles } from '../components/simple-checkbox.js';
 import { loadDeducedProps } from './load-deduced-props.js';
+import { STAGGER_COARSE, STAGGER_FINE } from '../morph/staggered-sat.js';
 import { logSomeStuff } from './log/log-some-stuff.js';
 import { toViewBoxStr, unionViewbox, getFlipTransform } from './fs-consts-types/viewbox.js';
 import { onClick } from './mouse/on-click.js';
@@ -62,17 +63,17 @@ const weightRanges: Record<
         keyof PathCostWeights,
         { max: number; step: number; group: keyof typeof weightGroupColors }
     > = {
-    radius: { max: 3, step: 0.05, group: 'dtw' },
-    turning: { max: 1, step: 0.01, group: 'dtw' },
-    gapOpen: { max: 1, step: 0.01, group: 'dtw' },
-    gapExtend: { max: 0.3, step: 0.005, group: 'dtw' },
-    tail: { max: 2, step: 0.05, group: 'dtw' },
-    del: { max: 10, step: 0.1, group: 'children' },
-    delFloor: { max: 1, step: 0.01, group: 'children' },
-    position: { max: 5, step: 0.05, group: 'children' },
-    spacing: { max: 0.5, step: 0.005, group: 'children' },
-    angle: { max: 2, step: 0.05, group: 'children' },
-    sway: { max: 4, step: 0.05, group: 'trunk' }
+    radius: { max: 3, step: 0.1, group: 'dtw' },
+    turning: { max: 1, step: 0.025, group: 'dtw' },
+    gapOpen: { max: 1, step: 0.025, group: 'dtw' },
+    gapExtend: { max: 0.3, step: 0.01, group: 'dtw' },
+    tail: { max: 2, step: 0.1, group: 'dtw' },
+    del: { max: 10, step: 0.2, group: 'children' },
+    delFloor: { max: 1, step: 0.02, group: 'children' },
+    position: { max: 5, step: 0.1, group: 'children' },
+    spacing: { max: 0.5, step: 0.0125, group: 'children' },
+    angle: { max: 2, step: 0.125, group: 'children' },
+    sway: { max: 4, step: 0.1, group: 'trunk' }
 };
 // console.log(getGlyphNames_);
 
@@ -84,7 +85,7 @@ function Page(props: Props) {
     const {
         toDraw, viewbox1, viewbox2, viewbox3, deduced, showSvgs, flipH, flipV,
         showWeights, glyph1Name, glyph2Name, glyphPresets, clickFor,
-        simplify, viewMat, morphFillOnly,
+        simplify, viewMat, staggeredSat, morphFillOnly,
         showPose, satScale, showDelay, pathWeights,
         morphT,
     } = pageState;
@@ -319,6 +320,7 @@ function Page(props: Props) {
                 </div>
                 <Checkbox checked={simplify} styles={toDrawCheckboxStyles} text="simplify" onChanged={simplify => updAndReload({ simplify }, false)} />
                 <Checkbox checked={!viewMat} styles={toDrawCheckboxStyles} text="SAT enabled" onChanged={satEnabled => updAndReload({ viewMat: !satEnabled }, false)} />
+                <Checkbox checked={staggeredSat} styles={toDrawCheckboxStyles} text={`staggered SAT (${STAGGER_COARSE} → ${STAGGER_FINE})`} onChanged={staggeredSat => updAndReload({ staggeredSat }, false)} />
                 <Checkbox checked={morphFillOnly} styles={toDrawCheckboxStyles} text="fill only" onChanged={morphFillOnly => updAndRedrawMorph({ morphFillOnly })} />
                 <Checkbox checked={pageState.showMorphBounds} styles={toDrawCheckboxStyles} text="bounds" onChanged={showMorphBounds => updAndRedrawMorph({ showMorphBounds })} />
                 <Checkbox checked={showPose} styles={toDrawCheckboxStyles} text="pose" onChanged={showPose => updAndRedrawMorph({ showPose })} />
@@ -331,7 +333,7 @@ function Page(props: Props) {
                     <Slider
                         value={satScale}
                         aria-labelledby="slider"
-                        min={1} max={10} step={0.025}
+                        min={1} max={10} step={0.05}
                         valueLabelDisplay="auto"
                         onChange={satScaleChanged}
                     />
@@ -343,7 +345,7 @@ function Page(props: Props) {
                     <Slider
                         value={showDelay}
                         aria-labelledby="slider"
-                        min={0} max={50_000} step={100}
+                        min={0} max={50_000} step={200}
                         valueLabelDisplay="auto"
                         onChange={showDelayChanged}
                     />
@@ -417,7 +419,7 @@ function Page(props: Props) {
                     <Slider
                         value={morphT}
                         aria-labelledby="slider"
-                        min={0} max={100} step={1}
+                        min={0} max={100} step={2}
                         valueLabelDisplay="auto"
                         onChange={morphChanged}
                     />
@@ -561,8 +563,10 @@ async function lazyLoadDeduced(
     const pathStr1 = await loadPath(glyph1Name);
     const pathStr2 = await loadPath(glyph2Name);
 
-    const { bezierLoops1, bezierLoops2, mats1, mats2, viewbox1, viewbox2, timingAll } = 
-        loadDeducedProps(stateControl, pathStr1, pathStr2);
+    const {
+        bezierLoops1, bezierLoops2, mats1, mats2, coarseMats1, coarseMats2,
+        viewbox1, viewbox2, timingAll
+    } = loadDeducedProps(stateControl, pathStr1, pathStr2);
 
     upd$(stateControl.state.appState.pageState.deduced, {
         bezierLoops1,
@@ -572,6 +576,7 @@ async function lazyLoadDeduced(
             .map(loop => beziersToSvgPathStr(loop)).join(' '),
         mats1,
         bezierLoops2, pathStr2, mats2,
+        coarseMats1, coarseMats2
     });
 
     if (typeof _debug_ !== 'undefined') { logSomeStuff(timingAll); }

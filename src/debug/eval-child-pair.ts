@@ -4,7 +4,6 @@ import type { Segment } from '../morph/segment-tree/segment.js';
 import type { SegMatchedPair } from '../morph/segment-tree/match-seg-trees/seg-matched-pair.js';
 import type { SegOp } from '../morph/segment-tree/match-seg-trees/seg-op.js';
 import type { SegChild } from '../morph/segment-tree/match-seg-trees/seg-child.js';
-import { matchSegTrees } from '../morph/segment-tree/match-seg-trees/match-seg-trees.js';
 import type { RouteWarp } from '../morph/segment-tree/match-seg-trees/route-warp-of.js';
 import type { RouteFeatures } from '../morph/segment-tree/match-seg-trees/route-features-of.js';
 import { calcWarpPosCost, calcAngleCost, calcSizeFactor, calcDropCost } from '../morph/segment-tree/match-seg-trees/child-costs.js';
@@ -47,7 +46,7 @@ interface ChildPairEval {
     /** viz alignment of the pinned-start sub-DTW's winning route pair */
     readonly align?: PathAlignDebug;
     readonly verdict: string;
-    /** the fresh winning match (current weights) */
+    /** the winning match the pair was located in */
     readonly root: SegMatchedPair;
 }
 
@@ -56,14 +55,15 @@ interface ChildPairEval {
  * * **Debug only**
  * 
  * Prices a clicked child-segment pair with the segment matcher's actual
- * economics: a fresh `matchSegTrees` run on the SAME trees (current
- * weights - tree construction is weight-independent) locates the segments
- * as pooled children of the winning match, then the pair is priced exactly
- * as the matcher's relabel-vs-drop decision would price it.
+ * economics: the segments are located as pooled children of the winning
+ * match (`root` - the morph's, staggered or not), then the pair is priced
+ * exactly as the matcher's relabel-vs-drop decision would price it (current
+ * weights).
  */
 function evalChildPair(
         gA: Segment[],
         gB: Segment[],
+        root: SegMatchedPair,
         segA: Segment,
         segB: Segment,
         loopA: number[][][],
@@ -73,8 +73,6 @@ function evalChildPair(
     const unitA = getUnit$(loopA);
     const unitB = getUnit$(loopB);
     const aniso = anisoOf(loopA, loopB);
-
-    const root = matchSegTrees(gA, gB, loopA, loopB, weights);
 
     const a = locate(root, segA, 'a');
     const b = locate(root, segB, 'b');

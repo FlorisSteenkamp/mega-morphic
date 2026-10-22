@@ -2,7 +2,10 @@ import type { CpNode } from 'flo-mat';
 import type { MorphEntry, Tether } from '../morph-entry.js';
 import type { SleeveSide } from '../anchored-sleeves.js';
 import type { PathCostWeights } from '../match-paths/path-cost-weights.js';
-import { buildMorphEntries } from './build-morph-entries.js';
+import { buildMorphEntries, buildMorphEntriesOfMatch } from './build-morph-entries.js';
+import { matchSegTrees } from '../segment-tree/match-seg-trees/match-seg-trees.js';
+import { refineMatch } from '../segment-tree/match-seg-trees/refine-match.js';
+import { defaultPathWeights } from '../match-paths/path-cost-weights.js';
 import { matchComponents } from '../components/match-components.js';
 import { segTreeFromCp } from '../segment-tree/seg-tree-from-cp.js';
 import { outlineLoopOf } from '../segment-tree/outline-loop.js';
@@ -22,6 +25,19 @@ const TETHER_SAMPLES = 16;
 const { hypot } = Math;
 
 
+/** One component (MAT) of a glyph. */
+interface GlyphComponent {
+    /** a `CpNode` of its MAT - the one the morph is drawn from */
+    readonly cp: CpNode;
+    /**
+     * a `CpNode` of a coarser SAT of it, a sub-tree of `cp`'s (see
+     * `markSplitDisks`) - matched first, the match then refined onto `cp`'s
+     * tree (`undefined`: matched at `cp`'s scale only)
+     */
+    readonly coarse: CpNode | undefined;
+}
+
+
 /**
  * Returns the morph entries of a whole glyph pair: the glyphs' components
  * (one MAT each) are matched (`matchComponents`), each matched pair is
@@ -37,30 +53,32 @@ const { hypot } = Math;
  *   from the smallest to the largest - the last pair built is the one the
  *   debug match views show (`recordPathMatch` keeps the latest)
  *
- * @param cpsA glyph A's MATs (a `CpNode` of each)
- * @param cpsB glyph B's MATs (a `CpNode` of each)
+ * * a component pair is matched at one scale, or staggered when both have
+ *   a coarse MAT (`buildPairEntries`)
+ *
+ * @param compsA glyph A's components
+ * @param compsB glyph B's components
  * @param weights the path cost weights
  */
 function buildGlyphMorphEntries(
-        cpsA: CpNode[],
-        cpsB: CpNode[],
+        compsA: GlyphComponent[],
+        compsB: GlyphComponent[],
         weights: Partial<PathCostWeights>): MorphEntry[] {
 
-    const loopsA = cpsA.map(outlineLoopOf);
-    const loopsB = cpsB.map(outlineLoopOf);
+    const loopsA = compsA.map(c => outlineLoopOf(c.cp));
+    const loopsB = compsB.map(c => outlineLoopOf(c.cp));
 
     const { pairs, onlyA, onlyB } = matchComponents(loopsA, loopsB);
 
     const blocks: MorphEntry[][] = [
-        ...onlyA.map(i => buildShrinkEntries(cpsA[i], loopsA[i], 'a', weights)),
-        ...onlyB.map(j => buildShrinkEntries(cpsB[j], loopsB[j], 'b', weights)),
+        ...onlyA.map(i => buildShrinkEntries(compsA[i], loopsA[i], 'a', weights)),
+        ...onlyB.map(j => buildShrinkEntries(compsB[j], loopsB[j], 'b', weights)),
         ...pairs
             .toSorted(([i1], [i2]) =>
                 calcProcrustes$(loopsA[i1]).scale -
                 calcProcrustes$(loopsA[i2]).scale)
-            .map(([i, j]) => buildMorphEntries(
-                segTreeFromCp(cpsA[i]), segTreeFromCp(cpsB[j]),
-                loopsA[i], loopsB[j], weights))
+            .map(([i, j]) => buildPairEntries(
+                compsA[i], compsB[j], loopsA[i], loopsB[j], weights))
     ];
 
     const entries: MorphEntry[] = [];
@@ -88,6 +106,44 @@ function buildGlyphMorphEntries(
     }
 
     return entries;
+}
+
+
+/**
+ * Returns the morph entries of a component pair:
+ *
+ * * both with a coarse MAT: their coarse trees are matched, the match is
+ *   refined onto their trees (`refineMatch`) and the morph built from that
+ *
+ * * else: matched and built on their trees (`buildMorphEntries`)
+ *
+ * @param a the component of A
+ * @param b the component of B
+ * @param loopA its outline loop
+ * @param loopB its outline loop
+ * @param weights the path cost weights
+ */
+function buildPairEntries(
+        a: GlyphComponent,
+        b: GlyphComponent,
+        loopA: number[][][],
+        loopB: number[][][],
+        weights: Partial<PathCostWeights>): MorphEntry[] {
+
+    const gA = segTreeFromCp(a.cp);
+    const gB = segTreeFromCp(b.cp);
+
+    if (a.coarse === undefined || b.coarse === undefined) {
+        return buildMorphEntries(gA, gB, loopA, loopB, weights);
+    }
+
+    const fullWeights = { ...defaultPathWeights, ...weights };
+    const coarse = matchSegTrees(
+        segTreeFromCp(a.coarse), segTreeFromCp(b.coarse),
+        loopA, loopB, fullWeights);
+    const trunk = refineMatch(coarse, gA, gB, loopA, loopB, fullWeights);
+
+    return buildMorphEntriesOfMatch(trunk, gA, gB, loopA, loopB, fullWeights);
 }
 
 
@@ -152,25 +208,24 @@ function calcTether(
  *   alignment keeps the component in its own glyph's coordinates, and
  *   `lone`, so the pose measurement leaves it out
  *
- * @param cp a `CpNode` of the component's MAT
+ * @param comp the component
  * @param loop the component's outline loop
  * @param side the glyph the component belongs to
  * @param weights the path cost weights
  */
 function buildShrinkEntries(
-        cp: CpNode,
+        comp: GlyphComponent,
         loop: number[][][],
         side: 'a' | 'b',
         weights: Partial<PathCostWeights>): MorphEntry[] {
 
-    const sg = segTreeFromCp(cp);
     const [cx, cy] = calcProcrustes$(loop).centroid;
 
     function shrink(p: number[]): number[] {
         return [cx + SHRINK*(p[0] - cx), cy + SHRINK*(p[1] - cy)];
     }
 
-    return buildMorphEntries(sg, sg, loop, loop, weights).map(e => {
+    return buildPairEntries(comp, comp, loop, loop, weights).map(e => {
         const { skelPssA, skelPssB, ra, rb, sleeveOut, sleeveBack, glue } = e;
 
         return side === 'a'
@@ -215,3 +270,4 @@ function copySleeveFrame(
 
 
 export { buildGlyphMorphEntries }
+export type { GlyphComponent }

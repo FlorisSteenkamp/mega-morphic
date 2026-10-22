@@ -10,6 +10,10 @@ import type { CalcCheapChildCost } from './cheap-child-cost.js';
 import type { SubLeader } from './sub-leaders-of.js';
 import type { Circle } from 'flo-mat';
 import type { RouteWarp } from './route-warp-of.js';
+import type { FixedOps, FixedOf } from './fixed-ops.js';
+import type { SeqOp } from '../../match-paths/align-seq.js';
+import { alignSeq } from '../../match-paths/align-seq.js';
+import { getCycle } from './align-outline.js';
 import { routeEndsOf } from './outline-len-of.js';
 import { subLeadersOf } from './sub-leaders-of.js';
 import { lenOfSegs$, lenOfRoute$ } from '../len-of.js';
@@ -86,7 +90,23 @@ function buildPair(
         new Map<string, { shapeCost: number; swayCost: number } | undefined>();
     const warpMemo = new Map<string, RouteWarp>();
 
-    return { pairOf: _buildPair, evalBest };
+    return { pairOf, pairOfFixed: _buildPair, evalBest };
+
+
+    /**
+     * Returns the match-tree node of the route pair, its children matched
+     * freely (`_buildPair` without fixed matches).
+     */
+    function pairOf(
+            scopeA: Segment[],
+            rA: RouteStep[],
+            scopeB: Segment[],
+            rB: RouteStep[],
+            shapeCost: number,
+            swayCost: number): SegMatchedPair {
+
+        return _buildPair(scopeA, rA, scopeB, rB, shapeCost, swayCost, undefined);
+    }
 
 
     /**
@@ -104,8 +124,9 @@ function buildPair(
 
         return leadersMemo.getOrInsertComputed(calcChildPairKey(a, b), () => {
                 const sizeFactor = calcSizeFactor_(a, b);
+                const subWeights = calcSubWeights(weights, a, b);
                 const ls = subLeadersOf(
-                    subDtwOf(gA, gB, unitA, unitB, δA, δB, weights, swayW, a, b),
+                    subDtwOf(gA, gB, unitA, unitB, δA, δB, subWeights, swayW, a, b),
                     a, b, unitA, unitB, cheapChildCost_, sizeFactor);
 
                 // variants priced junction → tip, as the sub-DTW runs, in
@@ -115,11 +136,11 @@ function buildPair(
                     endVariantsOf(l.c, gA, gB, (startA, endA, startB, endB) =>
                         routePairCostsMemo.getOrInsertComputed(
                             calcRoutePairKey(startA, endA, startB, endB) +
-                                `|${rotB}`,
+                                `|${rotB}|${subWeights.gapOpen}`,
                             () => routePairCostsOf(
                                 routeSegments(a.segs, startA, endA),
                                 routeSegments(b.segs, startB, endB),
-                                unitA, unitB, δA, δB, weights, swayW, rotB))
+                                unitA, unitB, δA, δB, subWeights, swayW, rotB))
                     ).map(c => c === l.c ? l : {
                         c,
                         // tip → junction
@@ -151,7 +172,8 @@ function buildPair(
                 leaders, evals,
                 l => _buildPair(
                     a.segs, l.rA, b.segs, l.rB,
-                    l.c.shapeCost, calcSizeFactor_(a, b)*l.c.swayCost)));
+                    l.c.shapeCost, calcSizeFactor_(a, b)*l.c.swayCost,
+                    undefined)));
     }
 
 
@@ -220,6 +242,12 @@ function buildPair(
      *   in this alignment, through its score)
      *
      * * when `_debug_` is active, the final alignment DP is attached as `dp`
+     *   (only without `fixedOf`)
+     *
+     * * with `fixedOf`, some child matches are already made (`FixedOps` -
+     *   a coarser match, refined): those are taken as they are, and only
+     *   the other children are aligned, in the gaps between them
+     *   (`calcFreeGaps`)
      *
      * @param scopeA the segments of A the children are taken from
      * @param rA the route in A
@@ -227,6 +255,8 @@ function buildPair(
      * @param rB the route in B
      * @param shapeCost the routes' own (DTW) shape cost
      * @param swayCost the routes' own measured warp sway
+     * @param fixedOf the matches already made among the routes' children
+     * (`undefined`: none)
      */
     function _buildPair(
             scopeA: Segment[],
@@ -234,7 +264,8 @@ function buildPair(
             scopeB: Segment[],
             rB: RouteStep[],
             shapeCost: number,
-            swayCost: number): SegMatchedPair {
+            swayCost: number,
+            fixedOf: FixedOf | undefined): SegMatchedPair {
 
         const chA = childrenOf(scopeA, rA, unitA);
         const chB = childrenOf(scopeB, rB, unitB);
@@ -273,22 +304,47 @@ function buildPair(
                 : calcScoreFloor(leadersOf(a, b).leaders, calcSizeFactor_(a, b)));
         }
 
-        let aligned = alignOutline(chA, chB, matchCost, calcDropCost_);
-        for (;;) {
-            const unbuilt = aligned.ops.filter(
-                op => op.type === 'match' && !isBuilt(op.a, op.b));
-            if (unbuilt.length === 0) { break; }
+        /** runs the alignment until all the matches it picks are built */
+        function alignLazily<T extends { ops: SeqOp<SegChild, SegChild>[] }>(
+                align: () => T): T {
 
-            for (const op of unbuilt) {
-                if (op.type === 'match') { evalBest(op.a, op.b); }
+            let aligned = align();
+            for (;;) {
+                const unbuilt = aligned.ops.filter(
+                    op => op.type === 'match' && !isBuilt(op.a, op.b));
+                if (unbuilt.length === 0) { return aligned; }
+
+                for (const op of unbuilt) {
+                    if (op.type === 'match') { evalBest(op.a, op.b); }
+                }
+                aligned = align();
             }
-            aligned = alignOutline(chA, chB, matchCost, calcDropCost_);
         }
+
+        const fixed = fixedOf === undefined ? undefined : fixedOf(chA, chB);
+
+        const aligned = fixed === undefined
+            ? alignLazily(() => alignOutline(chA, chB, matchCost, calcDropCost_))
+            : undefined;
+
+        // with fixed matches, the rest is aligned in the gaps between them
+        const freeOps = aligned !== undefined
+            ? aligned.ops
+            : calcFreeGaps(chA, chB, fixed!).flatMap(({ as, bs, cyclic }) =>
+                alignLazily(() => cyclic
+                    ? alignOutline(as, bs, matchCost, calcDropCost_)
+                    : alignSeq(as, bs, matchCost, calcDropCost_, calcDropCost_)
+                ).ops);
 
         const ops: SegOp[] = [];
         let cost = shapeCost;
 
-        for (const op of aligned.ops) {
+        for (const { a, b, sub } of fixed?.matches ?? []) {
+            cost += calcPlaceCost(a, b) + sub.cost;
+            ops.push({ type: 'match', a, b, sub });
+        }
+
+        for (const op of freeOps) {
             if (op.type === 'match') {
                 const subPair = evalBest(op.a, op.b);
                 cost += calcPlaceCost(op.a, op.b) + subPair.cost;
@@ -303,9 +359,10 @@ function buildPair(
             }
         }
 
-        const dp: SegDp | undefined = typeof _debug_ !== 'undefined'
-            ? { D: aligned.D, as: aligned.as, bs: aligned.bs, ops: aligned.ops }
-            : undefined;
+        const dp: SegDp | undefined =
+            typeof _debug_ !== 'undefined' && aligned !== undefined
+                ? { D: aligned.D, as: aligned.as, bs: aligned.bs, ops: aligned.ops }
+                : undefined;
 
         return {
             routeA: rA, routeB: rB, shapeCost, cost, sway: swayCost, ops,
@@ -365,6 +422,125 @@ function calcRoutePairKey(
         endB: Circle): string {
 
     return `${idOf(startA)},${idOf(endA)},${idOf(startB)},${idOf(endB)}`;
+}
+
+
+/**
+ * Returns the weights a child pair's sub-DTW runs with: the gap opening
+ * scaled by the pair's mean material (its salience fraction - a whole glyph
+ * is about `1`).
+ *
+ * * every other DTW cost scales with the material aligned (steps by length
+ *   and radius, extensions by length) - a flat gap opening would not: a
+ *   single unavoidable gap (sample counts differing by one) would outprice
+ *   dropping a small branch outright, so small branches never matched
+ *
+ * * so a child pair is priced like a scaled-down glyph pair
+ */
+function calcSubWeights(
+        weights: PathCostWeights,
+        a: SegChild,
+        b: SegChild): PathCostWeights {
+
+    const m = (a.material + b.material)/2;
+
+    return { ...weights, gapOpen: weights.gapOpen*m };
+}
+
+
+/**
+ * Returns the children still to be aligned, given the fixed matches, as
+ * the stretches of the two outlines to align with each other:
+ *
+ * * between each two consecutive fixed matches (around the outlines), the
+ *   children of A there with those of B there, in outline order (`cyclic`
+ *   false) - so no new match crosses a fixed one
+ *
+ * * without fixed matches, or when they don't run in the same cyclic order
+ *   in both outlines, all of them around the outlines (`cyclic` true)
+ *
+ * * the fixed matches' children are left out; stretches without children
+ *   on either side are omitted
+ *
+ * @param chA the children of route A
+ * @param chB the children of route B
+ * @param fixed the matches already made
+ */
+function calcFreeGaps(
+        chA: SegChild[],
+        chB: SegChild[],
+        fixed: FixedOps): { as: SegChild[]; bs: SegChild[]; cyclic: boolean }[] {
+
+    const { matches } = fixed;
+
+    const fixedA = new Set(matches.map(m => m.a));
+    const fixedB = new Set(matches.map(m => m.b));
+
+    const cycleA = getCycle(chA);
+    const cycleB = getCycle(chB);
+
+    const anchors = matches
+        .map(({ a, b }) => [cycleA.indexOf(a), cycleB.indexOf(b)])
+        .filter(([iA, iB]) => iA >= 0 && iB >= 0)
+        .sort((x, y) => x[0] - y[0]);
+
+    if (anchors.length === 0 || !isCyclicAscending(anchors.map(x => x[1]))) {
+        return [{
+            as: chA.filter(c => !fixedA.has(c)),
+            bs: chB.filter(c => !fixedB.has(c)),
+            cyclic: true
+        }];
+    }
+
+    const gaps: { as: SegChild[]; bs: SegChild[]; cyclic: boolean }[] = [];
+    const n = anchors.length;
+    for (let k = 0; k < n; k++) {
+        const [iA0, iB0] = anchors[k];
+        const [iA1, iB1] = anchors[(k + 1) % n];
+
+        const as = cyclicBetween(cycleA, iA0, iA1).filter(c => !fixedA.has(c));
+        const bs = cyclicBetween(cycleB, iB0, iB1).filter(c => !fixedB.has(c));
+        if (as.length > 0 || bs.length > 0) {
+            gaps.push({ as, bs, cyclic: false });
+        }
+    }
+
+    return gaps;
+}
+
+
+/**
+ * Returns the items of the cycle strictly after index `i` up to strictly
+ * before index `j`, going forward round it (`i === j`: all but `i`).
+ */
+function cyclicBetween<T>(
+        cycle: T[],
+        i: number,
+        j: number): T[] {
+
+    const n = cycle.length;
+    const span = (j - i + n) % n || n;
+
+    const out: T[] = [];
+    for (let k = 1; k < span; k++) { out.push(cycle[(i + k) % n]); }
+
+    return out;
+}
+
+
+/**
+ * Returns `true` if the numbers ascend round a cycle: at most one descent,
+ * counting the step from the last back to the first.
+ */
+function isCyclicAscending(xs: number[]): boolean {
+    const n = xs.length;
+
+    let descents = 0;
+    for (let k = 0; k < n; k++) {
+        if (xs[k] > xs[(k + 1) % n]) { descents++; }
+    }
+
+    return descents <= 1;
 }
 
 

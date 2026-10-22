@@ -4,6 +4,7 @@ import { reverseShapeOrientation } from 'flo-boolean';
 import { StateControl } from '../state-control/state-control';
 import { updDebugGlobal } from './fs-consts-types/upd-debug-global';
 import { getViewBoxForShape } from './fs-consts-types/viewbox';
+import { prepareStaggered, STAGGER_FINE } from '../morph/staggered-sat.js';
 
 
 const IS_DEBUG_ON = true;
@@ -17,7 +18,9 @@ function loadDeducedProps(
     const { state } = stateControl;
     const { appState } = state;
     const { pageState } = appState;
-    const { viewMat, simplify, satScale, rot1, flipH, flipV } = pageState;
+    const {
+        viewMat, staggeredSat, simplify, satScale, rot1, flipH, flipV
+    } = pageState;
 
     const bezierLoops1 = rotateLoops(
         flipLoops(getPathsFromStr(pathStr1), flipH, flipV),
@@ -33,15 +36,17 @@ function loadDeducedProps(
     let timingAll: number;
     let mats1: Mat[] = [];
     let mats2: Mat[] = [];
+    let coarseMats1: Mat[] = [];
+    let coarseMats2: Mat[] = [];
 
     // Resets _debug_
     updDebugGlobal(stateControl, IS_DEBUG_ON);
 
     try {
         const options = {
-            applySat: !viewMat,
+            applySat: staggeredSat || !viewMat,
             simplify,
-            satScale,
+            satScale: staggeredSat ? STAGGER_FINE : satScale,
             maxCurviness: 0.25,
             maxLength: 10,
             angleIncrement: 15,
@@ -50,13 +55,22 @@ function loadDeducedProps(
 
         mats1 = findMats(bezierLoops1, options);
         mats2 = findMats(bezierLoops2, options);
+
+        // before anything builds the fine segment trees
+        if (staggeredSat) {
+            coarseMats1 = mats1.map(prepareStaggered);
+            coarseMats2 = mats2.map(prepareStaggered);
+        }
     } catch (e) {
         console.log(e);
     } finally {
         timingAll = performance.now() - timeStart;
     }
 
-    return { bezierLoops1, bezierLoops2, mats1, mats2, viewbox1, viewbox2, timingAll };
+    return {
+        bezierLoops1, bezierLoops2, mats1, mats2, coarseMats1, coarseMats2,
+        viewbox1, viewbox2, timingAll
+    };
 }
 
 

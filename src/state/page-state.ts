@@ -21,6 +21,12 @@ interface PageState {
     readonly satScale: number;
     readonly toDraw: ToDraw;
     readonly viewMat: boolean;
+    /**
+     * staggered SAT: the MATs are the fine SAT (`STAGGER_FINE`), matched
+     * first at the coarse scale (`STAGGER_COARSE`) and then refined -
+     * overrides `viewMat` and `satScale`
+     */
+    readonly staggeredSat: boolean;
     readonly simplify: boolean;
     /** Which of the three SVGs are shown (shape 1, shape 2, morph). */
     readonly showSvgs: readonly [boolean, boolean, boolean];

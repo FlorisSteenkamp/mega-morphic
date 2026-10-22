@@ -144,6 +144,11 @@ h1 > a:hover {
 .brown     { stroke: #a52a2ad0; fill: #a52a2ad0; }
 .black     { stroke: #000000d0; fill: #000000d0; }
 .darkgreen { stroke: #008800d0; fill: #008800d0; }
+.navy       { stroke: #000080d0; fill: #000080d0; }
+.olive      { stroke: #808000d0; fill: #808000d0; }
+.skyblue    { stroke: #4fb3ffd0; fill: #4fb3ffd0; }
+.blueviolet { stroke: #8a2be2d0; fill: #8a2be2d0; }
+.slate      { stroke: #607080d0; fill: #607080d0; }
 
 .thin1  { stroke-width: 0.01%; }
 .thin2  { stroke-width: 0.02%; }

@@ -1,5 +1,7 @@
 import type { PageData } from '../page-data.js';
 import type { PoseRamp } from '../../morph/procrustes/pose-ramp.js';
+import type { Mat } from 'flo-mat';
+import type { GlyphComponent } from '../../morph/build-morph-entries/build-glyph-morph-entries.js';
 import { buildGlyphMorphEntries } from '../../morph/build-morph-entries/build-glyph-morph-entries.js';
 import { alignEntriesBToA } from '../../morph/procrustes/align-entries-b-to-a.js';
 import { drawMorph } from '../../morph/draw-morph/draw-morph.js';
@@ -24,14 +26,16 @@ function onMorphClicked(
         deduced, morphT, pathWeights, showMatchBoundary, showBranchNums,
         showMatch
     } = pageState;
-    const { mats1, mats2 } = deduced;
+    const { mats1, mats2, coarseMats1, coarseMats2 } = deduced;
 
     //------------------------------------------------------------------
     // Match the glyphs' components (one MAT each), then each matched
     // pair's trees, and build the morph entries
     //------------------------------------------------------------------
     const morphEntries = buildGlyphMorphEntries(
-        mats1.map(m => m.cpNode), mats2.map(m => m.cpNode), pathWeights);
+        componentsOf(mats1, coarseMats1),
+        componentsOf(mats2, coarseMats2),
+        pathWeights);
 
     //----------------------------------------
     // Pose-align shape B's frame onto shape A
@@ -54,6 +58,21 @@ function onMorphClicked(
     // Refresh the overlay for the newly built match.
     if (showMatch) { drawMatch(refPageData, true, showMatchBoundary); }
     if (showBranchNums) { showVertexNums(refPageData, true); }
+}
+
+
+/**
+ * Returns a glyph's components: its MATs, each with its coarse SAT (when
+ * staggered - `coarseMats` is then parallel to `mats`, else empty).
+ */
+function componentsOf(
+        mats: Mat[],
+        coarseMats: Mat[]): GlyphComponent[] {
+
+    return mats.map((m, i) => ({
+        cp: m.cpNode,
+        coarse: coarseMats[i]?.cpNode
+    }));
 }
 
 

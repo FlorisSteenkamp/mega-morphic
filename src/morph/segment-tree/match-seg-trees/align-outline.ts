@@ -144,4 +144,4 @@ function getCycle(
 }
 
 
-export { alignOutline, alignOutlineLinked }
+export { alignOutline, alignOutlineLinked, getCycle }

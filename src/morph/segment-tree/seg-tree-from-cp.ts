@@ -1,6 +1,6 @@
 import type { CpNode } from 'flo-mat';
 import type { Segment } from './segment.js';
-import { getRealProngCount } from 'flo-mat';
+import { isSegVertex } from './split-disks.js';
 import { stepsOf$ } from './steps-of.js';
 
 
@@ -8,8 +8,9 @@ import { stepsOf$ } from './steps-of.js';
  * Builds and returns the segment tree (as its segments - see `Segment`)
  * directly from the MAT, in one walk around the outline
  *
- * * a segment starts at every outline step that leaves a fork/leaf disk
- *   (not a leaf-tip cap: a same-disk step). The outline runs along BOTH
+ * * a segment starts at every outline step that leaves a fork/leaf disk or
+ *   one marked as a vertex (`isSegVertex`), not a leaf-tip cap (a same-disk
+ *   step). The outline runs along BOTH
  *   sides of the skeleton, so each segment is met twice, once per side:
  *   marking a segment's steps AND their twins (`cp.next.prevOnCircle`, the
  *   opposite-side steps) as consumed makes the other side skip when the
@@ -29,7 +30,7 @@ function segTreeFromCp(
 
     let cp = cpStart;
     do {
-        if (!consumed.has(cp) && !isCap(cp) && getRealProngCount(cp) !== 2) {
+        if (!consumed.has(cp) && !isCap(cp) && isSegVertex(cp)) {
             const seg = cp as Segment;
             for (const step of stepsOf$(seg)) {
                 consumed.add(step);

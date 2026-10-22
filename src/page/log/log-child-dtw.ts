@@ -236,7 +236,8 @@ function evaluate(
         showDelay?: number): void {
 
     const { gA, gB, loopA, loopB } = pm;
-    const r = evalChildPair(gA, gB, segA, segB, loopA, loopB, weights);
+    const r = evalChildPair(
+        gA, gB, pm.trunk, segA, segB, loopA, loopB, weights);
 
     if (r.align !== undefined) {
         const g1 = svgGroup('svg');
@@ -280,7 +281,7 @@ function evaluate(
         selectionB: describeLoc(r.b),
         // the DP only ever compares children pooled on the same parent pair
         sameParent: r.sameParent,
-        // the fresh winning match (current weights), for digging
+        // the morph's winning match, for digging
         root: r.root
     });
 }

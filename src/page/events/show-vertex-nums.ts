@@ -47,6 +47,7 @@ function drawNums(g: SVGGElement, tree: Segment[]): void {
         ? 1 : Math.hypot(ctm.a, ctm.b);
     const fontSize = 12 / pxPerUnit;
 
+    const wanted: { pV: number[]; p: number[]; id: number; leaf: boolean }[] = [];
     for (const [v, id] of vertexIds$(tree)) {
         const inc = tree.filter(s => {
             const { vertS, vertE } = geomOf$(s);
@@ -69,8 +70,96 @@ function drawNums(g: SVGGElement, tree: Segment[]): void {
             p = [pV[0] - off*d[0], pV[1] - off*d[1]];
         }
 
-        label(g, p, id, fontSize, leaf ? '#000000' : '#8b0000');
+        wanted.push({ pV, p, id, leaf });
     }
+
+    // forks first: they are the crowded ones and the most referenced
+    wanted.sort((x, y) => Number(x.leaf) - Number(y.leaf));
+
+    const placed: Box[] = [];
+    for (const { pV, p, id, leaf } of wanted) {
+        const w = 0.62*fontSize*`${id}`.length + 0.2*fontSize;
+        const h = 1.05*fontSize;
+        const q = placeLabel(p, w, h, fontSize, placed);
+        placed.push({ c: q, w, h });
+
+        const color = leaf ? '#000000' : '#8b0000';
+        if (q !== p) {
+            // displaced: tie the number to its vertex
+            leader(g, pV, q, fontSize, color);
+        }
+        label(g, q, id, fontSize, color);
+    }
+}
+
+
+/** A label's box: center and size. */
+interface Box {
+    readonly c: number[];
+    readonly w: number;
+    readonly h: number;
+}
+
+
+/**
+ * Returns where to put a `w` × `h` label wanted at `p`: `p` itself when it
+ * overlaps none of the `placed` labels, else the first free spot on rings
+ * of growing radius around it (falling back to `p` if none is free).
+ */
+function placeLabel(
+        p: number[],
+        w: number,
+        h: number,
+        fontSize: number,
+        placed: Box[]): number[] {
+
+    function isFree(c: number[]): boolean {
+        return placed.every(b =>
+            Math.abs(b.c[0] - c[0]) >= (b.w + w)/2 ||
+            Math.abs(b.c[1] - c[1]) >= (b.h + h)/2);
+    }
+
+    if (isFree(p)) { return p; }
+
+    for (let ring = 1; ring <= 6; ring++) {
+        const r = ring*1.1*fontSize;
+        const n = 8*ring;
+        for (let k = 0; k < n; k++) {
+            const θ = 2*Math.PI*k/n;
+            const c = [p[0] + r*Math.cos(θ), p[1] + r*Math.sin(θ)];
+            if (isFree(c)) { return c; }
+        }
+    }
+
+    return p;
+}
+
+
+/** A thin line from the vertex to its displaced label, and a dot on it. */
+function leader(
+        g: SVGGElement,
+        pV: number[],
+        q: number[],
+        fontSize: number,
+        color: string): void {
+
+    const $l = document.createElementNS(XMLNS, 'line');
+    $l.setAttributeNS(null, 'x1', `${pV[0]}`);
+    $l.setAttributeNS(null, 'y1', `${pV[1]}`);
+    $l.setAttributeNS(null, 'x2', `${q[0]}`);
+    $l.setAttributeNS(null, 'y2', `${q[1]}`);
+    $l.setAttributeNS(null, 'class', 'branch-num');
+    $l.setAttributeNS(null, 'style',
+        `stroke: ${color}; stroke-width: ${fontSize/14}px; opacity: 0.6;`);
+    g.appendChild($l);
+
+    const $c = document.createElementNS(XMLNS, 'circle');
+    $c.setAttributeNS(null, 'cx', `${pV[0]}`);
+    $c.setAttributeNS(null, 'cy', `${pV[1]}`);
+    $c.setAttributeNS(null, 'r', `${fontSize/8}`);
+    $c.setAttributeNS(null, 'class', 'branch-num');
+    $c.setAttributeNS(null, 'style', `fill: ${color};`);
+    g.appendChild($c);
 }
 
 
