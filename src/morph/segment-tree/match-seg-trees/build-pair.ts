@@ -14,6 +14,7 @@ import type { FixedOps, FixedOf } from './fixed-ops.js';
 import type { SeqOp } from '../../match-paths/align-seq.js';
 import { alignSeq } from '../../match-paths/align-seq.js';
 import { getCycle } from './align-outline.js';
+import { calcSubWeights } from './calc-sub-weights.js';
 import { routeEndsOf } from './outline-len-of.js';
 import { subLeadersOf } from './sub-leaders-of.js';
 import { lenOfSegs$, lenOfRoute$ } from '../len-of.js';
@@ -422,29 +423,6 @@ function calcRoutePairKey(
         endB: Circle): string {
 
     return `${idOf(startA)},${idOf(endA)},${idOf(startB)},${idOf(endB)}`;
-}
-
-
-/**
- * Returns the weights a child pair's sub-DTW runs with: the gap opening
- * scaled by the pair's mean material (its salience fraction - a whole glyph
- * is about `1`).
- *
- * * every other DTW cost scales with the material aligned (steps by length
- *   and radius, extensions by length) - a flat gap opening would not: a
- *   single unavoidable gap (sample counts differing by one) would outprice
- *   dropping a small branch outright, so small branches never matched
- *
- * * so a child pair is priced like a scaled-down glyph pair
- */
-function calcSubWeights(
-        weights: PathCostWeights,
-        a: SegChild,
-        b: SegChild): PathCostWeights {
-
-    const m = (a.material + b.material)/2;
-
-    return { ...weights, gapOpen: weights.gapOpen*m };
 }
 
 

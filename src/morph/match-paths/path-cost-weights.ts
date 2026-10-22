@@ -63,7 +63,7 @@ const defaultPathWeights: PathCostWeights = {
     del: 3,
     delFloor: 0,
     tail: 0.5,
-    sway: 1,
+    sway: 3,
     gapOpen: 0.15,
     gapExtend: 0.06
 };

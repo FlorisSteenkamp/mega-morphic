@@ -16,6 +16,7 @@ import { routeFeaturesOf } from '../morph/segment-tree/match-seg-trees/route-fea
 import { buildPair } from '../morph/segment-tree/match-seg-trees/build-pair.js';
 import { scoreOf } from '../morph/segment-tree/match-seg-trees/score-of.js';
 import { cheapChildCost } from '../morph/segment-tree/match-seg-trees/cheap-child-cost.js';
+import { calcSubWeights } from '../morph/segment-tree/match-seg-trees/calc-sub-weights.js';
 
 
 /**
@@ -106,7 +107,10 @@ function evalChildPair(
 
     // the best sub-pair's routes (tip → junction)
     const { routeA, routeB } = price.sub;
-    const align = alignOfRoutes(routeA, routeB, unitA, unitB, weights, false);
+    // aligned as the matcher aligned them: a child pair's weights
+    const align = alignOfRoutes(
+        routeA, routeB, unitA, unitB,
+        calcSubWeights(weights, a.child, b.child), false);
 
     const verdict =
         (price.matchCost < dropCost

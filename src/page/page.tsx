@@ -64,8 +64,8 @@ const weightRanges: Record<
         { max: number; step: number; group: keyof typeof weightGroupColors }
     > = {
     radius: { max: 3, step: 0.1, group: 'dtw' },
-    turning: { max: 1, step: 0.025, group: 'dtw' },
-    gapOpen: { max: 1, step: 0.025, group: 'dtw' },
+    turning: { max: 1, step: 0.05, group: 'dtw' },
+    gapOpen: { max: 1, step: 0.05, group: 'dtw' },
     gapExtend: { max: 0.3, step: 0.01, group: 'dtw' },
     tail: { max: 2, step: 0.1, group: 'dtw' },
     del: { max: 10, step: 0.2, group: 'children' },
@@ -73,7 +73,7 @@ const weightRanges: Record<
     position: { max: 5, step: 0.1, group: 'children' },
     spacing: { max: 0.5, step: 0.0125, group: 'children' },
     angle: { max: 2, step: 0.125, group: 'children' },
-    sway: { max: 4, step: 0.1, group: 'trunk' }
+    sway: { max: 20, step: 0.5, group: 'trunk' }
 };
 // console.log(getGlyphNames_);
 
@@ -419,7 +419,7 @@ function Page(props: Props) {
                     <Slider
                         value={morphT}
                         aria-labelledby="slider"
-                        min={0} max={100} step={2}
+                        min={0} max={100} step={1}
                         valueLabelDisplay="auto"
                         onChange={morphChanged}
                     />

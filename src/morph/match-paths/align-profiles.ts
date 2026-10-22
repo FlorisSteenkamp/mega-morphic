@@ -4,6 +4,7 @@ import type { PathCostWeights } from './path-cost-weights.js';
 import type { Samples } from './samples.js';
 import type { AlignStep } from './tail-align.js';
 import { stepCostOf } from './step-cost-of.js';
+import { gapExtendOf } from './gap-extend-of.js';
 
 const { min } = Math;
 
@@ -30,8 +31,9 @@ function alignProfiles(
 
     const nA = fA.u.length;
     const nB = fB.u.length;
-    const extA = gapExtend * stepA;
-    const extB = gapExtend * stepB;
+    // a gapped sample costs by its material, as in `productDtw`
+    const extA = gapExtendOf(gapExtend, stepA, fA.r);
+    const extB = gapExtendOf(gapExtend, stepB, fB.r);
     const tailUnitA = tail * stepA;
     const tailUnitB = tail * stepB;
     const diagStep = (stepA + stepB) / 2;
@@ -57,11 +59,11 @@ function alignProfiles(
     M[0][0] = cost(0, 0);
     for (let i = 1; i < nA; i++) {
         M[i][0] = i*tailUnitA + cost(i, 0);
-        Ix[i][0] = min(M[i - 1][0] + gapOpen, Ix[i - 1][0]) + extA;
+        Ix[i][0] = min(M[i - 1][0] + gapOpen, Ix[i - 1][0]) + extA(i);
     }
     for (let j = 1; j < nB; j++) {
         M[0][j] = j*tailUnitB + cost(0, j);
-        Iy[0][j] = min(M[0][j - 1] + gapOpen, Iy[0][j - 1]) + extB;
+        Iy[0][j] = min(M[0][j - 1] + gapOpen, Iy[0][j - 1]) + extB(j);
     }
 
     for (let i = 1; i < nA; i++) {
@@ -73,8 +75,8 @@ function alignProfiles(
             M[i][j] = best + cost(i, j);
             fromM[i][j] = best === prevM ? 0 : best === prevIx ? 1 : 2;
 
-            Ix[i][j] = min(M[i - 1][j] + gapOpen, Ix[i - 1][j]) + extA;
-            Iy[i][j] = min(M[i][j - 1] + gapOpen, Iy[i][j - 1]) + extB;
+            Ix[i][j] = min(M[i - 1][j] + gapOpen, Ix[i - 1][j]) + extA(i);
+            Iy[i][j] = min(M[i][j - 1] + gapOpen, Iy[i][j - 1]) + extB(j);
         }
     }
 

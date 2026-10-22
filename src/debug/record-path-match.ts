@@ -5,6 +5,7 @@ import type { SegMatchedPair } from '../morph/segment-tree/match-seg-trees/seg-m
 import type { Segment } from '../morph/segment-tree/segment.js';
 import { getUnit$ } from '../morph/segment-tree/get-unit.js';
 import { alignOfRoutes } from './align-of-routes.js';
+import { calcSubWeights } from '../morph/segment-tree/match-seg-trees/calc-sub-weights.js';
 
 
 /**
@@ -35,7 +36,7 @@ function recordPathMatch(
     // entries (whole trees) would otherwise accumulate.
     _debug_.elems.pathMatchResult.length = 0;
     _debug_.elems.pathMatchResult.push({
-        trunk: withAlign(trunk, true, unit1, unit2, weights),
+        trunk: withAlign(trunk, true, unit1, unit2, weights, weights),
         gA, gB, loopA, loopB
     });
 }
@@ -44,23 +45,34 @@ function recordPathMatch(
 /**
  * The pair tree with each pair's `align` attached (the classic Gotoh
  * re-run on the CHOSEN routes - viz-equivalent).
+ *
+ * @param weights the match's weights
+ * @param pairWeights the weights the pair's own routes were aligned with
+ * (a child pair's: `calcSubWeights`)
  */
 function withAlign(
         pair: SegMatchedPair,
         trunkLevel: boolean,
         unit1: number,
         unit2: number,
-        weights: PathCostWeights): SegMatchedPair {
+        weights: PathCostWeights,
+        pairWeights: PathCostWeights): SegMatchedPair {
 
     const { routeA, routeB, ops } = pair;
 
     return {
         ...pair,
         ops: ops.map(op => op.type === 'match'
-            ? { ...op, sub: withAlign(op.sub, false, unit1, unit2, weights) }
+            ? {
+                ...op,
+                sub: withAlign(
+                    op.sub, false, unit1, unit2,
+                    weights, calcSubWeights(weights, op.a, op.b))
+            }
             : op
         ),
-        align: alignOfRoutes(routeA, routeB, unit1, unit2, weights, trunkLevel)
+        align: alignOfRoutes(
+            routeA, routeB, unit1, unit2, pairWeights, trunkLevel)
     };
 }
 

@@ -3,11 +3,20 @@ import type { SampledSegGraph } from './sampled-seg-graph.js';
 import type { PathCostWeights } from '../match-paths/path-cost-weights.js';
 import { wrapAngle } from '../intrinsic-skeleton/wrap-angle.js';
 import { stepCostOf } from '../match-paths/step-cost-of.js';
+import { gapExtendOf } from '../match-paths/gap-extend-of.js';
 
 const { abs, min, max, PI: π } = Math;
 
 /** cost tolerance for a tie: symmetric shapes tie up to rounding */
 const EPS = 1e-9;
+
+/**
+ * The near-tie window, as a fraction of the gap opening: paths reaching a
+ * DP state within this of the best value seen there compete on value +
+ * sway (`selectAlts`) - the most shape a decision may give up for
+ * orientation
+ */
+const TIE_WINDOW = 0.05;
 
 type ProductDtwResult_Candidate = {
     readonly startA: Circle;
@@ -69,21 +78,34 @@ interface ProductDtwResult {
 
 
 /**
- * One way a DP state is reached at its best cost: where the path started
- * and what it accumulated on the way. A state keeps EVERY alternative that
- * ties for its best cost (symmetric shapes tie exactly, e.g. a cross's four
- * tips as route starts), so no start is discarded by an arbitrary rule -
- * every tied start becomes a candidate and the recursion decides.
+ * One way a DP state is reached (a path): where it started, its value and
+ * what it accumulated on the way.
+ *
+ * * a state keeps the path(s) chosen by `selectAlts`: within `TIE_WINDOW`
+ *   of the best value seen there, the least value + λ·`tie` - near-ties in
+ *   shape are broken by orientation where they meet
+ *
+ * * exact ties (symmetric shapes, e.g. a cross's four tips as route starts)
+ *   are all kept, so every tied start becomes a candidate and the recursion
+ *   decides
  */
 interface Alt {
     /** start-sample pair, packed (a0 << 16) | b0 */
     readonly start: number;
+    /** the path's DP value: shape − del × covered */
+    readonly v: number;
     /** material corresponded (diagonally consumed) so far - decomposes the
      *  final value back into shapeCost/totalCost */
     readonly cov: number;
-    /** accumulated raw sway (material × |Δφ|) - measured only, never part
-     *  of the minimized value */
+    /** accumulated raw sway (material × |Δφ|/π) of the corresponded
+     *  material - the measured sway */
     readonly sway: number;
+    /**
+     * `sway`, plus each gapped sample's share of material counted as fully
+     * rotated - the tie-break's sway, so gapping rotating material never
+     * lowers it
+     */
+    readonly tie: number;
 }
 
 
@@ -113,6 +135,14 @@ interface Alt {
  * Callers add `swayCost` to selection and relabel prices. (Global
  * route-mean angle diffs are NOT equivalent: stroke means can cancel or
  * mis-penalize locally-clean pairings, e.g. M→N.)
+ *
+ * Sway does break NEAR-TIES where paths meet (`selectAlts`): within a small
+ * window of the best value at a state (`TIE_WINDOW` × gap opening), the
+ * path with the least value + λ × sway is kept (λ: the rate the final mean
+ * charges a unit of sway). A shape tie (e.g. mirror-image serif halves as
+ * route starts) is otherwise decided by rounding before sway is ever
+ * measured. Gapped material counts as fully rotated in this comparison, so
+ * gapping never lowers it, and the window caps the shape given up.
  */
 function productDtw(
         A: SampledSegGraph,
@@ -126,8 +156,9 @@ function productDtw(
     const nB = B.r.length;
     const N = nA * nB;
 
-    const extA = gapExtend * A.step;
-    const extB = gapExtend * B.step;
+    // a gapped sample costs by its material (`gapExtendOf`)
+    const extA = gapExtendOf(gapExtend, A.step, A.r);
+    const extB = gapExtendOf(gapExtend, B.step, B.r);
     const diagStep = (A.step + B.step) / 2;
 
     // local material of one sample (≈ its salience fraction: 2r̂ dŝ)
@@ -143,31 +174,54 @@ function productDtw(
         ) / π;
     }
 
-    // Gotoh DP tables, one cell per product state (a,b):
-    // M  = best cost with a and b MATCHED (arrived by a diagonal step)
-    // Ix = best cost while in a gap in A (A advances alone, b waits)
-    // Iy = best cost while in a gap in B (B advances alone, a waits)
-    const M = new Float64Array(N).fill(Infinity);
-    const Ix = new Float64Array(N).fill(Infinity);
-    const Iy = new Float64Array(N).fill(Infinity);
+    // the near-tie window, and the exchange rate turning accumulated sway
+    // into score: the final sway is `sway` × the sum over half the covered
+    // material - the total material stands in for the coverage, not yet
+    // known where paths meet (a ceiling, so a conservative rate)
+    const W = TIE_WINDOW*gapOpen;
+    const total = A.material + B.material;
+    const λ = total > 0 ? sway/(total/2) : 0;
 
-    // ...and per cell the alternatives attaining that cost (see `Alt`) -
-    // one table each, so every path carries ITS OWN start/cov/sway; on
-    // open/extend/diagonal they come from the predecessor table(s) the
-    // cost came from. The DP explores all start pairs at once, so the
-    // winning route ends are only known because the start rides along.
-    const AM: (Alt[] | undefined)[] = new Array(N);
-    const AIx: (Alt[] | undefined)[] = new Array(N);
-    const AIy: (Alt[] | undefined)[] = new Array(N);
+    function select(alts: Alt[], best: number): Alt[] {
+        return selectAlts(alts, best, W, λ);
+    }
+
+    // Gotoh DP tables, one cell per product state (a,b), each holding the
+    // paths kept there (see `Alt`) and the best value ever offered there
+    // (the near-tie window's reference):
+    // M  = a and b MATCHED (arrived by a diagonal step)
+    // Ix = in a gap in A (A advances alone, b waits)
+    // Iy = in a gap in B (B advances alone, a waits)
+    // Every path carries ITS OWN start/value/cov/sway. The DP explores all
+    // start pairs at once, so the winning route ends are only known because
+    // the start rides along.
+    const BM = new Float64Array(N).fill(Infinity);
+    const BIx = new Float64Array(N).fill(Infinity);
+    const BIy = new Float64Array(N).fill(Infinity);
+    const AM: Alt[][] = new Array(N);
+    const AIx: Alt[][] = new Array(N);
+    const AIy: Alt[][] = new Array(N);
+
+    function offer(
+            B_: Float64Array,
+            AT: Alt[][],
+            i: number,
+            alts: Alt[]): void {
+
+        for (const x of alts) { if (x.v < B_[i]) { B_[i] = x.v; } }
+        AT[i] = select(AT[i] === undefined ? alts : [...AT[i], ...alts], B_[i]);
+    }
 
     for (const a0 of A.starts) {
         for (const b0 of B.starts) {
             const i = a0*nB + b0;
             const cov = calcMaterialA(a0) + calcMaterialB(b0);
-            const cost = calcCost_(a0, b0) - del*cov;
-            settle(M, AM, i, cost, [
-                { start: (a0 << 16) | b0, cov, sway: swayOf(a0, b0) }
-            ]);
+            const w = swayOf(a0, b0);
+            offer(BM, AM, i, [{
+                start: (a0 << 16) | b0,
+                v: calcCost_(a0, b0) - del*cov,
+                cov, sway: w, tie: w
+            }]);
         }
     }
 
@@ -186,45 +240,60 @@ function productDtw(
             const b = rankToB[s - rA];
             const i = a*nB + b;
 
-            const m = M[i];
-            const ix = Ix[i];
-            const iy = Iy[i];
-            if (m === Infinity && ix === Infinity && iy === Infinity) { continue; }
+            const m = AM[i] ?? [];
+            const ix = AIx[i] ?? [];
+            const iy = AIy[i] ?? [];
+            if (m.length === 0 && ix.length === 0 && iy.length === 0) {
+                continue;
+            }
 
-            const best = min(m, ix, iy);
-            const bestAlts = altsWithin(best, [m, ix, iy], [AM[i], AIx[i], AIy[i]]);
-
-            const open = m + gapOpen;
+            // the paths leaving the state on a diagonal: from any table
+            const here = select(
+                [...m, ...ix, ...iy], min(BM[i], BIx[i], BIy[i]));
 
             // gap in A: consume A alone - NO coverage reward (a gap is a
             // retraction: the material keeps its drop price, else gap runs
             // launder drop costs into near-free coverage and mismatched
-            // routes/pairings win)
-            const gA = min(open, ix);
-            const altsA = gA === Infinity
-                ? undefined
-                : altsWithin(gA, [open, ix], [AM[i], AIx[i]]);
+            // routes/pairings win); opening from M, extending from Ix
+            const opened = m.map(x => ({ ...x, v: x.v + gapOpen }));
+            const fromA = select(
+                [...opened, ...ix], min(BM[i] + gapOpen, BIx[i]));
 
             for (const aN of A.succ[a]) {
-                if (altsA !== undefined) {
-                    settle(Ix, AIx, aN*nB + b, gA + extA, altsA);
+                // the gapped sample counts as fully rotated in the
+                // tie-break sway (half its material: its share of a pair)
+                const ext = extA(aN);
+                const half = calcMaterialA(aN)/2;
+                if (fromA.length > 0) {
+                    offer(BIx, AIx, aN*nB + b, fromA.map(x => ({
+                        ...x, v: x.v + ext, tie: x.tie + half
+                    })));
                 }
                 // diagonal
                 for (const bN of B.succ[b]) {
                     const cov = calcMaterialA(aN) + calcMaterialB(bN);
-                    const v = best + calcCost_(aN, bN) - del*cov;
+                    const c = calcCost_(aN, bN) - del*cov;
                     const w = swayOf(aN, bN);
-                    settle(M, AM, aN*nB + bN, v, bestAlts.map(x => ({
-                        start: x.start, cov: x.cov + cov, sway: x.sway + w
+                    offer(BM, AM, aN*nB + bN, here.map(x => ({
+                        start: x.start,
+                        v: x.v + c,
+                        cov: x.cov + cov,
+                        sway: x.sway + w,
+                        tie: x.tie + w
                     })));
                 }
             }
+
             // gap in B
-            const gB = min(open, iy);
-            if (gB !== Infinity) {
-                const altsB = altsWithin(gB, [open, iy], [AM[i], AIy[i]]);
+            const fromB = select(
+                [...opened, ...iy], min(BM[i] + gapOpen, BIy[i]));
+            if (fromB.length > 0) {
                 for (const bN of B.succ[b]) {
-                    settle(Iy, AIy, a*nB + bN, gB + extB, altsB);
+                    const ext = extB(bN);
+                    const half = calcMaterialB(bN)/2;
+                    offer(BIy, AIy, a*nB + bN, fromB.map(x => ({
+                        ...x, v: x.v + ext, tie: x.tie + half
+                    })));
                 }
             }
         }
@@ -235,24 +304,27 @@ function productDtw(
     for (const aE of A.ends) {
         for (const bE of B.ends) {
             const i = aE*nB + bE;
-            const v = min(M[i], Ix[i], Iy[i]);
-            if (v === Infinity) { continue; }
+            const best = min(BM[i], BIx[i], BIy[i]);
+            if (best === Infinity) { continue; }
             const endA = A.leafOf.get(aE)!;
             const endB = B.leafOf.get(bE)!;
 
-            // one candidate per tied alternative (start) at this end pair;
+            // one candidate per kept path (start) at this end pair;
             // v = shape − del·covered  ⇒  shape = v + del·covered;
             // total re-adds the constant drop price of ALL material.
-            for (const alt of altsWithin(v, [M[i], Ix[i], Iy[i]], [AM[i], AIx[i], AIy[i]])) {
+            const alts = select(
+                [...(AM[i] ?? []), ...(AIx[i] ?? []), ...(AIy[i] ?? [])],
+                best);
+            for (const alt of alts) {
                 candidates.push({
                     startA: A.leafOf.get(alt.start >>> 16)!,
                     startB: B.leafOf.get(alt.start & 0xffff)!,
                     endA,
                     endB,
-                    totalCost: v + del*(A.material + B.material),
-                    shapeCost: v + del*alt.cov,
+                    totalCost: alt.v + del*total,
+                    shapeCost: alt.v + del*alt.cov,
                     swayCost: swayCostOf(alt),
-                    covered: alt.cov / (A.material + B.material)
+                    covered: alt.cov / total
                 });
             }
         }
@@ -272,50 +344,43 @@ function productDtw(
 
 
 /**
- * Records that state `i` of table `T` is reached at cost `v` by `alts`:
- * a strictly better cost replaces the cell, a tie (within `EPS`) keeps
- * both sides' alternatives.
+ * Returns the paths to keep among those reaching a state (`alts`):
+ *
+ * * only paths within `W` of `best` (the best value ever offered there)
+ *   compete - the window is always measured against the best, never
+ *   against the path kept, so tie-breaks can't drift the value away
+ *
+ * * among those, the least value + λ × tie-break sway wins - near-ties in
+ *   shape go to the path whose material turns less (e.g. the serif half
+ *   pointing the same way); exact ties (within `EPS`) are all kept
+ *
+ * * a start reached more than one way keeps its best path
+ *
+ * @param alts the paths
+ * @param best the best value ever offered at the state
+ * @param W the near-tie window
+ * @param λ the exchange rate of tie-break sway into value
  */
-function settle(
-        T: Float64Array,
-        AT: (Alt[] | undefined)[],
-        i: number,
-        v: number,
-        alts: Alt[]): void {
-
-    const cur = T[i];
-    if (v < cur - EPS) {
-        T[i] = v;
-        AT[i] = alts;
-    } else if (v <= cur + EPS) {
-        AT[i] = mergeAlts(AT[i]!, alts);
-    }
-}
-
-
-/** The alternatives of every source whose value ties with `best`. */
-function altsWithin(
+function selectAlts(
+        alts: Alt[],
         best: number,
-        values: number[],
-        alts: (Alt[] | undefined)[]): Alt[] {
+        W: number,
+        λ: number): Alt[] {
 
-    let out: Alt[] | undefined;
-    for (let k = 0; k < values.length; k++) {
-        if (values[k] > best + EPS) { continue; }
-        out = out === undefined ? alts[k]! : mergeAlts(out, alts[k]!);
+    const keyOf = (x: Alt) => x.v + λ*x.tie;
+
+    let kMin = Infinity;
+    for (const x of alts) {
+        if (x.v <= best + W && keyOf(x) < kMin) { kMin = keyOf(x); }
     }
 
-    return out!;
-}
+    const out: Alt[] = [];
+    for (const x of alts) {
+        if (x.v > best + W || keyOf(x) > kMin + EPS) { continue; }
 
-
-/** Union by start; a start reached two ways keeps the lower sway. */
-function mergeAlts(a: Alt[], b: Alt[]): Alt[] {
-    const out = a.slice();
-    for (const x of b) {
         const k = out.findIndex(y => y.start === x.start);
         if (k < 0) { out.push(x); }
-        else if (x.sway < out[k].sway) { out[k] = x; }
+        else if (keyOf(x) < keyOf(out[k])) { out[k] = x; }
     }
 
     return out;
