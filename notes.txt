@@ -27,6 +27,12 @@ Checkpoints
   (1.5) and off; components (MATs) matched across glyphs, lone ones
   shrink/grow tethered to the matched shape. Last commit before the
   staggered SAT (coarse 2 → fine 1.05) work.
+* e32c732 (2026-10-22) - new reference: staggered SAT (coarse 2 → fine
+  1.05, coarse matches kept as anchors, the rest matched in the gaps) and
+  the gap opening scaled by the child pair's size in every sub-DTW (looked
+  "absurdly good" in all modes). Note the single-scale results changed
+  with the gap scaling (e.g. SAT off trunks of k/x, T/A) - go back to
+  41f0080 for the tuning before it.
 * branch fork-pull-warp (2026-10-21) - parked experiment: a soft
   fork-to-fork pull in the matcher's warp (`alignBranches` fork profiles,
   W_FORK 0.5; the morph passes none). No structural difference on T/A, so
