@@ -43,6 +43,15 @@ Checkpoints
   a flank). Children still slide along a single-sided parent warp here;
   split route junctions share one frame (k->x serifs right) and segment
   areas are over closed loops. Go back here if the chainsaw fails.
+* branch chainsaw (2026-10-23) - parked experiment: the "chainsaw" drawing
+  (each flank of a branch warped on its own, pinned by the forks on it and
+  by the other flank's where they don't cross; skeleton = their midpoint;
+  matched and dropped children ride their own flank, so crossing forks
+  shear the stroke instead of one child sliding). Matcher unchanged, so it
+  looked identical to master (k->x checked) - only worth picking up with
+  the matcher side: stretch + shear priced instead of slides (shear in
+  local radii, growing with parallel distance), leaves free to go round a
+  cap onto a flank (outlinePos sweep unclamped).
 * branch fork-pull-warp (2026-10-21) - parked experiment: a soft
   fork-to-fork pull in the matcher's warp (`alignBranches` fork profiles,
   W_FORK 0.5; the morph passes none). No structural difference on T/A, so
