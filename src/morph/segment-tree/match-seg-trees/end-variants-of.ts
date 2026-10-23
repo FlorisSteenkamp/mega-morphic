@@ -17,11 +17,14 @@ import { geomOf$ } from '../geom-of.js';
  *   recursion, which sees the children, can tell which way the two glyphs
  *   correspond
  *
+ * * where both ends are leaves at terminal tips, both may retract to their
+ *   forks (`calcEndPairs`)
+ *
  * * every route pair (the candidate's too, when it has variants) is priced
  *   by `costsOf`, so they compare like with like - variants that can't be
  *   priced are left out
  *
- * * without disagreeing ends, just the candidate
+ * * without such ends, just the candidate
  *
  * @param c the route candidate
  * @param gA tree A's segments
@@ -61,8 +64,16 @@ function endVariantsOf(
 
 /**
  * Returns the route end pairs to try in place of `(vA, vB)`: the pair
- * itself, plus - when one is a fork and the other a leaf - each alternative
- * of either end (`calcEndAlts`) paired with the other end as is.
+ * itself, plus
+ *
+ * * when one is a fork and the other a leaf: each alternative of either end
+ *   (`calcEndAlts`) paired with the other end as is
+ *
+ * * when both are leaves at the end of terminal tips: both retracted to
+ *   their forks - the route then stops there, and the tips are matched as
+ *   the forks' terminal children, in sweep order (e.g. E→F: E's top arm and
+ *   F's top-left serif would otherwise pair up as the trunk's start, the
+ *   other two dropped)
  *
  * @param gA tree A's segments
  * @param gB tree B's segments
@@ -79,6 +90,14 @@ function calcEndPairs(
     const isLeafB = adjOf$(gB).get(vB)!.length === 1;
 
     const pairs: [Circle, Circle][] = [[vA, vB]];
+
+    if (isLeafA && isLeafB) {
+        for (const a of calcEndAlts(gA, vA)) {
+            for (const b of calcEndAlts(gB, vB)) { pairs.push([a, b]); }
+        }
+
+        return pairs;
+    }
     if (isLeafA === isLeafB) { return pairs; }
 
     for (const a of calcEndAlts(gA, vA)) { pairs.push([a, vB]); }
