@@ -150,6 +150,25 @@ function productDtw(
         weights: PathCostWeights,
         sway = 0): ProductDtwResult {
 
+    // one start pair (a pinned start): every state keeps at most one path
+    if (A.starts.length === 1 && B.starts.length === 1) {
+        return productDtwSingle(A, B, weights, sway);
+    }
+
+    return productDtwGeneral(A, B, weights, sway);
+}
+
+
+/**
+ * `productDtw` over any start pairs: every path carries its own start (see
+ * `Alt`).
+ */
+function productDtwGeneral(
+        A: SampledSegGraph,
+        B: SampledSegGraph,
+        weights: PathCostWeights,
+        sway: number): ProductDtwResult {
+
     const { radius, turning, gapOpen, gapExtend, del } = weights;
 
     const nA = A.r.length;
@@ -340,6 +359,241 @@ function productDtw(
     function swayCostOf(alt: Alt): number {
         return alt.cov > 0 ? sway * alt.sway / (alt.cov/2) : 0;
     }
+}
+
+
+/** One Gotoh table of `productDtwSingle`: per state its (single) kept path. */
+interface SingleTable {
+    /** the best value ever offered at the state (the near-tie reference) */
+    readonly best: Float64Array;
+    /** whether the state keeps a path */
+    readonly has: Uint8Array;
+    /** the kept path's value, coverage, sway and tie-break sway (see `Alt`) */
+    readonly v: Float64Array;
+    readonly cov: Float64Array;
+    readonly sw: Float64Array;
+    readonly tie: Float64Array;
+}
+
+
+/**
+ * `productDtw` with a single start pair (both graphs sampled from a pinned
+ * start) - the same DP, results identical, without its per-path objects.
+ *
+ * * `selectAlts` keeps at most one path per start, so with one start pair
+ *   every table cell holds at most one path: it is kept as numbers in typed
+ *   arrays (`SingleTable`), and the selection among the few paths meeting
+ *   at a state (`pick`) follows `selectAlts` exactly - same window, same
+ *   tie-break key, same order (the first of equal keys is kept)
+ *
+ * * the general DP allocates arrays and path objects at every step - with
+ *   the pinned-start DTWs of route pairs and child pairs run hundreds of
+ *   times per match, that was most of the matching time
+ */
+function productDtwSingle(
+        A: SampledSegGraph,
+        B: SampledSegGraph,
+        weights: PathCostWeights,
+        sway: number): ProductDtwResult {
+
+    const { radius, turning, gapOpen, gapExtend, del } = weights;
+
+    const nA = A.r.length;
+    const nB = B.r.length;
+    const N = nA * nB;
+
+    const extA = gapExtendOf(gapExtend, A.step, A.r);
+    const extB = gapExtendOf(gapExtend, B.step, B.r);
+    const diagStep = (A.step + B.step) / 2;
+
+    const calcMaterialA = getMaterial(A);
+    const calcMaterialB = getMaterial(B);
+    const calcCost_ = calcCost(A, B, diagStep, radius, turning);
+
+    function swayOf(a: number, b: number): number {
+        return (
+            (calcMaterialA(a) + calcMaterialB(b))/2) * abs(wrapAngle(A.φ[a] - B.φ[b])
+        ) / π;
+    }
+
+    const W = TIE_WINDOW*gapOpen;
+    const total = A.material + B.material;
+    const λ = total > 0 ? sway/(total/2) : 0;
+
+    const M = createSingleTable(N);
+    const Ix = createSingleTable(N);
+    const Iy = createSingleTable(N);
+
+    // the paths meeting at a state, in `selectAlts`' order (at most 3)
+    const sv = new Float64Array(3);
+    const sc = new Float64Array(3);
+    const ss = new Float64Array(3);
+    const st = new Float64Array(3);
+    let sn = 0;
+
+    function push(v: number, cov: number, sw: number, tie: number): void {
+        sv[sn] = v; sc[sn] = cov; ss[sn] = sw; st[sn] = tie;
+        sn++;
+    }
+
+    /** pushes table `T`'s path at `i`, if any, its value raised by `dv` */
+    function pushFrom(T: SingleTable, i: number, dv: number): void {
+        if (T.has[i] === 1) { push(T.v[i] + dv, T.cov[i], T.sw[i], T.tie[i]); }
+    }
+
+    /** `selectAlts` over the pushed paths: the kept one's index, or -1 */
+    function pick(best: number): number {
+        let kMin = Infinity;
+        for (let k = 0; k < sn; k++) {
+            const key = sv[k] + λ*st[k];
+            if (sv[k] <= best + W && key < kMin) { kMin = key; }
+        }
+
+        let out = -1;
+        for (let k = 0; k < sn; k++) {
+            const key = sv[k] + λ*st[k];
+            if (sv[k] > best + W || key > kMin + EPS) { continue; }
+            if (out < 0 || key < sv[out] + λ*st[out]) { out = k; }
+        }
+
+        return out;
+    }
+
+    function offer(
+            T: SingleTable,
+            i: number,
+            v: number,
+            cov: number,
+            sw: number,
+            tie: number): void {
+
+        if (v < T.best[i]) { T.best[i] = v; }
+
+        sn = 0;
+        pushFrom(T, i, 0);
+        push(v, cov, sw, tie);
+        const k = pick(T.best[i]);
+        if (k < 0) { T.has[i] = 0; return; }
+
+        T.has[i] = 1;
+        T.v[i] = sv[k]; T.cov[i] = sc[k]; T.sw[i] = ss[k]; T.tie[i] = st[k];
+    }
+
+    const a0 = A.starts[0];
+    const b0 = B.starts[0];
+    {
+        const cov = calcMaterialA(a0) + calcMaterialB(b0);
+        const w = swayOf(a0, b0);
+        offer(M, a0*nB + b0, calcCost_(a0, b0) - del*cov, cov, w, w);
+    }
+
+    const rankToA = A.topo;
+    const rankToB = B.topo;
+    const maxSum = nA + nB - 2;
+
+    for (let s = 0; s <= maxSum; s++) {
+        const rA0 = max(0, s - nB + 1);
+        const rA1 = min(s, nA - 1);
+
+        for (let rA = rA0; rA <= rA1; rA++) {
+            const a = rankToA[rA];
+            const b = rankToB[s - rA];
+            const i = a*nB + b;
+
+            if (M.has[i] === 0 && Ix.has[i] === 0 && Iy.has[i] === 0) {
+                continue;
+            }
+
+            // the path leaving on a diagonal
+            sn = 0;
+            pushFrom(M, i, 0); pushFrom(Ix, i, 0); pushFrom(Iy, i, 0);
+            const kh = pick(min(M.best[i], Ix.best[i], Iy.best[i]));
+            const hasH = kh >= 0;
+            const hv = sv[kh], hc = sc[kh], hs = ss[kh], ht = st[kh];
+
+            // gap in A: opened from M, extended from Ix
+            sn = 0;
+            pushFrom(M, i, gapOpen); pushFrom(Ix, i, 0);
+            const ka = pick(min(M.best[i] + gapOpen, Ix.best[i]));
+            const hasA = ka >= 0;
+            const av = sv[ka], ac = sc[ka], as = ss[ka], at = st[ka];
+
+            for (const aN of A.succ[a]) {
+                const ext = extA(aN);
+                const half = calcMaterialA(aN)/2;
+                if (hasA) { offer(Ix, aN*nB + b, av + ext, ac, as, at + half); }
+
+                if (!hasH) { continue; }
+                for (const bN of B.succ[b]) {
+                    const cov = calcMaterialA(aN) + calcMaterialB(bN);
+                    const c = calcCost_(aN, bN) - del*cov;
+                    const w = swayOf(aN, bN);
+                    offer(M, aN*nB + bN, hv + c, hc + cov, hs + w, ht + w);
+                }
+            }
+
+            // gap in B: opened from M, extended from Iy
+            sn = 0;
+            pushFrom(M, i, gapOpen); pushFrom(Iy, i, 0);
+            const kb = pick(min(M.best[i] + gapOpen, Iy.best[i]));
+            if (kb < 0) { continue; }
+            const bv = sv[kb], bc = sc[kb], bs = ss[kb], bt = st[kb];
+
+            for (const bN of B.succ[b]) {
+                const ext = extB(bN);
+                const half = calcMaterialB(bN)/2;
+                offer(Iy, a*nB + bN, bv + ext, bc, bs, bt + half);
+            }
+        }
+    }
+
+    const candidates: ProductDtwResult_Candidate[] = [];
+
+    const startA = A.leafOf.get(a0)!;
+    const startB = B.leafOf.get(b0)!;
+    for (const aE of A.ends) {
+        for (const bE of B.ends) {
+            const i = aE*nB + bE;
+            const best = min(M.best[i], Ix.best[i], Iy.best[i]);
+            if (best === Infinity) { continue; }
+
+            sn = 0;
+            pushFrom(M, i, 0); pushFrom(Ix, i, 0); pushFrom(Iy, i, 0);
+            const k = pick(best);
+            if (k < 0) { continue; }
+
+            const v = sv[k];
+            const cov = sc[k];
+            candidates.push({
+                startA,
+                startB,
+                endA: A.leafOf.get(aE)!,
+                endB: B.leafOf.get(bE)!,
+                totalCost: v + del*total,
+                shapeCost: v + del*cov,
+                swayCost: cov > 0 ? sway * ss[k] / (cov/2) : 0,
+                covered: cov / total
+            });
+        }
+    }
+    candidates.sort((x, y) => x.totalCost - y.totalCost);
+
+    return { ...candidates[0], states: N, candidates };
+}
+
+
+/** Returns an empty `SingleTable` of `n` states. */
+function createSingleTable(
+        n: number): SingleTable {
+
+    return {
+        best: new Float64Array(n).fill(Infinity),
+        has: new Uint8Array(n),
+        v: new Float64Array(n),
+        cov: new Float64Array(n),
+        sw: new Float64Array(n),
+        tie: new Float64Array(n)
+    };
 }
 
 
