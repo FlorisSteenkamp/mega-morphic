@@ -1,4 +1,5 @@
 import type { StateControl } from './state-control/state-control.js';
+import { installProcessPolyfill } from './process-polyfill.js';
 import type { State } from './state/state.js';
 import { useState } from 'react';
 import { createRoot } from 'react-dom/client';
@@ -25,6 +26,8 @@ function App() {
     );
 }
 
+
+installProcessPolyfill();
 
 const container = document.getElementById('app');
 const root = createRoot(container!);
