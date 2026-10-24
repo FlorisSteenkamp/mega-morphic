@@ -9,6 +9,29 @@ interface PathAlignDebug {
     readonly radiiB: number[];
     /** full DTW traceback, start → end */
     readonly steps: AlignStep[];
+    /** the DTW's table, as the DP ran it */
+    readonly dp: DtwTable;
+}
+
+
+/**
+ * Debug-only: a DTW's table in the order its DP ran - from the routes'
+ * starts, or from their ends (`fromEnds`, a child pair: from its junctions).
+ */
+interface DtwTable {
+    /**
+     * per sample of A (rows) and of B (columns): the value of the best path
+     * kept there (shape − del × covered, what the DP minimizes) - `Infinity`
+     * where none reaches it
+     */
+    readonly values: number[][];
+    /**
+     * the chosen path through `values`, start → end: a diagonal into the
+     * cell (`state` 0), A advancing alone (`1`) or B alone (`2`)
+     */
+    readonly path: { readonly i: number; readonly j: number; readonly state: 0 | 1 | 2 }[];
+    /** the DP ran from the routes' ends */
+    readonly fromEnds: boolean;
 }
 
 
@@ -23,4 +46,4 @@ interface AlignStep {
 }
 
 
-export type { PathAlignDebug, AlignStep }
+export type { PathAlignDebug, DtwTable }

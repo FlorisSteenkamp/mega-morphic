@@ -5,6 +5,7 @@ import type { SegMatchedPair } from '../morph/segment-tree/match-seg-trees/seg-m
 import type { Segment } from '../morph/segment-tree/segment.js';
 import { getUnit$ } from '../morph/segment-tree/get-unit.js';
 import { alignOfRoutes } from './align-of-routes.js';
+import { recordChildDtwPair } from './record-child-dtw-pair.js';
 import { calcSubWeights } from '../morph/segment-tree/match-seg-trees/calc-sub-weights.js';
 import { anisoOf } from '../morph/segment-tree/match-seg-trees/aniso-of.js';
 import { lenOfSegs$ } from '../morph/segment-tree/len-of.js';
@@ -49,6 +50,9 @@ function recordPathMatch(
         trunk: withAlign(trunk, ctx, weights, 0, false),
         gA, gB, loopA, loopB
     });
+
+    // a pair picked in the previous match is stale now
+    recordChildDtwPair(undefined);
 }
 
 

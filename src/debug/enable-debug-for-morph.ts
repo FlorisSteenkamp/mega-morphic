@@ -14,7 +14,8 @@ function enableDebugForMorph(debugOn: boolean) {
         elems: { 
             ...debug?.elems,
             pathMatchResult: [],
-            trunkCands: []
+            trunkCands: [],
+            childDtwPair: []
         },
         timing: {
             ...debug?.timing,

@@ -72,11 +72,22 @@ function alignOfRoutes(
     // φ only feeds the sway measurement
     const ssgBInA = { ...ssgB, φ: ssgB.φ.map(φ => φ + rotB) };
 
-    const trace = traceSingleDtw(
+    const traced = traceSingleDtw(
         ssgA, ssgBInA, weights, sway,
         isChild ? startA : endA,
         isChild ? startB : endB);
-    if (trace === undefined) { return undefined; }
+    if (traced === undefined) { return undefined; }
+    const { steps: trace, valueAt } = traced;
+
+    // the DP's table, in the order it ran (the path visits every sample)
+    const idsA = [...new Set(trace.map(s => s.a))];
+    const idsB = [...new Set(trace.map(s => s.b))];
+    const dpIdxA = new Map(idsA.map((id, i) => [id, i]));
+    const dpIdxB = new Map(idsB.map((id, j) => [id, j]));
+    const dpValues = idsA.map(a => idsB.map(b => valueAt(a, b)));
+    const dpPath = trace.map(({ a, b, state }) => ({
+        i: dpIdxA.get(a)!, j: dpIdxB.get(b)!, state
+    }));
 
     const path = isChild ? toRouteOrder(trace) : trace;
 
@@ -92,7 +103,8 @@ function alignOfRoutes(
         radiiA, radiiB,
         steps: path.map(({ a, b, state, cost }) => ({
             i: usA.idx.get(a)!, j: usB.idx.get(b)!, state, cost
-        }))
+        })),
+        dp: { values: dpValues, path: dpPath, fromEnds: isChild }
     };
 }
 

@@ -32,6 +32,8 @@ import { getGlyphNames, loadPath } from './fs-consts-types/load-path.js';
 import { drawMatch } from './events/draw-match.js';
 import { showVertexNums } from './events/show-vertex-nums.js';
 import { NeedleWindow } from './components/needle-window.js';
+import { DtwWindow } from './components/dtw-window.js';
+import { DiagnosticsPanel } from './components/diagnostics-panel.js';
 import { PresetSelect } from './components/preset-select.js';
 import { onMorphClicked } from './events/on-morph-clicked.js';
 import { drawMorph } from '../morph/draw-morph/draw-morph.js';
@@ -70,7 +72,6 @@ const weightRanges: Record<
     del: { max: 10, step: 0.2, group: 'children' },
     delFloor: { max: 1, step: 0.02, group: 'children' },
     position: { max: 5, step: 0.1, group: 'children' },
-    spacing: { max: 0.5, step: 0.0125, group: 'children' },
     angle: { max: 2, step: 0.125, group: 'children' },
     sway: { max: 20, step: 0.5, group: 'trunk' }
 };
@@ -105,6 +106,7 @@ function Page(props: Props) {
     // parent entry so their junction stays attached throughout the morph.
     const morphRef = useRef<MorphEntry[] | null>(null);
     const [showNeedle, setShowNeedle] = useState(false);
+    const [showDtw, setShowDtw] = useState(false);
 
     const refPageData = useRef<PageData>(null);
     refPageData.current = {
@@ -239,248 +241,265 @@ function Page(props: Props) {
 
     return <>
         <div style={{ height: '100vh', boxSizing: 'border-box', padding: '10px', display: 'flex', flexDirection: 'column' }}>
-            <div>
-            {toDrawKeys.map(key =>
+            <div style={{ position: 'relative' }}>
+                <div>
+                {toDrawKeys.map(key =>
+                    <Checkbox
+                        key={key}
+                        checked={toDraw[key]}
+                        styles={toDrawCheckboxStyles}
+                        text={toDrawKeyToText[key]}
+                        onChanged={toDrawChanged(key)}
+                    />
+                )}
                 <Checkbox
-                    key={key}
-                    checked={toDraw[key]}
+                    checked={pageState.showMatch}
                     styles={toDrawCheckboxStyles}
-                    text={toDrawKeyToText[key]}
-                    onChanged={toDrawChanged(key)}
+                    text="match"
+                    onChanged={onShowMatchChanged}
                 />
-            )}
-            <Checkbox
-                checked={pageState.showMatch}
-                styles={toDrawCheckboxStyles}
-                text="match"
-                onChanged={onShowMatchChanged}
-            />
-            <Checkbox
-                checked={pageState.showMatchBoundary}
-                styles={toDrawCheckboxStyles}
-                text="match bnds"
-                onChanged={onShowMatchBoundaryChanged}
-            />
-            <Checkbox
-                checked={pageState.showBranchNums}
-                styles={toDrawCheckboxStyles}
-                text="vertex #s"
-                onChanged={onShowBranchNumsChanged}
-            />
+                <Checkbox
+                    checked={pageState.showMatchBoundary}
+                    styles={toDrawCheckboxStyles}
+                    text="match bnds"
+                    onChanged={onShowMatchBoundaryChanged}
+                />
+                <Checkbox
+                    checked={pageState.showBranchNums}
+                    styles={toDrawCheckboxStyles}
+                    text="vertex #s"
+                    onChanged={onShowBranchNumsChanged}
+                />
+                </div>
+                <ButtonGroup<ClickFor>
+                    options={{
+                        twoProng: { text: '2-prong' },
+                        threeProng: { text: '3-prong' },
+                        bezier: { text: 'bezier' },
+                        loopSimplified: { text: 'loop (simplified)' },
+                        loopset: { text: 'loop set' },
+                        cp: { text: 'cp' },
+                        curvature: { text: 'k'},
+                        curve: { text: 'curve' },
+                        matCurve: { text: 'mat-curve'},
+                        salience: { text: 'salience' },
+                        fatBranch: { text: 'fat branch' },
+                        fatTree: { text: 'fat tree' },
+                        pathMatchResult: { text: 'path match' },
+                        profileAlign: { text: 'align' },
+                        childDtw: { text: 'child dtw' },
+                        mBezier: { text: 'm-bezier' }
+                    }}
+                    value={clickFor}
+                    onChanged={onClickForChanged}
+                />
+                <div style={{ display: 'flex', gap: '16px', alignItems: 'center', marginTop: '10px', marginBottom: '2px' }}>
+                    <div>
+                        <PresetSelect
+                            presets={glyphPresets}
+                            glyph1Name={glyph1Name}
+                            glyph2Name={glyph2Name}
+                            onSelected={onPresetSelected}
+                            onAdded={onPresetAdded}
+                            onDeleted={onPresetDeleted}
+                        />
+                    </div>
+                    <div>
+                        <SimpleSelect
+                            value={glyph1Name}
+                            options={getGlyphNames_}
+                            style={{ minWidth: '187px' }}
+                            onChanged={glyph1Name => updAndReload({ glyph1Name }, true)}
+                        />
+                    </div>
+                    <div>
+                        <SimpleSelect
+                            value={glyph2Name}
+                            options={getGlyphNames_}
+                            style={{ minWidth: '187px' }}
+                            onChanged={glyph2Name => updAndReload({ glyph2Name }, true)}
+                        />
+                    </div>
+                    <Checkbox checked={simplify} styles={toDrawCheckboxStyles} text="simplify" onChanged={simplify => updAndReload({ simplify }, false)} />
+                    <Checkbox checked={!viewMat} styles={toDrawCheckboxStyles} text="SAT enabled" onChanged={satEnabled => updAndReload({ viewMat: !satEnabled }, false)} />
+                    <Checkbox checked={staggeredSat} styles={toDrawCheckboxStyles} text={`staggered SAT (${STAGGER_COARSE} → ${STAGGER_FINE})`} onChanged={staggeredSat => updAndReload({ staggeredSat }, false)} />
+                    <Checkbox checked={morphFillOnly} styles={toDrawCheckboxStyles} text="fill only" onChanged={morphFillOnly => updAndRedrawMorph({ morphFillOnly })} />
+                    <Checkbox checked={pageState.showMorphBounds} styles={toDrawCheckboxStyles} text="bounds" onChanged={showMorphBounds => updAndRedrawMorph({ showMorphBounds })} />
+                    <Checkbox checked={showPose} styles={toDrawCheckboxStyles} text="pose" onChanged={showPose => updAndRedrawMorph({ showPose })} />
+                </div>
+                <div style={{ display: 'flex', gap: '16px', alignItems: 'flex-end', paddingBottom: '8px' }}>
+                    <div style={{ minWidth: '225px'}}>
+                        <p id="slider" style={{ marginTop: 0, marginBottom: '0.35em' }}>
+                            SAT Scale
+                        </p>
+                        <Slider
+                            value={satScale}
+                            aria-labelledby="slider"
+                            min={1} max={10} step={0.1}
+                            valueLabelDisplay="auto"
+                            onChange={satScaleChanged}
+                        />
+                    </div>
+                    <div style={{ minWidth: '225px'}}>
+                        <p id="slider" style={{ marginTop: 0, marginBottom: '0.35em' }}>
+                            Show delay
+                        </p>
+                        <Slider
+                            value={showDelay}
+                            aria-labelledby="slider"
+                            min={0} max={50_000} step={200}
+                            valueLabelDisplay="auto"
+                            onChange={showDelayChanged}
+                        />
+                    </div>
+                    <div style={{ display: 'flex' }}>
+                        <button
+                            onClick={onZoomOutClicked}
+                            style={btnStyleBlue}
+                        >
+                            zoom out
+                        </button>
+                    </div>
+                    <div style={{ display: 'flex', position: 'relative' }}>
+                        <span style={{
+                            position: 'absolute',
+                            top: '-16px',
+                            left: '50%',
+                            transform: 'translateX(-50%)',
+                            fontSize: '12px',
+                            color: '#1976d2',
+                            userSelect: 'none',
+                            whiteSpace: 'nowrap',
+                        }}>
+                            {pageState.rot1}°
+                        </span>
+                        <button
+                            onClick={onRotate15Clicked}
+                            style={btnStyleBlue}
+                        >
+                            rotate 15
+                        </button>
+                    </div>
+                    <div style={{ display: 'flex' }}>
+                        <button
+                            onClick={onFlipHClicked}
+                            style={flipH ? btnStyleBlueFlipped : btnStyleBlue}
+                        >
+                            flip h
+                        </button>
+                    </div>
+                    <div style={{ display: 'flex' }}>
+                        <button
+                            onClick={onFlipVClicked}
+                            style={flipV ? btnStyleBlueFlipped : btnStyleBlue}
+                        >
+                            flip v
+                        </button>
+                    </div>
+                    {/* <div style={{ display: 'flex', gap: '6px' }}>
+                        <button
+                            onClick={() => onMorphClicked(refPageData)}
+                            style={{
+                                padding: '9px 20px',
+                                fontSize: '14px',
+                                fontWeight: 500,
+                                lineHeight: '1',
+                                color: '#fff',
+                                backgroundColor: '#1976d2',
+                                border: 'none',
+                                borderRadius: '4px',
+                                cursor: 'pointer',
+                            }}
+                        >
+                            morph
+                        </button>
+                    </div> */}
+                    <div style={{ minWidth: '225px'}}>
+                        <p id="slider" style={{ marginTop: 0, marginBottom: '0.35em' }}>
+                            Morph
+                        </p>
+                        <Slider
+                            value={morphT}
+                            aria-labelledby="slider"
+                            min={0} max={100} step={1}
+                            valueLabelDisplay="auto"
+                            onChange={morphChanged}
+                        />
+                    </div>
+                    <div style={{ display: 'flex', gap: '6px', alignItems: 'flex-end' }}>
+                        {[0, 1, 2].map(i => {
+                            const on = showSvgs[i];
+                            return (
+                                <button
+                                    key={i}
+                                    onClick={() => toggleSvg(i)}
+                                    style={toggleBtnStyle(on, false)}
+                                >
+                                    {i + 1}
+                                </button>
+                            );
+                        })}
+                        <button
+                            onClick={() => upd(pageState, { showWeights: !showWeights })}
+                            style={toggleBtnStyle(showWeights, false)}
+                        >
+                            weights
+                        </button>
+                    </div>
+                </div>
+                {showWeights &&
+                <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap', alignItems: 'flex-end', paddingBottom: '6px' }}>
+                    {(Object.keys(weightRanges) as (keyof PathCostWeights)[])
+                        .map(key => {
+                            const color = weightGroupColors[weightRanges[key].group];
+                            return (
+                                <div key={key} style={{ minWidth: '110px' }}>
+                                    <p style={{ marginTop: 0, marginBottom: '0.1em', fontSize: '12px', color }}>
+                                        {key}: {pathWeights[key]}
+                                    </p>
+                                    <Slider
+                                        value={pathWeights[key]}
+                                        min={0}
+                                        max={weightRanges[key].max}
+                                        step={weightRanges[key].step}
+                                        color={color}
+                                        onChange={pathWeightChanged(key)}
+                                    />
+                                </div>
+                            );
+                        })}
+                    <button
+                        onClick={() => upd(pageState, { pathWeights: defaultPathWeights })}
+                        style={toggleBtnStyle(false, true)}
+                    >
+                        reset
+                    </button>
+                    <button
+                        onClick={() => { setShowNeedle(show => !show); setShowDtw(false); }}
+                        style={toggleBtnStyle(showNeedle, true)}
+                    >
+                        needle
+                    </button>
+                    <button
+                        onClick={() => { setShowDtw(show => !show); setShowNeedle(false); }}
+                        style={toggleBtnStyle(showDtw, true)}
+                    >
+                        DTW
+                    </button>
+                </div>}
+                <DiagnosticsPanel
+                    show={pageState.showDiagnostics}
+                    onToggle={() => upd(pageState, { showDiagnostics: !pageState.showDiagnostics })}
+                    glyph1Name={glyph1Name}
+                    glyph2Name={glyph2Name}
+                    mats1={mats1}
+                    mats2={mats2}
+                />
             </div>
-            <ButtonGroup<ClickFor>
-                options={{
-                    twoProng: { text: '2-prong' },
-                    threeProng: { text: '3-prong' },
-                    bezier: { text: 'bezier' },
-                    loopSimplified: { text: 'loop (simplified)' },
-                    loopset: { text: 'loop set' },
-                    cp: { text: 'cp' },
-                    curvature: { text: 'k'},
-                    curve: { text: 'curve' },
-                    matCurve: { text: 'mat-curve'},
-                    salience: { text: 'salience' },
-                    fatBranch: { text: 'fat branch' },
-                    fatTree: { text: 'fat tree' },
-                    pathMatchResult: { text: 'path match' },
-                    profileAlign: { text: 'align' },
-                    childDtw: { text: 'child dtw' },
-                    mBezier: { text: 'm-bezier' }
-                }}
-                value={clickFor}
-                onChanged={onClickForChanged}
-            />
-            <div style={{ display: 'flex', gap: '16px', alignItems: 'center', marginTop: '10px', marginBottom: '2px' }}>
-                <div>
-                    <PresetSelect
-                        presets={glyphPresets}
-                        glyph1Name={glyph1Name}
-                        glyph2Name={glyph2Name}
-                        onSelected={onPresetSelected}
-                        onAdded={onPresetAdded}
-                        onDeleted={onPresetDeleted}
-                    />
-                </div>
-                <div>
-                    <SimpleSelect
-                        value={glyph1Name}
-                        options={getGlyphNames_}
-                        style={{ minWidth: '187px' }}
-                        onChanged={glyph1Name => updAndReload({ glyph1Name }, true)}
-                    />
-                </div>
-                <div>
-                    <SimpleSelect
-                        value={glyph2Name}
-                        options={getGlyphNames_}
-                        style={{ minWidth: '187px' }}
-                        onChanged={glyph2Name => updAndReload({ glyph2Name }, true)}
-                    />
-                </div>
-                <Checkbox checked={simplify} styles={toDrawCheckboxStyles} text="simplify" onChanged={simplify => updAndReload({ simplify }, false)} />
-                <Checkbox checked={!viewMat} styles={toDrawCheckboxStyles} text="SAT enabled" onChanged={satEnabled => updAndReload({ viewMat: !satEnabled }, false)} />
-                <Checkbox checked={staggeredSat} styles={toDrawCheckboxStyles} text={`staggered SAT (${STAGGER_COARSE} → ${STAGGER_FINE})`} onChanged={staggeredSat => updAndReload({ staggeredSat }, false)} />
-                <Checkbox checked={morphFillOnly} styles={toDrawCheckboxStyles} text="fill only" onChanged={morphFillOnly => updAndRedrawMorph({ morphFillOnly })} />
-                <Checkbox checked={pageState.showMorphBounds} styles={toDrawCheckboxStyles} text="bounds" onChanged={showMorphBounds => updAndRedrawMorph({ showMorphBounds })} />
-                <Checkbox checked={showPose} styles={toDrawCheckboxStyles} text="pose" onChanged={showPose => updAndRedrawMorph({ showPose })} />
-            </div>
-            <div style={{ display: 'flex', gap: '16px', alignItems: 'flex-end', paddingBottom: '8px' }}>
-                <div style={{ minWidth: '225px'}}>
-                    <p id="slider" style={{ marginTop: 0, marginBottom: '0.35em' }}>
-                        SAT Scale
-                    </p>
-                    <Slider
-                        value={satScale}
-                        aria-labelledby="slider"
-                        min={1} max={10} step={0.1}
-                        valueLabelDisplay="auto"
-                        onChange={satScaleChanged}
-                    />
-                </div>
-                <div style={{ minWidth: '225px'}}>
-                    <p id="slider" style={{ marginTop: 0, marginBottom: '0.35em' }}>
-                        Show delay
-                    </p>
-                    <Slider
-                        value={showDelay}
-                        aria-labelledby="slider"
-                        min={0} max={50_000} step={200}
-                        valueLabelDisplay="auto"
-                        onChange={showDelayChanged}
-                    />
-                </div>
-                <div style={{ display: 'flex' }}>
-                    <button
-                        onClick={onZoomOutClicked}
-                        style={btnStyleBlue}
-                    >
-                        zoom out
-                    </button>
-                </div>
-                <div style={{ display: 'flex', position: 'relative' }}>
-                    <span style={{
-                        position: 'absolute',
-                        top: '-16px',
-                        left: '50%',
-                        transform: 'translateX(-50%)',
-                        fontSize: '12px',
-                        color: '#1976d2',
-                        userSelect: 'none',
-                        whiteSpace: 'nowrap',
-                    }}>
-                        {pageState.rot1}°
-                    </span>
-                    <button
-                        onClick={onRotate15Clicked}
-                        style={btnStyleBlue}
-                    >
-                        rotate 15
-                    </button>
-                </div>
-                <div style={{ display: 'flex' }}>
-                    <button
-                        onClick={onFlipHClicked}
-                        style={flipH ? btnStyleBlueFlipped : btnStyleBlue}
-                    >
-                        flip h
-                    </button>
-                </div>
-                <div style={{ display: 'flex' }}>
-                    <button
-                        onClick={onFlipVClicked}
-                        style={flipV ? btnStyleBlueFlipped : btnStyleBlue}
-                    >
-                        flip v
-                    </button>
-                </div>
-                {/* <div style={{ display: 'flex', gap: '6px' }}>
-                    <button
-                        onClick={() => onMorphClicked(refPageData)}
-                        style={{
-                            padding: '9px 20px',
-                            fontSize: '14px',
-                            fontWeight: 500,
-                            lineHeight: '1',
-                            color: '#fff',
-                            backgroundColor: '#1976d2',
-                            border: 'none',
-                            borderRadius: '4px',
-                            cursor: 'pointer',
-                        }}
-                    >
-                        morph
-                    </button>
-                </div> */}
-                <div style={{ minWidth: '225px'}}>
-                    <p id="slider" style={{ marginTop: 0, marginBottom: '0.35em' }}>
-                        Morph
-                    </p>
-                    <Slider
-                        value={morphT}
-                        aria-labelledby="slider"
-                        min={0} max={100} step={1}
-                        valueLabelDisplay="auto"
-                        onChange={morphChanged}
-                    />
-                </div>
-                <div style={{ display: 'flex', gap: '6px', alignItems: 'flex-end' }}>
-                    {[0, 1, 2].map(i => {
-                        const on = showSvgs[i];
-                        return (
-                            <button
-                                key={i}
-                                onClick={() => toggleSvg(i)}
-                                style={toggleBtnStyle(on, false)}
-                            >
-                                {i + 1}
-                            </button>
-                        );
-                    })}
-                    <button
-                        onClick={() => upd(pageState, { showWeights: !showWeights })}
-                        style={toggleBtnStyle(showWeights, false)}
-                    >
-                        weights
-                    </button>
-                </div>
-            </div>
-            {showWeights &&
-            <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap', alignItems: 'flex-end', paddingBottom: '6px' }}>
-                {(Object.keys(weightRanges) as (keyof PathCostWeights)[])
-                    .map(key => {
-                        const color = weightGroupColors[weightRanges[key].group];
-                        return (
-                            <div key={key} style={{ minWidth: '110px' }}>
-                                <p style={{ marginTop: 0, marginBottom: '0.1em', fontSize: '12px', color }}>
-                                    {key}: {pathWeights[key]}
-                                </p>
-                                <Slider
-                                    value={pathWeights[key]}
-                                    min={0}
-                                    max={weightRanges[key].max}
-                                    step={weightRanges[key].step}
-                                    color={color}
-                                    onChange={pathWeightChanged(key)}
-                                />
-                            </div>
-                        );
-                    })}
-                <button
-                    onClick={() => upd(pageState, { pathWeights: defaultPathWeights })}
-                    style={toggleBtnStyle(false, true)}
-                >
-                    reset
-                </button>
-                <button
-                    onClick={() => setShowNeedle(show => !show)}
-                    style={toggleBtnStyle(showNeedle, true)}
-                >
-                    needle
-                </button>
-            </div>}
             <span ref={refX} style={{ userSelect: 'none', position: 'fixed', bottom: '13px', left: '10px' }} />
             <span ref={refY} style={{ userSelect: 'none', position: 'fixed', bottom: '13px', left: '120px' }} />
             {showNeedle && <NeedleWindow onClose={() => setShowNeedle(false)} />}
+            {showDtw && <DtwWindow onClose={() => setShowDtw(false)} />}
             <div style={{ display: 'flex', gap: '16px', flex: 1, minHeight: 0 }}>
             <svg 
                 id="svg3"

@@ -32,6 +32,8 @@ interface PageState {
     readonly showSvgs: readonly [boolean, boolean, boolean];
     /** Show the path-matching weight sliders. */
     readonly showWeights: boolean;
+    /** show the diagnostics panel (top right of the header) */
+    readonly showDiagnostics: boolean;
     /** Draw the morph as filled area only (no MAT skeletons, no outline stroke). */
     readonly morphFillOnly: boolean;
     /** Draw a pose gizmo on the morph (centroid ring ∝ √area + principal

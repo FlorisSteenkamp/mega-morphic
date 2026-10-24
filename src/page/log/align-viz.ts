@@ -21,7 +21,7 @@ const GAP_CLASSES = 'thin140 gray nofill';
 const GAP_CORE_CLASSES = 'thin20 black nofill';
 /** the point of the other glyph a gap collapses onto */
 const WAIT_DOT_CLASSES = 'black nostroke';
-/** the routes' start (the alignment runs from here) */
+/** where the DP started (the alignment runs from here) */
 const START_RING_CLASSES = 'thin20 black nofill';
 
 
@@ -37,7 +37,8 @@ const START_RING_CLASSES = 'thin20 black nofill';
  *
  * * unmatched tails are thin gray
  *
- * * a black ring marks where both routes start
+ * * a black ring marks where the DP started on both routes: their starts,
+ *   or for a child pair their ends (its junctions, `dp.fromEnds`)
  *
  * Returns `false` for degenerate alignments.
  */
@@ -61,6 +62,10 @@ function drawAlignSteps(
     const rA = dotRadius(g1);
     const rB = dotRadius(g2);
 
+    // the diagonal moves, numbered from where the DP started (the first one
+    // red): from the routes' starts, or (a child pair) from their ends
+    const diagCount = steps.slice(1).filter(s => s.state === 0).length;
+
     // Each step advances one or both sides by a sample: draw the segment(s)
     // it consumed.
     let k = 0;
@@ -69,8 +74,9 @@ function drawAlignSteps(
         const s1 = steps[n];
 
         if (s1.state === 0) {
+            const fromStart = al.dp.fromEnds ? diagCount - 1 - k : k;
             k++;
-            const color = palette[k % palette.length];
+            const color = palette[fromStart % palette.length];
             const width = widthClasses[min(
                 widthClasses.length - 1,
                 floor(s1.cost / cMax * widthClasses.length))];
@@ -105,10 +111,13 @@ function drawAlignSteps(
     drawTail(g1, segsA, last.i, segsA.length, showDelay);
     drawTail(g2, segsB, last.j, segsB.length, showDelay);
 
-    // where both routes start
-    drawFs.circle(g1, { center: ptsA[0], radius: 2*rA },
+    // where the DP started: the routes' starts, or (a child pair) their
+    // ends - its junctions
+    const startA = al.dp.fromEnds ? ptsA[ptsA.length - 1] : ptsA[0];
+    const startB = al.dp.fromEnds ? ptsB[ptsB.length - 1] : ptsB[0];
+    drawFs.circle(g1, { center: startA, radius: 2*rA },
         START_RING_CLASSES, showDelay);
-    drawFs.circle(g2, { center: ptsB[0], radius: 2*rB },
+    drawFs.circle(g2, { center: startB, radius: 2*rB },
         START_RING_CLASSES, showDelay);
 
     return true;

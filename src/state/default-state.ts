@@ -58,6 +58,7 @@ const defaultPageState: PageState = {
     simplify: false,
     showSvgs: [true, true, true],
     showWeights: true,
+    showDiagnostics: true,
     morphFillOnly: false,
     showPose: false,
     showMatch: false,

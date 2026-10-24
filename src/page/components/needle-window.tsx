@@ -3,7 +3,11 @@ import type { Debug } from '../../debug/debug.js';
 import type { Circle } from 'flo-mat';
 import type { SegDp } from '../../morph/segment-tree/match-seg-trees/seg-dp.js';
 import type { SegChild } from '../../morph/segment-tree/match-seg-trees/seg-child.js';
+import type { RouteStep } from '../../morph/segment-tree/segment.js';
+import { useEffect, useState } from 'react';
 import { vertexIds$ } from '../../debug/segment-tree/vertex-ids.js';
+import { CHILD_DTW_PAIR_EVENT } from '../../debug/record-child-dtw-pair.js';
+import { routeEndsOf } from '../../morph/segment-tree/match-seg-trees/outline-len-of.js';
 import { geomOf$ } from '../../morph/segment-tree/geom-of.js';
 import { btnStyleBlue } from '../btn-styles.js';
 
@@ -45,11 +49,19 @@ const opColors = {
 
 
 /**
- * Overlay window showing the TRUNK pair's children Needleman-Wunsch
- * scoring matrices (one per side), traceback cells tinted by op type.
- * Data comes from the last morph's `pathMatchResult` (debug-only).
+ * Overlay window showing a pair's children Needleman-Wunsch scoring matrix,
+ * traceback cells tinted by op type: the child pair last evaluated by the
+ * child-DTW tool (`childDtwPair`), else the trunk pair.
+ *
+ * * data from the last morph's `pathMatchResult` and the child-DTW tool
+ *   (debug-only)
+ *
+ * * re-rendered whenever the tool evaluates a pair or a morph replaces the
+ *   match (`CHILD_DTW_PAIR_EVENT`)
  */
 function NeedleWindow(props: { onClose: () => void }) {
+    useChildDtwPairRefresh();
+
     const content = needleContent();
 
     return <>
@@ -72,29 +84,69 @@ function NeedleWindow(props: { onClose: () => void }) {
 }
 
 
+/**
+ * Re-renders the component whenever the child-DTW tool evaluates a pair or
+ * a morph replaces the match (`CHILD_DTW_PAIR_EVENT`).
+ */
+function useChildDtwPairRefresh(): void {
+    const [, setVersion] = useState(0);
+
+    useEffect(() => {
+        const refresh = () => setVersion(v => v + 1);
+        window.addEventListener(CHILD_DTW_PAIR_EVENT, refresh);
+
+        return () => window.removeEventListener(CHILD_DTW_PAIR_EVENT, refresh);
+    }, []);
+}
+
+
 function needleContent() {
     if (typeof _debug_ === 'undefined') {
         return <div style={windowStyle}>debug mode is off</div>;
     }
     const pm = _debug_.elems.pathMatchResult.at(-1);
-    if (pm?.trunk.dp === undefined) {
-        return <div style={windowStyle}>
-            no match data - click morph first (then re-toggle)
-        </div>;
+    if (pm === undefined) {
+        return <div style={windowStyle}>no match data - click morph first</div>;
     }
 
-    const { cost, shapeCost, dp } = pm.trunk;
-    const childCost = cost - shapeCost;
     const idsA = vertexIds$(pm.gA);
     const idsB = vertexIds$(pm.gB);
 
+    const picked = _debug_.elems.childDtwPair?.[0];
+    const pair = picked?.sub ?? pm.trunk;
+    const { cost, shapeCost, dp, routeA, routeB } = pair;
+
+    const title = picked === undefined
+        ? <b>Trunk children DP</b>
+        : <>
+            <b>Clicked pair's children DP</b> (A {routeLabel(routeA, idsA)},
+            B {routeLabel(routeB, idsB)}
+            {picked.priced ? ' - as priced fresh: the match\'s own sub-pair ' +
+                'has no table' : ''})
+        </>;
+
+    if (dp === undefined) {
+        return <div style={windowStyle}>
+            {title} — no table: its children were aligned in the gaps
+            between the matches kept from the coarse match (staggered SAT)
+        </div>;
+    }
+
     return <div style={windowStyle}>
-        <b>Trunk children DP</b> (cost {childCost.toFixed(3)}) — traceback:
+        {title} (cost {(cost - shapeCost).toFixed(3)}) — traceback:
         <span style={{ background: opColors.match }}> match </span>
         <span style={{ background: opColors.delete }}> delete </span>
         <span style={{ background: opColors.insert }}> insert </span>
         <DpTable dp={dp} idsA={idsA} idsB={idsB} />
     </div>;
+}
+
+
+/** "v<start id>→v<end id>" of a route (ids as `showVertexNums`). */
+function routeLabel(route: RouteStep[], ids: Map<Circle, number>): string {
+    const [start, end] = routeEndsOf(route);
+
+    return `v${ids.get(start)}→v${ids.get(end)}`;
 }
 
 
@@ -166,4 +218,7 @@ function childLabel(c: SegChild, ids: Map<Circle, number>): string {
 }
 
 
-export { NeedleWindow }
+export {
+    NeedleWindow, useChildDtwPairRefresh, routeLabel,
+    windowStyle, cellStyle, headStyle
+}

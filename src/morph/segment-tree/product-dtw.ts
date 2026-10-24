@@ -394,6 +394,21 @@ interface DtwTraceStep {
 }
 
 
+/** **Diagnostics only** - a `productDtwSingle` path and its DP's values. */
+interface DtwTrace {
+    /** the kept path, start → end (`traceSingleDtw`) */
+    readonly steps: DtwTraceStep[];
+    /**
+     * the DP's value at state `(a, b)` (samples of A and B): that of the
+     * best path kept there (shape − del × covered, what the DP minimizes) -
+     * `Infinity` where none reaches it
+     *
+     * * holds the DP's tables: read what is needed, then let it go
+     */
+    readonly valueAt: (a: number, b: number) => number;
+}
+
+
 /**
  * `productDtw` with a single start pair (both graphs sampled from a pinned
  * start) - the same DP, results identical, without its per-path objects.
@@ -421,7 +436,8 @@ function productDtwSingle(
 /**
  * **Diagnostics only** - Returns the path `productDtwSingle` keeps from
  * the start pair to the end pair `endA`, `endB` (the route ends'
- * vertices), start → end - `undefined` if none reaches it.
+ * vertices), start → end, with the DP's values (`DtwTrace`) - `undefined`
+ * if no path reaches it.
  *
  * * the very DP the matcher runs (same samples, objective and tie-breaks),
  *   so the path is the one its costs were measured along
@@ -432,9 +448,12 @@ function traceSingleDtw(
         weights: PathCostWeights,
         sway: number,
         endA: Circle,
-        endB: Circle): DtwTraceStep[] | undefined {
+        endB: Circle): DtwTrace | undefined {
 
-    return runSingle(A, B, weights, sway).traceTo(endA, endB);
+    const { traceTo, valueAt } = runSingle(A, B, weights, sway);
+    const steps = traceTo(endA, endB);
+
+    return steps === undefined ? undefined : { steps, valueAt };
 }
 
 
@@ -656,7 +675,25 @@ function runSingle(
 
     const result: ProductDtwResult = { ...candidates[0], states: N, candidates };
 
-    return { result, traceTo };
+    return { result, traceTo, valueAt };
+
+
+    /**
+     * the value (shape − del × covered) of the best path kept at state
+     * `(a, b)` - `Infinity` where none reaches it
+     */
+    function valueAt(
+            a: number,
+            b: number): number {
+
+        const i = a*nB + b;
+        let v = Infinity;
+        for (const T of tables) {
+            if (T.has[i] === 1 && T.v[i] < v) { v = T.v[i]; }
+        }
+
+        return v;
+    }
 
 
     /** the kept path to the end pair (`traceSingleDtw`) */
@@ -774,4 +811,4 @@ function calcCost(
 
 
 export { productDtw, traceSingleDtw }
-export type { ProductDtwResult, ProductDtwResult_Candidate, DtwTraceStep }
+export type { ProductDtwResult, ProductDtwResult_Candidate, DtwTraceStep, DtwTrace }

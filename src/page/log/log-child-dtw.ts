@@ -1,5 +1,6 @@
 declare var _debug_: Debug;
-import type { Debug } from '../../debug/debug.js';
+import type { Debug, ChildDtwPair } from '../../debug/debug.js';
+import { recordChildDtwPair } from '../../debug/record-child-dtw-pair.js';
 import type { PathMatchResult } from '../../debug/path-match-result.js';
 import type { PathCostWeights } from '../../morph/match-paths/path-cost-weights.js';
 import type { SegMatchedPair } from '../../morph/segment-tree/match-seg-trees/seg-matched-pair.js';
@@ -117,6 +118,7 @@ function logChildDtw(
         clearSelection();
 
         if (selA.trunk === true && selB.trunk === true) {
+            recordChildDtwPair(undefined);
             logTrunkPair(pm, showDelay);
             return;
         }
@@ -128,6 +130,32 @@ function logChildDtw(
 
         evaluate(pm, selA.seg, selB.seg, weights, showDelay);
     };
+}
+
+
+/**
+ * Returns what the needle and DTW windows show for an evaluated child pair:
+ * the sub-pair whose children alignment the needle window shows - the
+ * match's own when it has a table, else the freshly priced one - and the
+ * routes' alignment the tool drew (`undefined` if there is no sub-pair).
+ *
+ * * a sub-pair kept from a staggered match's coarse SAT has no children
+ *   table: its children were aligned in the gaps between its kept matches
+ *
+ * @param own the match's own sub-pair (the two are matched together)
+ * @param priced the freshly priced sub-pair
+ * @param align the alignment the tool drew
+ */
+function calcNeedlePair(
+        own: SegMatchedPair | undefined,
+        priced: SegMatchedPair | undefined,
+        align: PathAlignDebug | undefined): ChildDtwPair | undefined {
+
+    if (own?.dp !== undefined) { return { sub: own, priced: false, align }; }
+    if (priced !== undefined) { return { sub: priced, priced: true, align }; }
+    if (own !== undefined) { return { sub: own, priced: false, align }; }
+
+    return undefined;
 }
 
 
@@ -255,6 +283,8 @@ function evaluate(
     const { gA, gB, loopA, loopB } = pm;
     const r = evalChildPair(
         gA, gB, pm.trunk, segA, segB, loopA, loopB, weights);
+
+    recordChildDtwPair(calcNeedlePair(r.actualSub, r.price?.sub, r.align));
 
     if (r.align !== undefined) {
         const g1 = svgGroup('svg');
