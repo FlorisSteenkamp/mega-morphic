@@ -1,0 +1,5 @@
+k->x: 45 entries, max idx shift 37.0  |  t0: 35 loops xor 9/6599  t0.25: 45 loops  t0.5: 45 loops  t0.75: 45 loops  t1: 32 loops xor 45/6360
+M->N: 35 entries, max idx shift 0.0  |  t0: 21 loops xor 26/6110  t0.25: 35 loops  t0.5: 35 loops  t0.75: 35 loops  t1: 28 loops xor 4/7545
+T->A: 80 entries, max idx shift 0.0  |  t0: 35 loops xor 2/4599  t0.25: 80 loops  t0.5: 80 loops  t0.75: 80 loops  t1: 63 loops xor 76/5808
+six->seven: 18 entries, max idx shift 0.0  |  t0: 12 loops xor 48/4660  t0.25: 18 loops  t0.5: 18 loops  t0.75: 18 loops  t1: 12 loops xor 7/3955
+C->B: 29 entries, max idx shift 0.0  |  t0: 14 loops xor 26/5135  t0.25: 29 loops  t0.5: 29 loops  t0.75: 29 loops  t1: 21 loops xor 28/8116

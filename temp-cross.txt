@@ -1,0 +1,23 @@
+0 purple
+1 orange glue e0 k1 301.0 k2 301.0 side 1
+2 blue glue e0 k1 863.0 k2 882.0 side 0
+3 pink glue e0 k1 863.0 k2 878.0 side 0
+4 cyan glue e0 k1 645.0 k2 645.0 side 0
+5 deeppink glue e0 k1 452.0 k2 452.0 side -1
+6 red collapsed:b glue e0 k1 455.0 k2 455.0 side 1
+7 red collapsed:b glue e0 k1 638.0 k2 638.0 side 1
+8 red collapsed:b glue e0 k1 801.0 k2 801.0 side 1
+9 red collapsed:b glue e0 k1 800.0 k2 800.0 side -1
+10 red collapsed:b glue e0 k1 393.0 k2 393.0 side -1
+11 red collapsed:b glue e0 k1 390.0 k2 390.0 side 1
+12 green collapsed:a glue e0 k1 207.0 k2 207.0 side -1
+13 green collapsed:a glue e0 k1 64.0 k2 64.0 side -1
+14 green collapsed:a glue e0 k1 210.0 k2 210.0 side 1
+15 green collapsed:a glue e1 k1 0.0 k2 0.0 side 0
+16 green collapsed:a glue e1 k1 0.0 k2 0.0 side 1
+17 green collapsed:a glue e16 k1 1.0 k2 1.0 side 0
+trunk out cuts (idxA→idxB) near 280-470: 280→280 470→470
+trunk back cuts (idxA→idxB) near 280-470: 280→280 470→470
+trunk out sleeve sin vote A 1760 B 1762
+
+crossings (matched child passes a topology child on the same parent + side):

@@ -1,0 +1,8 @@
+verdict: match (relabel 0.045 < drop 0.090) (in isolation, before spacing; sequence order and the spacing to neighbouring matches can override)
+material a 0.0006  b 0.0295
+sizeFactor 0.0452  position 0.0015  angle 0.0001
+sub: shape 0.0230  sway 0.0170  children 0.0030  score 0.0430
+matchCost 0.0446  delete 0.0017  insert 0.0886  drop both 0.0903
+sub route A: length 0.6 (0.0024 unit)  samples 18  step 0.00030  mean r 0.0447  material 0.0002
+sub route B: length 65.0 (0.2688 unit)  samples 26  step 0.02688  mean r 0.1043  material 0.0729
+sub gapOpen = gapOpen × mean material = 0.0023
