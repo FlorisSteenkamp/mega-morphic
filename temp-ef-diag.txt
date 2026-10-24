@@ -64,7 +64,7 @@ B coarse material vs gap-closed vs fine-route sum:
   20-21 mat 346 closed 346 fineRoute 346
   20-23 mat 12 closed 12 fineRoute 12
   0-28 mat 165 closed 165 fineRoute 165
-weights: {"radius":1,"turning":0.15,"position":2,"spacing":0.025,"angle":0.25,"del":3,"delFloor":0,"sway":3,"gapOpen":0.15,"gapExtend":0.06}
+weights: {"radius":1,"turning":0.15,"position":2,"angle":0.25,"del":3,"delFloor":0,"sway":3,"gapOpen":0.15,"gapExtend":0.06}
 
 === COARSE ===
 PAIR A 15(136,494)→3(40,12)  B 13(136,494)→1(40,12)  shape 0.2450 cost 0.6716 sway 0.1149

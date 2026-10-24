@@ -104,7 +104,7 @@ B coarse material vs gap-closed vs fine-route sum:
   13-42 mat 15453 closed 15453 fineRoute 10618
   last out: [[[343.1,339],[343.1,339]]]
   last back: [[[334.1,359],[334.1,359],[334.1,359],[334.1,359]]]
-weights: {"radius":1,"turning":0.15,"position":2,"spacing":0.025,"angle":0.25,"del":3,"delFloor":0,"tail":0.5,"sway":3,"gapOpen":0.15,"gapExtend":0.06}
+weights: {"radius":1,"turning":0.15,"position":2,"angle":0.25,"del":3,"delFloor":0,"sway":3,"gapOpen":0.15,"gapExtend":0.06}
 
 === COARSE ===
 PAIR A 35(470,-18)→0(142,570)  B 35(445,23)→0(137,351)  shape 0.1009 cost 1.0032 sway 0.1410

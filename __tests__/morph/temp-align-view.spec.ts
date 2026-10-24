@@ -45,6 +45,11 @@ describe('temp align view', () => {
                         const want = steps[k].state === 0 ? [1, 1] : steps[k].state === 1 ? [1, 0] : [0, 1];
                         ok = di === want[0] && dj === want[1];
                     }
+                    const { values, path } = al.dp;
+                    ok = ok && values.length === usA.length && values[0].length === usB.length &&
+                        path[0].i === 0 && path[0].j === 0 &&
+                        path.at(-1)!.i === values.length - 1 && path.at(-1)!.j === values[0].length - 1 &&
+                        path.every(c => Number.isFinite(values[c.i][c.j]));
                     for (let k = 1; k < usA.length && ok; k++) { ok = usA[k] >= usA[k - 1]; }
                     for (let k = 1; k < usB.length && ok; k++) { ok = usB[k] >= usB[k - 1]; }
                     if (!ok) {
