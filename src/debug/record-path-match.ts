@@ -6,6 +6,9 @@ import type { Segment } from '../morph/segment-tree/segment.js';
 import { getUnit$ } from '../morph/segment-tree/get-unit.js';
 import { alignOfRoutes } from './align-of-routes.js';
 import { calcSubWeights } from '../morph/segment-tree/match-seg-trees/calc-sub-weights.js';
+import { anisoOf } from '../morph/segment-tree/match-seg-trees/aniso-of.js';
+import { lenOfSegs$ } from '../morph/segment-tree/len-of.js';
+import { TARGET_SAMPLES } from '../morph/segment-tree/match-seg-trees/consts.js';
 
 
 /**
@@ -29,36 +32,63 @@ function recordPathMatch(
         return;
     }
 
-    const unit1 = getUnit$(loopA);
-    const unit2 = getUnit$(loopB);
+    const ctx: AlignContext = {
+        unitA: getUnit$(loopA),
+        unitB: getUnit$(loopB),
+        // the matcher's trunk-level sample spacing and sway factor
+        δA: lenOfSegs$(gA)/TARGET_SAMPLES,
+        δB: lenOfSegs$(gB)/TARGET_SAMPLES,
+        sway: weights.sway*anisoOf(loopA, loopB),
+        weights
+    };
 
     // Keep only the LATEST result - readers use [0]/at(-1) and stale
     // entries (whole trees) would otherwise accumulate.
     _debug_.elems.pathMatchResult.length = 0;
     _debug_.elems.pathMatchResult.push({
-        trunk: withAlign(trunk, true, unit1, unit2, weights, weights),
+        trunk: withAlign(trunk, ctx, weights, 0, false),
         gA, gB, loopA, loopB
     });
 }
 
 
+/** What every pair's alignment is computed with (see `alignOfRoutes`). */
+interface AlignContext {
+    readonly unitA: number;
+    readonly unitB: number;
+    readonly δA: number;
+    readonly δB: number;
+    readonly sway: number;
+    /** the match's weights */
+    readonly weights: PathCostWeights;
+}
+
+
 /**
- * The pair tree with each pair's `align` attached (the classic Gotoh
- * re-run on the CHOSEN routes - viz-equivalent).
+ * The pair tree with each pair's `align` attached: the matcher's own
+ * alignment of its routes (`alignOfRoutes`).
  *
- * @param weights the match's weights
+ * @param pair the pair
+ * @param ctx the match's context
  * @param pairWeights the weights the pair's own routes were aligned with
  * (a child pair's: `calcSubWeights`)
+ * @param rotB the rotation of B's directions into A's frame (a child
+ * pair's parent-frame difference, `0` for the trunk)
+ * @param isChild `true` for a child pair
  */
 function withAlign(
         pair: SegMatchedPair,
-        trunkLevel: boolean,
-        unit1: number,
-        unit2: number,
-        weights: PathCostWeights,
-        pairWeights: PathCostWeights): SegMatchedPair {
+        ctx: AlignContext,
+        pairWeights: PathCostWeights,
+        rotB: number,
+        isChild: boolean): SegMatchedPair {
 
     const { routeA, routeB, ops } = pair;
+    const { unitA, unitB, δA, δB, sway, weights } = ctx;
+
+    const align = alignOfRoutes(
+        routeA, routeB, unitA, unitB, δA, δB,
+        pairWeights, sway, rotB, isChild);
 
     return {
         ...pair,
@@ -66,13 +96,12 @@ function withAlign(
             ? {
                 ...op,
                 sub: withAlign(
-                    op.sub, false, unit1, unit2,
-                    weights, calcSubWeights(weights, op.a, op.b))
+                    op.sub, ctx, calcSubWeights(weights, op.a, op.b),
+                    op.a.routeDir - op.b.routeDir, true)
             }
             : op
         ),
-        align: alignOfRoutes(
-            routeA, routeB, unit1, unit2, pairWeights, trunkLevel)
+        ...(align !== undefined ? { align } : {})
     };
 }
 

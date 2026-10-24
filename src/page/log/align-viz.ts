@@ -1,6 +1,8 @@
 import type { PathAlignDebug } from '../../morph/match-paths/path-align-debug.js';
 import { drawFs } from 'flo-draw';
 import { resampleAt } from '../../morph/align-branches.js';
+import { calcSkelCumKnots } from '../../morph/fs/skeleton-knots.js';
+import { getLastP } from '../../morph/fs/get-last-p.js';
 import { getG } from '../../draw/get-g.js';
 
 const { hypot, min, max, floor } = Math;
@@ -45,9 +47,11 @@ function drawAlignSteps(
         al: PathAlignDebug,
         showDelay?: number): boolean {
 
-    // Per-sample skeleton segments (segment k spans samples k..k+1).
-    const segsA = resampleAt(al.skelPssA, al.radiiA, al.usA).beziers;
-    const segsB = resampleAt(al.skelPssB, al.radiiB, al.usB).beziers;
+    // Per-sample skeleton pieces (interval k spans samples k..k+1).
+    const { pieces: segsA, points: ptsA } =
+        calcSamplePieces(al.skelPssA, al.radiiA, al.usA);
+    const { pieces: segsB, points: ptsB } =
+        calcSamplePieces(al.skelPssB, al.radiiB, al.usB);
 
     const { steps } = al;
     const matches = steps.filter(s => s.state === 0);
@@ -73,19 +77,23 @@ function drawAlignSteps(
             const cls = `${width} ${color} nofill`;
 
             for (let i = s0.i; i < s1.i; i++) {
-                drawFs.bezier(g1, segsA[i], cls, showDelay);
+                for (const ps of segsA[i]) { drawFs.bezier(g1, ps, cls, showDelay); }
             }
             for (let j = s0.j; j < s1.j; j++) {
-                drawFs.bezier(g2, segsB[j], cls, showDelay);
+                for (const ps of segsB[j]) { drawFs.bezier(g2, ps, cls, showDelay); }
             }
         } else if (s1.state === 1) {
             // A advances alone: B waits at sample s1.j
-            for (let i = s0.i; i < s1.i; i++) { drawGap(g1, segsA[i], showDelay); }
-            drawWait(g2, sampleP(segsB, s1.j), rB, showDelay);
+            for (let i = s0.i; i < s1.i; i++) {
+                for (const ps of segsA[i]) { drawGap(g1, ps, showDelay); }
+            }
+            drawWait(g2, ptsB[s1.j], rB, showDelay);
         } else {
             // B advances alone: A waits at sample s1.i
-            for (let j = s0.j; j < s1.j; j++) { drawGap(g2, segsB[j], showDelay); }
-            drawWait(g1, sampleP(segsA, s1.i), rA, showDelay);
+            for (let j = s0.j; j < s1.j; j++) {
+                for (const ps of segsB[j]) { drawGap(g2, ps, showDelay); }
+            }
+            drawWait(g1, ptsA[s1.i], rA, showDelay);
         }
     }
 
@@ -98,12 +106,52 @@ function drawAlignSteps(
     drawTail(g2, segsB, last.j, segsB.length, showDelay);
 
     // where both routes start
-    drawFs.circle(g1, { center: sampleP(segsA, 0), radius: 2*rA },
+    drawFs.circle(g1, { center: ptsA[0], radius: 2*rA },
         START_RING_CLASSES, showDelay);
-    drawFs.circle(g2, { center: sampleP(segsB, 0), radius: 2*rB },
+    drawFs.circle(g2, { center: ptsB[0], radius: 2*rB },
         START_RING_CLASSES, showDelay);
 
     return true;
+}
+
+
+/**
+ * Returns the skeleton cut at the samples: per sample interval the pieces
+ * covering it (`pieces[k]` spans samples `k`..`k + 1`), and each sample's
+ * point.
+ *
+ * * an interval may span several of the skeleton's beziers (the matcher
+ *   samples by arc length, not at its beziers' ends), so the skeleton is
+ *   cut at the samples and the bezier ends together (`resampleAt` needs
+ *   each interval within one bezier) and an interval gets all the pieces
+ *   between its samples
+ *
+ * * an interval of no length (samples on a zero-length segment) has no
+ *   pieces
+ *
+ * @param bz the skeleton
+ * @param radii its radii per bezier end
+ * @param us the samples' positions (fractions of its length, ascending)
+ */
+function calcSamplePieces(
+        bz: number[][][],
+        radii: number[],
+        us: number[]): { pieces: number[][][][]; points: number[][] } {
+
+    const cuts = [...new Set([...us, ...calcSkelCumKnots(bz)])]
+        .toSorted((a, b) => a - b);
+    const cutPieces = resampleAt(bz, radii, cuts).beziers;
+
+    const at = new Map(cuts.map((u, m) => [u, m]));
+    const pointAt = (m: number): number[] => m < cutPieces.length
+        ? cutPieces[m][0]
+        : getLastP(cutPieces);
+
+    return {
+        pieces: us.slice(0, -1).map((u, k) =>
+            cutPieces.slice(at.get(u)!, at.get(us[k + 1])!)),
+        points: us.map(u => pointAt(at.get(u)!))
+    };
 }
 
 
@@ -129,18 +177,6 @@ function drawWait(
 }
 
 
-/** The skeleton point of sample `k` (segment `k`'s start, or the end). */
-function sampleP(
-        segs: number[][][],
-        k: number): number[] {
-
-    if (k < segs.length) { return segs[k][0]; }
-    const last = segs[segs.length - 1];
-
-    return last[last.length - 1];
-}
-
-
 /** A dot radius of about 0.6% of the svg's view box width. */
 function dotRadius(g: SVGGElement): number {
     const vb = g.ownerSVGElement?.viewBox.baseVal;
@@ -151,13 +187,15 @@ function dotRadius(g: SVGGElement): number {
 
 function drawTail(
         g: SVGGElement,
-        segs: number[][][],
+        segs: number[][][][],
         from: number,
         to: number,
         showDelay?: number): void {
 
     for (let i = from; i < to; i++) {
-        drawFs.bezier(g, segs[i], 'thin10 gray nofill', showDelay);
+        for (const ps of segs[i]) {
+            drawFs.bezier(g, ps, 'thin10 gray nofill', showDelay);
+        }
     }
 }
 

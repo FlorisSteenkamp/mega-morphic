@@ -53,7 +53,7 @@ const getGlyphNames_ = await getGlyphNames();
 
 /** cost-class color per weight group (mirrors PathCostWeights grouping) */
 const weightGroupColors = {
-    dtw: '#1976d2',       // profile alignment (shapeCost + tailCost)
+    dtw: '#1976d2',       // profile alignment (shapeCost)
     children: '#388e3c',  // pooled children (childCost)
     trunk: '#f57c00'      // trunk orientation (sway)
 } as const;
@@ -67,7 +67,6 @@ const weightRanges: Record<
     turning: { max: 1, step: 0.05, group: 'dtw' },
     gapOpen: { max: 1, step: 0.05, group: 'dtw' },
     gapExtend: { max: 0.3, step: 0.01, group: 'dtw' },
-    tail: { max: 2, step: 0.1, group: 'dtw' },
     del: { max: 10, step: 0.2, group: 'children' },
     delFloor: { max: 1, step: 0.02, group: 'children' },
     position: { max: 5, step: 0.1, group: 'children' },
@@ -333,7 +332,7 @@ function Page(props: Props) {
                     <Slider
                         value={satScale}
                         aria-labelledby="slider"
-                        min={1} max={10} step={0.05}
+                        min={1} max={10} step={0.1}
                         valueLabelDisplay="auto"
                         onChange={satScaleChanged}
                     />

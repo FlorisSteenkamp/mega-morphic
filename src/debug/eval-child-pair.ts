@@ -10,7 +10,8 @@ import { calcWarpPosCost, calcAngleCost, calcSizeFactor, calcDropCost } from '..
 import { alignOfRoutes } from './align-of-routes.js';
 import { anisoOf } from '../morph/segment-tree/match-seg-trees/aniso-of.js';
 import { getUnit$ } from '../morph/segment-tree/get-unit.js';
-import { lenOfRoute$ } from '../morph/segment-tree/len-of.js';
+import { lenOfRoute$, lenOfSegs$ } from '../morph/segment-tree/len-of.js';
+import { TARGET_SAMPLES } from '../morph/segment-tree/match-seg-trees/consts.js';
 import { routeWarpOf } from '../morph/segment-tree/match-seg-trees/route-warp-of.js';
 import { routeFeaturesOf } from '../morph/segment-tree/match-seg-trees/route-features-of.js';
 import { buildPair } from '../morph/segment-tree/match-seg-trees/build-pair.js';
@@ -128,7 +129,9 @@ function evalChildPair(
     // aligned as the matcher aligned them: a child pair's weights
     const align = alignOfRoutes(
         routeA, routeB, unitA, unitB,
-        calcSubWeights(weights, a.child, b.child), false);
+        lenOfSegs$(gA)/TARGET_SAMPLES, lenOfSegs$(gB)/TARGET_SAMPLES,
+        calcSubWeights(weights, a.child, b.child), weights.sway*aniso,
+        a.child.routeDir - b.child.routeDir, true);
 
     const verdict =
         (price.matchCost < dropCost
@@ -143,7 +146,8 @@ function evalChildPair(
                 'spacing to neighbouring matches can override)');
 
     return {
-        a, b, sameParent, price, align, verdict, root,
+        a, b, sameParent, price, verdict, root,
+        ...(align !== undefined ? { align } : {}),
         ...(actualSub !== undefined ? { actualSub } : {})
     };
 }

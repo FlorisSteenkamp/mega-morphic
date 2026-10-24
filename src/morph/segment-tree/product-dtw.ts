@@ -5,7 +5,7 @@ import { wrapAngle } from '../intrinsic-skeleton/wrap-angle.js';
 import { stepCostOf } from '../match-paths/step-cost-of.js';
 import { gapExtendOf } from '../match-paths/gap-extend-of.js';
 
-const { abs, min, max, PI: π } = Math;
+const { abs, min, max, floor, PI: π } = Math;
 
 /** cost tolerance for a tie: symmetric shapes tie up to rounding */
 const EPS = 1e-9;
@@ -112,9 +112,8 @@ interface Alt {
 /**
  * Gotoh affine-gap DTW over the PRODUCT of two sampled segment DAGs: one DP
  * covers every leaf-to-leaf path pair of both glyphs simultaneously (paths
- * sharing a prefix share DP states), using the same step-cost structure as
- * `alignProfiles` (radius + radius-weighted turning, integrated over
- * normalized arc).
+ * sharing a prefix share DP states), with the step cost of `stepCostOf`
+ * (radius + radius-weighted turning, integrated over normalized arc).
  *
  * Off-route material is priced like the matcher's drops:
  * each DIAGONALLY consumed sample earns back `del` × its local material
@@ -373,6 +372,25 @@ interface SingleTable {
     readonly cov: Float64Array;
     readonly sw: Float64Array;
     readonly tie: Float64Array;
+    /**
+     * the kept path's previous state, `state × 3 + table` (`0` M, `1` Ix,
+     * `2` Iy), `-1` at the start - for `traceSingleDtw`
+     */
+    readonly from: Int32Array;
+}
+
+
+/**
+ * **Diagnostics only** - one state of a `productDtwSingle` path: sample `a`
+ * of A and `b` of B, reached by a diagonal (`state` 0), by A advancing
+ * alone (`1`, a gap in B) or by B advancing alone (`2`); `cost` is the
+ * diagonal's step cost (`0` for a gap).
+ */
+interface DtwTraceStep {
+    readonly a: number;
+    readonly b: number;
+    readonly state: 0 | 1 | 2;
+    readonly cost: number;
 }
 
 
@@ -395,6 +413,40 @@ function productDtwSingle(
         B: SampledSegGraph,
         weights: PathCostWeights,
         sway: number): ProductDtwResult {
+
+    return runSingle(A, B, weights, sway).result;
+}
+
+
+/**
+ * **Diagnostics only** - Returns the path `productDtwSingle` keeps from
+ * the start pair to the end pair `endA`, `endB` (the route ends'
+ * vertices), start → end - `undefined` if none reaches it.
+ *
+ * * the very DP the matcher runs (same samples, objective and tie-breaks),
+ *   so the path is the one its costs were measured along
+ */
+function traceSingleDtw(
+        A: SampledSegGraph,
+        B: SampledSegGraph,
+        weights: PathCostWeights,
+        sway: number,
+        endA: Circle,
+        endB: Circle): DtwTraceStep[] | undefined {
+
+    return runSingle(A, B, weights, sway).traceTo(endA, endB);
+}
+
+
+/**
+ * The DP of `productDtwSingle`: its result, and the traceback of its kept
+ * paths (its tables live as long as `traceTo` does).
+ */
+function runSingle(
+        A: SampledSegGraph,
+        B: SampledSegGraph,
+        weights: PathCostWeights,
+        sway: number) {
 
     const { radius, turning, gapOpen, gapExtend, del } = weights;
 
@@ -423,22 +475,37 @@ function productDtwSingle(
     const M = createSingleTable(N);
     const Ix = createSingleTable(N);
     const Iy = createSingleTable(N);
+    const tables = [M, Ix, Iy];
 
-    // the paths meeting at a state, in `selectAlts`' order (at most 3)
+    // the paths meeting at a state, in `selectAlts`' order (at most 3),
+    // each with its back-pointer (see `SingleTable`'s `from`)
     const sv = new Float64Array(3);
     const sc = new Float64Array(3);
     const ss = new Float64Array(3);
     const st = new Float64Array(3);
+    const sf = new Int32Array(3);
     let sn = 0;
 
-    function push(v: number, cov: number, sw: number, tie: number): void {
-        sv[sn] = v; sc[sn] = cov; ss[sn] = sw; st[sn] = tie;
+    function push(
+            v: number,
+            cov: number,
+            sw: number,
+            tie: number,
+            f: number): void {
+
+        sv[sn] = v; sc[sn] = cov; ss[sn] = sw; st[sn] = tie; sf[sn] = f;
         sn++;
     }
 
-    /** pushes table `T`'s path at `i`, if any, its value raised by `dv` */
-    function pushFrom(T: SingleTable, i: number, dv: number): void {
-        if (T.has[i] === 1) { push(T.v[i] + dv, T.cov[i], T.sw[i], T.tie[i]); }
+    /**
+     * pushes table `t`'s path at `i`, if any, its value raised by `dv` -
+     * continuing from there (its back-pointer is that state)
+     */
+    function pushFrom(t: 0 | 1 | 2, i: number, dv: number): void {
+        const T = tables[t];
+        if (T.has[i] === 1) {
+            push(T.v[i] + dv, T.cov[i], T.sw[i], T.tie[i], i*3 + t);
+        }
     }
 
     /** `selectAlts` over the pushed paths: the kept one's index, or -1 */
@@ -465,18 +532,22 @@ function productDtwSingle(
             v: number,
             cov: number,
             sw: number,
-            tie: number): void {
+            tie: number,
+            f: number): void {
 
         if (v < T.best[i]) { T.best[i] = v; }
 
         sn = 0;
-        pushFrom(T, i, 0);
-        push(v, cov, sw, tie);
+        if (T.has[i] === 1) {
+            push(T.v[i], T.cov[i], T.sw[i], T.tie[i], T.from[i]);
+        }
+        push(v, cov, sw, tie, f);
         const k = pick(T.best[i]);
         if (k < 0) { T.has[i] = 0; return; }
 
         T.has[i] = 1;
         T.v[i] = sv[k]; T.cov[i] = sc[k]; T.sw[i] = ss[k]; T.tie[i] = st[k];
+        T.from[i] = sf[k];
     }
 
     const a0 = A.starts[0];
@@ -484,7 +555,7 @@ function productDtwSingle(
     {
         const cov = calcMaterialA(a0) + calcMaterialB(b0);
         const w = swayOf(a0, b0);
-        offer(M, a0*nB + b0, calcCost_(a0, b0) - del*cov, cov, w, w);
+        offer(M, a0*nB + b0, calcCost_(a0, b0) - del*cov, cov, w, w, -1);
     }
 
     const rankToA = A.topo;
@@ -506,43 +577,48 @@ function productDtwSingle(
 
             // the path leaving on a diagonal
             sn = 0;
-            pushFrom(M, i, 0); pushFrom(Ix, i, 0); pushFrom(Iy, i, 0);
+            pushFrom(0, i, 0); pushFrom(1, i, 0); pushFrom(2, i, 0);
             const kh = pick(min(M.best[i], Ix.best[i], Iy.best[i]));
             const hasH = kh >= 0;
             const hv = sv[kh], hc = sc[kh], hs = ss[kh], ht = st[kh];
+            const hf = sf[kh];
 
             // gap in A: opened from M, extended from Ix
             sn = 0;
-            pushFrom(M, i, gapOpen); pushFrom(Ix, i, 0);
+            pushFrom(0, i, gapOpen); pushFrom(1, i, 0);
             const ka = pick(min(M.best[i] + gapOpen, Ix.best[i]));
             const hasA = ka >= 0;
             const av = sv[ka], ac = sc[ka], as = ss[ka], at = st[ka];
+            const af = sf[ka];
 
             for (const aN of A.succ[a]) {
                 const ext = extA(aN);
                 const half = calcMaterialA(aN)/2;
-                if (hasA) { offer(Ix, aN*nB + b, av + ext, ac, as, at + half); }
+                if (hasA) {
+                    offer(Ix, aN*nB + b, av + ext, ac, as, at + half, af);
+                }
 
                 if (!hasH) { continue; }
                 for (const bN of B.succ[b]) {
                     const cov = calcMaterialA(aN) + calcMaterialB(bN);
                     const c = calcCost_(aN, bN) - del*cov;
                     const w = swayOf(aN, bN);
-                    offer(M, aN*nB + bN, hv + c, hc + cov, hs + w, ht + w);
+                    offer(M, aN*nB + bN, hv + c, hc + cov, hs + w, ht + w, hf);
                 }
             }
 
             // gap in B: opened from M, extended from Iy
             sn = 0;
-            pushFrom(M, i, gapOpen); pushFrom(Iy, i, 0);
+            pushFrom(0, i, gapOpen); pushFrom(2, i, 0);
             const kb = pick(min(M.best[i] + gapOpen, Iy.best[i]));
             if (kb < 0) { continue; }
             const bv = sv[kb], bc = sc[kb], bs = ss[kb], bt = st[kb];
+            const bf = sf[kb];
 
             for (const bN of B.succ[b]) {
                 const ext = extB(bN);
                 const half = calcMaterialB(bN)/2;
-                offer(Iy, a*nB + bN, bv + ext, bc, bs, bt + half);
+                offer(Iy, a*nB + bN, bv + ext, bc, bs, bt + half, bf);
             }
         }
     }
@@ -558,7 +634,7 @@ function productDtwSingle(
             if (best === Infinity) { continue; }
 
             sn = 0;
-            pushFrom(M, i, 0); pushFrom(Ix, i, 0); pushFrom(Iy, i, 0);
+            pushFrom(0, i, 0); pushFrom(1, i, 0); pushFrom(2, i, 0);
             const k = pick(best);
             if (k < 0) { continue; }
 
@@ -578,7 +654,38 @@ function productDtwSingle(
     }
     candidates.sort((x, y) => x.totalCost - y.totalCost);
 
-    return { ...candidates[0], states: N, candidates };
+    const result: ProductDtwResult = { ...candidates[0], states: N, candidates };
+
+    return { result, traceTo };
+
+
+    /** the kept path to the end pair (`traceSingleDtw`) */
+    function traceTo(
+            endA: Circle,
+            endB: Circle): DtwTraceStep[] | undefined {
+
+        const aE = A.ends.find(e => A.leafOf.get(e) === endA);
+        const bE = B.ends.find(e => B.leafOf.get(e) === endB);
+        if (aE === undefined || bE === undefined) { return undefined; }
+
+        const i = aE*nB + bE;
+        sn = 0;
+        pushFrom(0, i, 0); pushFrom(1, i, 0); pushFrom(2, i, 0);
+        const k = pick(min(M.best[i], Ix.best[i], Iy.best[i]));
+        if (k < 0) { return undefined; }
+
+        const steps: DtwTraceStep[] = [];
+        for (let f = sf[k]; f >= 0; ) {
+            const j = floor(f/3);
+            const t = (f - 3*j) as 0 | 1 | 2;
+            const a = floor(j/nB);
+            const b = j - a*nB;
+            steps.push({ a, b, state: t, cost: t === 0 ? calcCost_(a, b) : 0 });
+            f = tables[t].from[j];
+        }
+
+        return steps.reverse();
+    }
 }
 
 
@@ -592,7 +699,8 @@ function createSingleTable(
         v: new Float64Array(n),
         cov: new Float64Array(n),
         sw: new Float64Array(n),
-        tie: new Float64Array(n)
+        tie: new Float64Array(n),
+        from: new Int32Array(n)
     };
 }
 
@@ -665,5 +773,5 @@ function calcCost(
 }
 
 
-export { productDtw }
-export type { ProductDtwResult, ProductDtwResult_Candidate }
+export { productDtw, traceSingleDtw }
+export type { ProductDtwResult, ProductDtwResult_Candidate, DtwTraceStep }

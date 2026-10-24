@@ -30,6 +30,16 @@ interface SampledSegGraph {
     readonly step: number;
     /** total skeleton material ≈ Σ 2r̂ dŝ (≈ salience fraction of the tree) */
     readonly material: number;
+    /**
+     * **diagnostics only** - per sample: the index (in the sampled segment
+     * list) of the segment it lies on
+     */
+    readonly seg: Int32Array;
+    /**
+     * **diagnostics only** - per sample: its arc fraction along its segment,
+     * from `vertS` (whichever way its run travels)
+     */
+    readonly pos: Float64Array;
 }
 
 

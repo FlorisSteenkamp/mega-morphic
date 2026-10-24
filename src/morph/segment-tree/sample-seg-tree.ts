@@ -33,6 +33,8 @@ function sampleSegTree(
     const t: number[] = [];
     const φ: number[] = [];
     const succ: number[][] = [];
+    const segIdx: number[] = [];
+    const pos: number[] = [];
 
     /** per segment per direction: its sample ids in travel order */
     const runs: {
@@ -41,8 +43,8 @@ function sampleSegTree(
         head: Circle
     }[] = [];
 
-    for (const seg of g) {
-        const { skelPss, radii, vertS, vertE, skelLen } = geomOf$(seg);
+    for (let s = 0; s < g.length; s++) {
+        const { skelPss, radii, vertS, vertE, skelLen } = geomOf$(g[s]);
 
         const n = max(2, round(skelLen / δ) + 1);
 
@@ -60,6 +62,8 @@ function sampleSegTree(
                 t.push(ts[k]);  // sign irrelevant (costs use |t|)
                 φ.push(φi[k] + (rev ? π : 0));
                 succ.push([]);
+                segIdx.push(s);
+                pos.push(k/(n - 1));
             }
             for (let i = 0; i + 1 < n; i++) {
                 succ[ids[i]].push(ids[i + 1]);
@@ -123,7 +127,9 @@ function sampleSegTree(
         step,
         // one direction of each segment (runs alternate +,−)
         material: runs.reduce((s, run, i) => i % 2 === 1 ? s
-            : s + run.ids.reduce((m, id) => m + 2*r[id]*step, 0), 0)
+            : s + run.ids.reduce((m, id) => m + 2*r[id]*step, 0), 0),
+        seg: Int32Array.from(segIdx),
+        pos: Float64Array.from(pos)
     };
 }
 

@@ -1,13 +1,13 @@
 /**
  * Relative importance of each (dimensionless) cost term - all tunable.
  *
- * Grouped by the cost class they feed (see `productDtw` / `matchSegTrees` /
- * `alignProfiles`): profile alignment (DTW), pooled children, trunk
+ * Grouped by the cost class they feed (see `productDtw` /
+ * `matchSegTrees`): profile alignment (DTW), pooled children, trunk
  * orientation.
  */
 interface PathCostWeights {
     //------------------------------------------------------
-    // --- profile alignment (DTW): shapeCost + tailCost ---
+    // --- profile alignment (DTW): shapeCost ---
     //------------------------------------------------------
     /** radius-profile mismatch, scaled by matched length */
     readonly radius: number;
@@ -17,8 +17,6 @@ interface PathCostWeights {
     readonly gapOpen: number;
     /** interior alignment gap extend (profile samples) */
     readonly gapExtend: number;
-    /** unmatched leaf tail (per normalized length) */
-    readonly tail: number;
 
     //------------------------------------------------------
     // --- pooled children: childCost ---
@@ -62,7 +60,6 @@ const defaultPathWeights: PathCostWeights = {
     angle: 0.25,
     del: 3,
     delFloor: 0,
-    tail: 0.5,
     sway: 3,
     gapOpen: 0.15,
     gapExtend: 0.06
