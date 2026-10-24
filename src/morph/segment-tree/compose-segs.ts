@@ -51,4 +51,3 @@ function composeRouteGeom(route: readonly RouteStep[]): ComposedGeom {
 
 
 export { composeSeg, composeRouteGeom }
-export type { ComposedGeom }

@@ -31,11 +31,6 @@ interface PathCostWeights {
      * still uses the whole-outline position)
      */
     readonly position: number;
-    /**
-     * spacing mismatch between consecutive matched children (relative to
-     * the gap, floored by the stroke width - see `calcSpacingCost`)
-     */
-    readonly spacing: number;
     /** fork emanating-angle mismatch */
     readonly angle: number;
 
@@ -56,7 +51,6 @@ const defaultPathWeights: PathCostWeights = {
     radius: 1,
     turning: 0.15,
     position: 2,
-    spacing: 0.025,
     angle: 0.25,
     del: 3,
     delFloor: 0,

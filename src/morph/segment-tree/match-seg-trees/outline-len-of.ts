@@ -6,30 +6,6 @@ import { lenOfRoute$ } from '../len-of.js';
 const { PI: π } = Math;
 
 
-/** a route's idealized sleeve outline, as children's positions refer to it */
-interface OutlineFrame {
-    /** the outline's length (`outlineLenOf`) */
-    readonly len: number;
-    /** the end anchor's position as an outline fraction (`endAnchorOf`) */
-    readonly end: number;
-    /** the route's (skeleton) length */
-    readonly routeLen: number;
-}
-
-
-/**
- * Returns the route's idealized sleeve outline frame (its length and end
- * anchor).
- */
-function outlineFrameOf(
-        route: RouteStep[]): OutlineFrame {
-
-    const len = outlineLenOf(route);
-
-    return { len, end: endAnchorOf(route)/len, routeLen: lenOfRoute$(route) };
-}
-
-
 /**
  * Returns the length of the route's idealized sleeve outline: both flanks
  * (each as long as the route) plus a half circle around each end disk.
@@ -42,20 +18,6 @@ function outlineLenOf(
     const [vStart, vEnd] = routeEndsOf(route);
 
     return 2*lenOfRoute$(route) + π*(vStart.radius + vEnd.radius);
-}
-
-
-/**
- * Returns the outline position (as `outlinePos`) of the route's end anchor:
- * the middle of its end cap, where the outline turns from the out flank to
- * the back flank.
- */
-function endAnchorOf(
-        route: RouteStep[]): number {
-
-    const [, vEnd] = routeEndsOf(route);
-
-    return lenOfRoute$(route) + π*vEnd.radius/2;
 }
 
 
@@ -74,5 +36,4 @@ function routeEndsOf(
 }
 
 
-export { outlineLenOf, endAnchorOf, outlineFrameOf, routeEndsOf }
-export type { OutlineFrame }
+export { outlineLenOf, routeEndsOf }

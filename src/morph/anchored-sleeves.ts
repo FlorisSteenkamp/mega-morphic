@@ -362,7 +362,7 @@ function unit(v: number[]): number[] {
 }
 
 
-export type { SleeveSide, SleeveFrame }
+export type { SleeveSide }
 export {
     buildSleeveSides,
     boundaryTangents,

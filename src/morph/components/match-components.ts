@@ -169,4 +169,3 @@ function calcPairCost(
 
 
 export { matchComponents }
-export type { ComponentMatch }

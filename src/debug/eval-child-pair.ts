@@ -142,8 +142,8 @@ function evalChildPair(
         (!sameParent
             ? ' - HYPOTHETICAL: pooled on different parent pairs, ' +
                 'the DP never compares them'
-            : ' (in isolation, before spacing; sequence order and the ' +
-                'spacing to neighbouring matches can override)');
+            : ' (in isolation; the order of the other matches around ' +
+                'the outlines can override)');
 
     return {
         a, b, sameParent, price, verdict, root,
@@ -173,7 +173,7 @@ interface ChildPairPrice {
     readonly subChildCost: number;
     /** the best sub-pair's score = shape + children + sway (`scoreOf`) */
     readonly subCost: number;
-    /** position + angle + sub (the DP's relabel price, before spacing) */
+    /** position + angle + sub (the DP's relabel price) */
     readonly matchCost: number;
     readonly deleteCost: number;
     readonly insertCost: number;
