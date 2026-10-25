@@ -40,6 +40,10 @@ function routePairCostsOf(
         swayW: number,
         rotB: number): { shapeCost: number; swayCost: number } | undefined {
 
+    // no route: an end variant outside the routes' segments (variants are
+    // looked up in the whole tree - `endVariantsOf`)
+    if (rA.length === 0 || rB.length === 0) { return undefined; }
+
     const segsA = rA.map(st => st.seg);
     const segsB = rB.map(st => st.seg);
     const [startA, endA] = routeEndsOf(rA);

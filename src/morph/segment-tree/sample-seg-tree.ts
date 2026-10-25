@@ -5,6 +5,7 @@ import { sampleProfile } from '../fs/sample-profile.js';
 import { lenOfSegs$ } from './len-of.js';
 import { geomOf$ } from './geom-of.js';
 import { adjOf$ } from './adj-of.js';
+import { isPhantomFork } from './split-disks.js';
 
 const { max, round, PI: π } = Math;
 
@@ -92,12 +93,15 @@ function sampleSegTree(
     // leafness LOCAL to this segment set (sub-trees share vertices)
     const adj = adjOf$(g);
     const degree = (v: Circle): number => adj.get(v)?.length ?? 0;
-    const isLeaf = (v: Circle): boolean => degree(v) === 1;
-    const isFork = (v: Circle): boolean => degree(v) >= 3;
 
     // Routes may start/end at leaves OR STOP at a fork (the terminal
-    // stretch beyond it then competes as an ordinary child).
-    const isEnd = (v: Circle): boolean => isLeaf(v) || isFork(v);
+    // stretch beyond it then competes as an ordinary child) - a child route
+    // at a phantom fork too (`markPhantomForks`: the branch a coarse SAT cut
+    // there comes back as a child at the fine scale; not trunks, which it
+    // would only derail).
+    const isEnd = (v: Circle): boolean =>
+        degree(v) === 1 || degree(v) >= 3 ||
+        (rootV !== undefined && isPhantomFork(v));
 
     const starts: number[] = [];
     const ends: number[] = [];

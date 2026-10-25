@@ -8,6 +8,13 @@ import { getRealProngCount } from 'flo-mat';
  */
 const splitNodes = new WeakSet<CpNode>();
 
+/**
+ * The phantom forks (`markPhantomForks`) - by disk, so shared by a SAT and
+ * the coarser SATs taken of it (a phantom fork is a real fork of the finer
+ * one, an end there anyway).
+ */
+const phantomForks = new WeakSet<Circle>();
+
 
 /**
  * Marks the given disks of the MAT (walked from `cpStart`) as segment-tree
@@ -45,4 +52,24 @@ function isSegVertex(cp: CpNode): boolean {
 }
 
 
-export { markSplitDisks, isSegVertex }
+/**
+ * Marks the given disks as phantom forks: forks of a finer SAT that a
+ * coarser one passes through (it cut their branch away) - a route may end
+ * there (`isPhantomFork`, `sampleSegTree`).
+ *
+ * * the disks must be segment-tree vertices too (`markSplitDisks`)
+ *
+ * @param disks the phantom forks
+ */
+function markPhantomForks(disks: Set<Circle>): void {
+    for (const disk of disks) { phantomForks.add(disk); }
+}
+
+
+/** Returns `true` if the disk was marked as a phantom fork. */
+function isPhantomFork(disk: Circle): boolean {
+    return phantomForks.has(disk);
+}
+
+
+export { markSplitDisks, isSegVertex, markPhantomForks, isPhantomFork }
