@@ -15,7 +15,7 @@ import { logThreeProng } from '../log/log-three-prong.js';
 import { logTwoProng } from '../log/log-two-prong.js';
 import { logMatCurve } from '../log/log-mat-curve.js';
 import { logSalience } from '../log/log-salience.js';
-import { logFatBranch } from '../log/log-fat-branch.js';
+import { logOwnMaterial } from '../log/log-own-material.js';
 import { logPathMatchResult } from '../log/log-path-match-result.js';
 import { logProfileAlignment } from '../log/log-profile-alignment.js';
 import { logChildDtw } from '../log/log-child-dtw.js';
@@ -76,8 +76,8 @@ function onClick(
             curve             : logCurve(mats),
             matCurve          : logMatCurve(mats),
             salience          : logSalience(mats),
-            fatBranch         : logFatBranch(mats, false),
-            fatTree           : logFatBranch(mats, true),
+            fatBranch         : logOwnMaterial(shapeIdx, false),
+            fatTree           : logOwnMaterial(shapeIdx, true),
             pathMatchResult   : logPathMatchResult,
             profileAlign      : logProfileAlignment,
             childDtw          : logChildDtw(shapeIdx, pageState.pathWeights),

@@ -1,3 +1,4 @@
+import type { Circle } from 'flo-mat';
 import type { Segment } from '../segment.js';
 import type { SegMatchedPair } from './seg-matched-pair.js';
 
@@ -8,6 +9,9 @@ interface PairInTree {
     /** the matched children's entry segments (`undefined` for the trunk) */
     readonly segA?: Segment;
     readonly segB?: Segment;
+    /** the matched children's junctions (`undefined` for the trunk) */
+    readonly attachA?: Circle;
+    readonly attachB?: Circle;
     /** DFS-preorder index (= the match / morph views' color index) */
     readonly idx: number;
 }
@@ -20,11 +24,17 @@ interface PairInTree {
  */
 function pairsOf(trunk: SegMatchedPair): PairInTree[] {
     const out: PairInTree[] = [];
-    const walk = (mp: SegMatchedPair, segA?: Segment, segB?: Segment): void => {
-        out.push({ mp, segA, segB, idx: out.length });
+    const walk = (
+            mp: SegMatchedPair,
+            segA?: Segment,
+            segB?: Segment,
+            attachA?: Circle,
+            attachB?: Circle): void => {
+
+        out.push({ mp, segA, segB, attachA, attachB, idx: out.length });
         for (const op of mp.ops) {
             if (op.type === 'match') {
-                walk(op.sub, op.a.entry, op.b.entry);
+                walk(op.sub, op.a.entry, op.b.entry, op.a.attachV, op.b.attachV);
             }
         }
     };
