@@ -4,6 +4,7 @@ import type { Debug } from '../../debug/debug.js';
 import type { Segment } from '../../morph/segment-tree/segment.js';
 import type { SegChild } from '../../morph/segment-tree/match-seg-trees/seg-child.js';
 import type { PairInTree } from '../../morph/segment-tree/match-seg-trees/pairs-of.js';
+import type { SegMatchedPair } from '../../morph/segment-tree/match-seg-trees/seg-matched-pair.js';
 import { pairsOf } from '../../morph/segment-tree/match-seg-trees/pairs-of.js';
 import { geomOf$ } from '../../morph/segment-tree/geom-of.js';
 import { segmentLoop } from '../../morph/segment-tree/segment-area.js';
@@ -34,6 +35,11 @@ interface Owner {
     readonly disk: Circle | undefined;
     /** the matched pair, or the deleted / inserted child */
     readonly group: PairInTree | SegChild;
+    /**
+     * the pair the child hangs off: the segment's part inside the junction
+     * disk is its material (`undefined` for the trunk)
+     */
+    readonly parent: { readonly color: string; readonly group: PairInTree } | undefined;
 }
 
 
@@ -41,7 +47,8 @@ interface Owner {
  * Click tool showing the material the matcher counts for each branch of the
  * last match (the morph button's): a child's material outside its junction
  * disk (`ownAreaOf$`), filled in the match view's color - red / green for
- * deleted / inserted children.
+ * deleted / inserted children; its part inside the disk is its parent's,
+ * filled in the parent's color.
  *
  * * `fullTree`: every branch of both glyphs
  *
@@ -89,18 +96,40 @@ function logOwnMaterial(
             return;
         }
 
-        const segsA = [...ownersA].filter(([, o]) => o.group === owner.group).map(([s]) => s);
-        const segsB = [...ownersB].filter(([, o]) => o.group === owner.group).map(([s]) => s);
-        for (const s of segsA) { drawOwned(g1, s, ownersA.get(s), 'red', delay); }
-        for (const s of segsB) { drawOwned(g2, s, ownersB.get(s), 'green', delay); }
+        const { group, color } = owner;
+        drawBranch(g1, ownersA, group, color, delay);
+        drawBranch(g2, ownersB, group, color, delay);
 
         const totalA = sum(gA.map(s => geomOf$(s).material));
         const totalB = sum(gB.map(s => geomOf$(s).material));
         console.log(
-            `${owner.color} branch - own material ` +
-            `A ${calcFraction(segsA, ownersA, totalA)}, ` +
-            `B ${calcFraction(segsB, ownersB, totalB)} (of the glyph's area)`);
+            `${color} branch - own material ` +
+            `A ${calcFraction(ownersA, group, totalA)}, ` +
+            `B ${calcFraction(ownersB, group, totalB)} (of the glyph's area)`);
     };
+}
+
+
+/**
+ * Draws one branch's material: its segments' regions outside its junction
+ * disk, and its children's inside theirs.
+ */
+function drawBranch(
+        g: SVGGElement,
+        owners: Map<Segment, Owner>,
+        group: PairInTree | SegChild,
+        color: string,
+        delay: number): void {
+
+    for (const [seg, owner] of owners) {
+        if (owner.group === group) {
+            drawRegion(g, seg, color, owner.disk, 'outside', delay);
+            drawSkeleton(g, seg, color, delay);
+        }
+        if (owner.parent?.group === group && owner.disk !== undefined) {
+            drawRegion(g, seg, color, owner.disk, 'inside', delay);
+        }
+    }
 }
 
 
@@ -119,25 +148,49 @@ function calcOwners(
     const ownersA = new Map<Segment, Owner>();
     const ownersB = new Map<Segment, Owner>();
 
+    // each matched sub-pair's parent pair
+    const parentOf = new Map<SegMatchedPair, PairInTree>();
     for (const pair of pairs) {
-        const { mp, idx, attachA, attachB } = pair;
-        const color = matchColors[idx % matchColors.length];
-        for (const { seg } of mp.routeA) {
-            ownersA.set(seg, { color, disk: attachA, group: pair });
-        }
-        for (const { seg } of mp.routeB) {
-            ownersB.set(seg, { color, disk: attachB, group: pair });
+        for (const op of pair.mp.ops) {
+            if (op.type === 'match') { parentOf.set(op.sub, pair); }
         }
     }
 
-    for (const { mp } of pairs) {
-        for (const op of mp.ops) {
-            if (op.type === 'delete') { setUnowned(ownersA, op.a, 'red'); }
-            if (op.type === 'insert') { setUnowned(ownersB, op.b, 'green'); }
+    for (const pair of pairs) {
+        const { mp, attachA, attachB } = pair;
+        const color = colorOf(pair);
+        const parent = calcParent(parentOf.get(mp));
+        for (const { seg } of mp.routeA) {
+            ownersA.set(seg, { color, disk: attachA, group: pair, parent });
+        }
+        for (const { seg } of mp.routeB) {
+            ownersB.set(seg, { color, disk: attachB, group: pair, parent });
+        }
+    }
+
+    for (const pair of pairs) {
+        const parent = calcParent(pair);
+        for (const op of pair.mp.ops) {
+            if (op.type === 'delete') { setUnowned(ownersA, op.a, 'red', parent); }
+            if (op.type === 'insert') { setUnowned(ownersB, op.b, 'green', parent); }
         }
     }
 
     return [ownersA, ownersB];
+}
+
+
+/** Returns the pair's color in the match and morph views. */
+function colorOf(pair: PairInTree): string {
+    return matchColors[pair.idx % matchColors.length];
+}
+
+
+/** Returns the owner's parent for a child of the given pair. */
+function calcParent(
+        pair: PairInTree | undefined): Owner['parent'] {
+
+    return pair === undefined ? undefined : { color: colorOf(pair), group: pair };
 }
 
 
@@ -147,18 +200,20 @@ function calcOwners(
 function setUnowned(
         owners: Map<Segment, Owner>,
         child: SegChild,
-        color: string): void {
+        color: string,
+        parent: Owner['parent']): void {
 
     for (const seg of child.segs) {
         if (owners.has(seg)) { continue; }
-        owners.set(seg, { color, disk: child.attachV, group: child });
+        owners.set(seg, { color, disk: child.attachV, group: child, parent });
     }
 }
 
 
 /**
- * Draws a segment's region outside its owner's junction disk, filled in
- * the owner's color (`fallback` with no owner, unclipped).
+ * Draws a segment's material as the full tree shows it: its region outside
+ * its owner's junction disk in the owner's color and inside it in the
+ * parent's (`fallback` with no owner, unclipped).
  */
 function drawOwned(
         g: SVGGElement,
@@ -167,31 +222,70 @@ function drawOwned(
         fallback: string,
         delay: number): void {
 
-    const { vertS, vertE, sleeves, skelPss } = geomOf$(seg);
-    const loop = segmentLoop(vertS, vertE, sleeves);
-    const color = owner?.color ?? fallback;
+    if (owner === undefined) {
+        drawRegion(g, seg, fallback, undefined, 'outside', delay);
+        drawSkeleton(g, seg, fallback, delay);
+        return;
+    }
 
-    const [$region] = drawBeziersAsSinglePath(
-        g, loop, `thin5 ${color} fill25 ${CLASS}`, delay);
-    drawBeziersAsSinglePath(g, skelPss, `thin5 ${color} nofill ${CLASS}`, delay);
-
-    const disk = owner?.disk;
-    if ($region === undefined || disk === undefined) { return; }
-
-    $region.setAttributeNS(null, 'mask', `url(#${addDiskMask(g, disk, delay)})`);
+    const { color, disk, parent } = owner;
+    drawRegion(g, seg, color, disk, 'outside', delay);
+    drawSkeleton(g, seg, color, delay);
+    if (disk !== undefined && parent !== undefined) {
+        drawRegion(g, seg, parent.color, disk, 'inside', delay);
+    }
 }
 
 
 /**
- * Adds a mask hiding the disk to the group and returns its id.
+ * Draws the part of a segment's region outside or inside the disk (all of
+ * it with no disk), filled in the color.
+ */
+function drawRegion(
+        g: SVGGElement,
+        seg: Segment,
+        color: string,
+        disk: Circle | undefined,
+        part: 'outside' | 'inside',
+        delay: number): void {
+
+    const { vertS, vertE, sleeves, caps } = geomOf$(seg);
+    const loop = segmentLoop(vertS, vertE, sleeves, caps);
+
+    const [$region] = drawBeziersAsSinglePath(
+        g, loop, `thin5 ${color} fill25 ${CLASS}`, delay);
+    if ($region === undefined || disk === undefined) { return; }
+
+    const maskId = addDiskMask(g, disk, part, delay);
+    $region.setAttributeNS(null, 'mask', `url(#${maskId})`);
+}
+
+
+/** Draws a segment's skeleton in the color. */
+function drawSkeleton(
+        g: SVGGElement,
+        seg: Segment,
+        color: string,
+        delay: number): void {
+
+    drawBeziersAsSinglePath(
+        g, geomOf$(seg).skelPss, `thin5 ${color} nofill ${CLASS}`, delay);
+}
+
+
+/**
+ * Adds a mask showing only the part outside or inside the disk to the
+ * group and returns its id.
  */
 function addDiskMask(
         g: SVGGElement,
         disk: Circle,
+        part: 'outside' | 'inside',
         delay: number): string {
 
     const id = `${CLASS}-mask-${maskCount++}`;
     const { center: [cx, cy], radius } = disk;
+    const isOutside = part === 'outside';
 
     const $mask = document.createElementNS(XMLNS, 'mask');
     $mask.setAttributeNS(null, 'id', id);
@@ -201,11 +295,11 @@ function addDiskMask(
 
     const $rect = document.createElementNS(XMLNS, 'rect');
     setAttrs($rect, { x: -1e5, y: -1e5, width: 2e5, height: 2e5 });
-    $rect.setAttributeNS(null, 'fill', 'white');
+    $rect.setAttributeNS(null, 'fill', isOutside ? 'white' : 'black');
 
     const $disk = document.createElementNS(XMLNS, 'circle');
     setAttrs($disk, { cx, cy, r: radius });
-    $disk.setAttributeNS(null, 'fill', 'black');
+    $disk.setAttributeNS(null, 'fill', isOutside ? 'black' : 'white');
 
     $mask.append($rect, $disk);
     g.appendChild($mask);
@@ -244,18 +338,21 @@ function calcNearestSeg(
 
 
 /**
- * Returns the segments' material outside their owners' disks as a
- * percentage of the glyph's area.
+ * Returns a branch's material (as `drawBranch` shows it) as a percentage
+ * of the glyph's area.
  */
 function calcFraction(
-        segs: Segment[],
         owners: Map<Segment, Owner>,
+        group: PairInTree | SegChild,
         total: number): string {
 
-    const own = sum(segs.map(s => {
-        const disk = owners.get(s)?.disk;
-        return disk === undefined ? geomOf$(s).material : ownAreaOf$(s, disk);
-    }));
+    let own = 0;
+    for (const [seg, { group: g, disk, parent }] of owners) {
+        const { material } = geomOf$(seg);
+        const outside = disk === undefined ? material : ownAreaOf$(seg, disk);
+        if (g === group) { own += outside; }
+        if (parent?.group === group) { own += material - outside; }
+    }
 
     return `${(100*own/total).toFixed(2)}%`;
 }
