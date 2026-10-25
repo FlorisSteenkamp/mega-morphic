@@ -38,12 +38,22 @@ function capArcBeziers(
     const a0 = atan2(from[1] - p[1], from[0] - p[0]);
     const a1 = atan2(to[1] - p[1], to[0] - p[0]);
 
-    const ccw = ((a1 - a0) % (2*π) + 2*π) % (2*π);
-    const forward = sign > 0 ? ccw : ccw - 2*π;
-    const sweep = abs(forward) > 2*π - NEAR_FULL_TURN
-        ? forward - sign*2*π
-        : forward;
-    if (abs(sweep) < 1e-9) { return []; }
+    return arcBeziers(p, r, a0, calcCapSweep(a0, a1, sign));
+}
+
+
+/**
+ * The arc of the disk at `p` of radius `r` from angle `a0` sweeping by
+ * `sweep` (any size, full turns included) as true cubic bezier segments (≤
+ * quarter circle each).
+ */
+function arcBeziers(
+        p: number[],
+        r: number,
+        a0: number,
+        sweep: number): number[][][] {
+
+    if (r < MIN_LEN || abs(sweep) < 1e-9) { return []; }
 
     // ≥ 1 since |sweep| ≥ 1e-9
     const segs = ceil(abs(sweep) / (π/2));
@@ -66,4 +76,23 @@ function capArcBeziers(
 }
 
 
-export { capArcBeziers }
+/**
+ * Returns the sweep of the cap arc from angle `a0` to `a1` (`capArcBeziers`):
+ * in the winding direction given by `sign`, unless within
+ * `NEAR_FULL_TURN` of a full turn - then the short way back.
+ */
+function calcCapSweep(
+        a0: number,
+        a1: number,
+        sign: number): number {
+
+    const ccw = ((a1 - a0) % (2*π) + 2*π) % (2*π);
+    const forward = sign > 0 ? ccw : ccw - 2*π;
+
+    return abs(forward) > 2*π - NEAR_FULL_TURN
+        ? forward - sign*2*π
+        : forward;
+}
+
+
+export { capArcBeziers, arcBeziers, calcCapSweep }

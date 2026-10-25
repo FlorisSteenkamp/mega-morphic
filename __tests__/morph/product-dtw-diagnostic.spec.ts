@@ -90,6 +90,22 @@ function insideLoops(p: number[], polys: number[][][]): boolean {
     return inside;
 }
 
+/** Nonzero-winding containment in one loop - the morph view's fill rule
+ *  (a loop may wind round a disk twice: a fork gap's arc carrying a full
+ *  turn). */
+function insideNonzero(p: number[], poly: number[][]): boolean {
+    let w = 0;
+    for (let i = 0, j = poly.length - 1; i < poly.length; j = i++) {
+        const [xa, ya] = poly[j];
+        const [xb, yb] = poly[i];
+        const side = (xb - xa)*(p[1] - ya) - (p[0] - xa)*(yb - ya);
+        if (ya <= p[1]) {
+            if (yb > p[1] && side > 0) { w++; }
+        } else if (yb <= p[1] && side < 0) { w--; }
+    }
+    return w !== 0;
+}
+
 function distToPolys(p: number[], polys: number[][][]): number {
     let d = Infinity;
     for (const poly of polys) {
@@ -141,7 +157,7 @@ function containment(
             if (!insideLoops(p, glyphPolys) ||
                 distToPolys(p, glyphPolys) < 3) { continue; }
             tested++;
-            if (!outlinePolys.some(poly => insideLoops(p, [poly]))) {
+            if (!outlinePolys.some(poly => insideNonzero(p, poly))) {
                 holes++;
             }
         }

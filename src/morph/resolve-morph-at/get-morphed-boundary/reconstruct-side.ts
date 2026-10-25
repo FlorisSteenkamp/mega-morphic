@@ -2,9 +2,9 @@ import type { SleeveSide } from '../../anchored-sleeves.js';
 import { controlPointLinesLength, toCubic } from 'flo-bezier3';
 import { boundaryPoint } from '../../anchored-sleeves.js';
 import { wrapAngle } from '../../intrinsic-skeleton/wrap-angle.js';
-import { capArcBeziers } from './cap-arc-pts.js';
+import { arcBeziers, calcCapSweep } from './cap-arc-pts.js';
 
-const { cos, sin, hypot, atan2, min } = Math;
+const { cos, sin, hypot, atan2, min, abs, round, PI: π } = Math;
 
 
 const MIN_LEN = 1e-6;
@@ -29,6 +29,7 @@ function reconstructSide(
         t: number): { pieces: number[][][]; first: number[]; last: number[] } {
 
     const { piecesA, piecesB, anchorsA, anchorsB } = side;
+    const gapSweeps = calcGapSweeps(side, isOut, capSign);
 
     const len = piecesA.length;
     const pieces: number[][][] = [];
@@ -52,11 +53,13 @@ function reconstructSide(
             first = e0;
         } else {
             // Fork gap: bridge along the boundary disk at this knot.
-            const gap = hypot(e0[0] - last[0], e0[1] - last[1]);
-            if (gap > 1e-3) {
+            const { sweepA, dSweep } = gapSweeps[k];
+            const sweep = sweepA + t*dSweep;
+            const r = rs[bidxFrom];
+            if (abs(sweep)*r > 1e-3) {
                 const p = boundaryPoint(bz, bidxFrom);
-                pieces.push(...capArcBeziers(
-                    p, rs[bidxFrom], last, e0, capSign));
+                const a0 = atan2(last[1] - p[1], last[0] - p[0]);
+                pieces.push(...arcBeziers(p, r, a0, sweep));
             }
         }
         last = e1;
@@ -101,6 +104,55 @@ function reconstructSide(
     }
 
     return { pieces, first, last };
+}
+
+
+/**
+ * Returns the sweep of each fork gap's arc (at the start of piece `k`, in
+ * outline order) as `sweepA + t·dSweep`: following its two anchors
+ * continuously (`dSweep`: the difference of their short-way turns), so it
+ * never flips mid-morph.
+ *
+ * * where the anchors' turns don't take the gap from its sweep in A to its
+ *   sweep in B (`calcCapSweep`) - they differ by whole turns - the arc
+ *   carries the extra full turns at one end, in the winding direction: a
+ *   full turn that way round the gap's disk leaves the filled shape as it
+ *   is
+ *
+ * @param side the sleeve side
+ * @param isOut whether it is the out side (pieces in outline order) or the
+ * back side (pieces in reverse)
+ * @param capSign the outline winding
+ */
+function calcGapSweeps(
+        side: SleeveSide,
+        isOut: boolean,
+        capSign: number): { sweepA: number; dSweep: number }[] {
+
+    const { anchorsA, anchorsB } = side;
+    const len = anchorsA.length;
+
+    const gapSweeps = anchorsA.map(() => ({ sweepA: 0, dSweep: 0 }));
+    for (let m = 1; m < len; m++) {
+        const k = isOut ? m : len - 1 - m;
+        const kPrev = isOut ? k - 1 : k + 1;
+
+        const sweepA = calcCapSweep(anchorsA[kPrev][2], anchorsA[k][0], capSign);
+        const sweepB = calcCapSweep(anchorsB[kPrev][2], anchorsB[k][0], capSign);
+        const dSweep =
+            wrapAngle(anchorsB[k][0] - anchorsA[k][0]) -
+            wrapAngle(anchorsB[kPrev][2] - anchorsA[kPrev][2]);
+
+        // extra forward turns at B (> 0) or, as many, at A (< 0)
+        const turns = round((sweepA + dSweep - sweepB) / (capSign*2*π));
+
+        gapSweeps[k] = {
+            sweepA: sweepA + (turns < 0 ? -turns*capSign*2*π : 0),
+            dSweep
+        };
+    }
+
+    return gapSweeps;
 }
 
 
@@ -237,7 +289,7 @@ function polarHandle(
 
 /**
  * Returns the interpolated anchor
- * 
+ *
  * * polar coords lerped (θ the short way) and applied to the DRAWN disk's
  *   local frame at skeleton boundary `bidx`.
  */
