@@ -137,8 +137,9 @@ describe('trunk-beam correspondence (hyphen-2 flipped → hyphen)', () => {
     test('left-fork prongs match top↔top / bottom↔bottom', () => {
         probe(true);   // SAT (single segment - nothing to assert)
         const mat = probe(false);
-        // both prongs must MATCH - no delete+regrow at the trunk level
-        expect(mat.pairs).toBe(2);
+        // both prongs must MATCH - no delete+regrow at the trunk level (a
+        // fork → fork trunk matches the other end's prongs too)
+        expect(mat.pairs).toBeGreaterThanOrEqual(2);
         expect(mat.drops).toBe(0);
     }, 300_000);
 });

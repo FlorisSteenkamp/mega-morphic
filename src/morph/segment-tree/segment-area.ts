@@ -24,24 +24,37 @@ function segmentArea(
         vertE: Circle,
         sleeves: readonly { out: number[][][]; back: number[][][] }[]): number {
 
+    const loop = segmentLoop(vertS, vertE, sleeves);
+
+    return loop.length === 0 ? 0 : abs(getShapeArea(loop));
+}
+
+
+/**
+ * Returns the closed boundary loop of the region a segment owns (see
+ * `segmentArea`) - empty if a side has no sleeve.
+ */
+function segmentLoop(
+        vertS: Circle,
+        vertE: Circle,
+        sleeves: readonly { out: number[][][]; back: number[][][] }[]): number[][][] {
+
     // `out` runs S → E along one side, `back` runs E → S along the other
     const out = sleeves.flatMap(e => e.out);
     const back = sleeves.toReversed().flatMap(e => e.back);
-    if (out.length === 0 || back.length === 0) { return 0; }
+    if (out.length === 0 || back.length === 0) { return []; }
 
     const outEnd = getLastP(out);
     const backStart = back[0][0];
     const backEnd = getLastP(back);
     const outStart = out[0][0];
 
-    const loop = closeGaps([
+    return closeGaps([
         ...out,
         ...wedge(outEnd, vertE.center, backStart),
         ...back,
         ...wedge(backEnd, vertS.center, outStart)
     ]);
-
-    return abs(getShapeArea(loop));
 }
 
 
@@ -80,4 +93,4 @@ function wedge(p: number[], c: number[], q: number[]): number[][][] {
 }
 
 
-export { segmentArea }
+export { segmentArea, segmentLoop }

@@ -3,6 +3,7 @@ import type { Segment, RouteStep } from '../segment.js';
 import type { SegChild } from './seg-child.js';
 import { cross, dot } from 'flo-vector2d';
 import { geomOf$ } from '../geom-of.js';
+import { ownAreaOf$ } from '../own-area-of.js';
 import { sum } from '../../../utils/sum.js';
 import { chordDir } from './chord-dir.js';
 import { meanDir } from './mean-dir.js';
@@ -117,7 +118,7 @@ function childrenOf(
                 routeDir: atan2(rd[1], rd[0]),
                 entry,
                 segs,
-                material: sum(segs.map(s => geomOf$(s).material)) / (unit**2),
+                material: sum(segs.map(s => ownAreaOf$(s, v))) / (unit**2),
                 outlinePos,
                 ...(terminal !== undefined ? { terminal, sweep } : {})
             });
