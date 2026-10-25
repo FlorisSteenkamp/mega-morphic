@@ -56,8 +56,8 @@ function calcOwnArea(
         seg: Segment,
         disk: Circle): number {
 
-    const { vertS, vertE, sleeves } = geomOf$(seg);
-    const loop = segmentLoop(vertS, vertE, sleeves);
+    const { vertS, vertE, sleeves, caps } = geomOf$(seg);
+    const loop = segmentLoop(vertS, vertE, sleeves, caps);
     if (loop.length === 0) { return 0; }
 
     const ps = flatten(loop);

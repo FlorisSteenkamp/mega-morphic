@@ -1,7 +1,7 @@
 import type { Segment } from './segment.js';
 import type { SegGeom } from './seg-geom.js';
 import type { CpNode } from 'flo-mat';
-import { getMatCurveToNext, getBoundaryBeziersToNext } from 'flo-mat';
+import { getMatCurveToNext, getBoundaryBeziersToNext, getRealProngCount } from 'flo-mat';
 import { lineToQuadratic } from 'flo-bezier3';
 import { memoize } from 'flo-memoize';
 import { stepsOf$ } from './steps-of.js';
@@ -39,12 +39,48 @@ const geomOf$ = memoize(function(
 
     const vertS = seg.pointOnShape.circle;
     const vertE = steps[steps.length - 1].next.pointOnShape.circle;
-    const material = segmentArea(vertS, vertE, sleeves);
+
+    const arrival = steps[steps.length - 1].next;
+    const departure = steps[0].next.prevOnCircle.next;
+    const caps = {
+        start: capOf(departure, seg),
+        end: capOf(arrival, arrival.prevOnCircle)
+    };
+
+    const material = segmentArea(vertS, vertE, sleeves, caps);
 
     const skelLen = lenOf$(skelPss);
 
-    return { vertS, vertE, skelPss, radii, material, sleeves, skelLen };
+    return { vertS, vertE, skelPss, radii, material, sleeves, caps, skelLen };
 });
+
+
+/**
+ * Returns the boundary round a leaf disk's cap: the outline from contact
+ * point `from` on to `to`, both on the leaf's circle (the contact points of
+ * a leaf disk chain round its cap) - empty unless the disk is a leaf (1
+ * prong) of nonzero radius, e.g. where the SAT cut a branch.
+ *
+ * @param from the contact point where the cap starts
+ * @param to the contact point where it ends
+ */
+function capOf(
+        from: CpNode,
+        to: CpNode): number[][][] {
+
+    const circle = from.pointOnShape.circle;
+    if (getRealProngCount(from) !== 1 || circle.radius === 0) { return []; }
+
+    const pss: number[][][] = [];
+    for (let cp = from; cp !== to; cp = cp.next) {
+        // not round the cap after all
+        if (cp.pointOnShape.circle !== circle) { return []; }
+
+        pss.push(...getBoundaryBeziersToNext(cp));
+    }
+
+    return pss;
+}
 
 
 /**

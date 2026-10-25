@@ -25,6 +25,16 @@ interface SegGeom {
         out: number[][][];
         back: number[][][]
     }[];
+    /**
+     * the boundary round the cap of a leaf disk at either end (`capOf`), in
+     * outline direction: from the `back` sleeve's end to the `out` sleeve's
+     * start (`start`), from the `out` sleeve's end to the `back` sleeve's
+     * start (`end`) - empty at other vertices
+     */
+    readonly caps: {
+        readonly start: number[][][];
+        readonly end: number[][][];
+    };
 
     readonly skelLen: number;
 }

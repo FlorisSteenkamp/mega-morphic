@@ -7,24 +7,37 @@ const { abs } = Math;
 
 /**
  * The area of the region a segment owns: the strip between its two
- * sleeves, closed at each end by a wedge through the end vertex's centre.
+ * sleeves, closed at each end by a wedge through the end vertex's centre -
+ * or by its cap, at a leaf disk with one.
  *
  * * at a fork the wedge is the sector of the fork disk between the two
  *   sleeve endpoints (two of the disk's contact points), so the segments
  *   meeting there split the disk exactly - the regions tile the shape with
  *   no overlap and no gap
+ *
  * * at a leaf tip the sleeve endpoints coincide, the wedge is degenerate
  *   and the sleeves already enclose the tip
  *
+ * * at a leaf disk of nonzero radius (e.g. where the SAT cut a branch) the
+ *   cap's boundary closes the region (`capOf`): a wedge would leave the cap
+ *   out
+ *
  * Signed area via Green's theorem over the closed loop (`getShapeArea`),
  * made positive.
+ *
+ * @param vertS the start vertex
+ * @param vertE the end vertex
+ * @param sleeves the boundary pieces alongside each skeleton edge
+ * @param caps the boundary round a leaf disk's cap at either end (empty
+ * where there is none)
  */
 function segmentArea(
         vertS: Circle,
         vertE: Circle,
-        sleeves: readonly { out: number[][][]; back: number[][][] }[]): number {
+        sleeves: readonly { out: number[][][]; back: number[][][] }[],
+        caps: { start: number[][][]; end: number[][][] }): number {
 
-    const loop = segmentLoop(vertS, vertE, sleeves);
+    const loop = segmentLoop(vertS, vertE, sleeves, caps);
 
     return loop.length === 0 ? 0 : abs(getShapeArea(loop));
 }
@@ -37,7 +50,8 @@ function segmentArea(
 function segmentLoop(
         vertS: Circle,
         vertE: Circle,
-        sleeves: readonly { out: number[][][]; back: number[][][] }[]): number[][][] {
+        sleeves: readonly { out: number[][][]; back: number[][][] }[],
+        caps: { start: number[][][]; end: number[][][] }): number[][][] {
 
     // `out` runs S → E along one side, `back` runs E → S along the other
     const out = sleeves.flatMap(e => e.out);
@@ -51,9 +65,9 @@ function segmentLoop(
 
     return closeGaps([
         ...out,
-        ...wedge(outEnd, vertE.center, backStart),
+        ...(caps.end.length > 0 ? caps.end : wedge(outEnd, vertE.center, backStart)),
         ...back,
-        ...wedge(backEnd, vertS.center, outStart)
+        ...(caps.start.length > 0 ? caps.start : wedge(backEnd, vertS.center, outStart))
     ]);
 }
 
