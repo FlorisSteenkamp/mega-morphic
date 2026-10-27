@@ -8,7 +8,11 @@ import { calcAngleProgress } from '../intrinsic-skeleton/calc-angle-progress.js'
 import { unwrappedChordAngles } from '../intrinsic-skeleton/unwrapped-chord-angles.js';
 import { wrapAngle } from '../intrinsic-skeleton/wrap-angle.js';
 
-const { min, max, floor, hypot, round, PI: π } = Math;
+const { min, max, floor, hypot, round, atan2, PI: π } = Math;
+
+/** a parent stretch spreading less than this (× its reach, RMS) has no
+ *  reliable direction (`calcWindowRot`) - a straight one spreads ~0.58 */
+const MIN_EXTENT = 0.1;
 
 
 /**
@@ -91,18 +95,36 @@ const getMorphedSkeleton$ = memoize(function(
 
 
     const { e, k1, k2 } = glue;
+    const parent = entries[e];
+    const { skelPssA: parentA, skelPssB: parentB } = parent;
 
     // Junction slides along the parent from k1 to k2.
     const kf = (1 - t)*k1 + t*k2;
-    const target = pAtIndex(getMorphedSkeleton$(entries, t, e).pss, kf);
+    const parentPss = getMorphedSkeleton$(entries, t, e).pss;
+    const target = pAtIndex(parentPss, kf);
 
-    // parent frame rotation beyond its naive lerp
+    // parent frame rotation beyond its naive lerp - measured over the
+    // parent's stretch around the junction, as long as the child
+    // (`calcWindowRot`), not by the tangent at the junction alone: there a
+    // short bend (e.g. a fork's corner, present in one glyph and collapsed
+    // in the other) can turn the tangent far more than the parent turns,
+    // swinging the child round with it - each rotation fitted directly
+    // between the two skeletons it compares, on the 2π branch of the
+    // tangents' (falling back on them where a stretch has no extent)
+    const reach = calcReach(entries[i]);
+    const [hL, hR] = calcWindow(parentA, parentB, k1, k2, reach);
     const ψ = parentPsi(entries, t, e, kf);
     const ψA = staticPsiA(entries, e, k1);
     const ψB = staticPsiB(entries, e, k2);
+    const rotA = calcNearBranch(
+        calcWindowRot(parentA, k1, parentPss, kf, hL, hR, reach), ψ - ψA);
+    const rotB = calcNearBranch(
+        calcWindowRot(parentB, k2, parentPss, kf, hL, hR, reach), ψ - ψB);
+    const rotAB = calcNearBranch(
+        calcWindowRot(parentA, k1, parentB, k2, hL, hR, reach), ψB - ψA);
     // (weighted as the child's own angles progress, so its angle relative
     // to the parent progresses by `s` too)
-    let dψ = (1 - s)*(ψ - ψA) + s*(ψ - ψB);
+    let dψ = (1 - s)*rotA + s*rotB;
 
     // Take the shortest rotation RELATIVE to the parent, not in
     // absolute terms - so children follow their parent's rotation
@@ -119,7 +141,7 @@ const getMorphedSkeleton$ = memoize(function(
         (ψsBe[ψsBe.length - 1] - φ0B) -
         (ψsAe[ψsAe.length - 1] - φ0A);
 
-    const relΔ = junctionRot - (ψB - ψA);
+    const relΔ = junctionRot - rotAB;
 
     const { collapsed } = entries[i];
     dψ += collapsed === 'b' ? -s*relΔ
@@ -181,6 +203,156 @@ function staticPsiB(
     const adj = ψsA[0] + wrapAngle(ψsB[0] - ψsA[0]) - ψsB[0];
 
     return profileAngleAt(ψsB, k) + adj;
+}
+
+
+/**
+ * Returns how far along its parent a glued entry's frame reaches: its own
+ * length (the longer frame's), but at least its junction disk's radius - a
+ * bend within the junction disk is the junction's own shape.
+ */
+function calcReach(entry: MorphEntry): number {
+    const { skelPssA, skelPssB, ra, rb } = entry;
+
+    return max(
+        sumOfChords(skelPssA), sumOfChords(skelPssB),
+        ra[ra.length - 1], rb[rb.length - 1]
+    );
+}
+
+
+/**
+ * Returns the parent's stretch a glued child's frame is measured over, as
+ * boundary-index offsets left and right of the junction: as far as `reach`
+ * each way (by the two frames' mean segment length), within the parent.
+ *
+ * * index offsets, not lengths, so the stretch is the same material in
+ *   every frame (the frames correspond boundary for boundary)
+ *
+ * @param pssA the parent's frame-a skeleton
+ * @param pssB the parent's frame-b skeleton
+ * @param k1 the junction's boundary index in frame a
+ * @param k2 the junction's boundary index in frame b
+ * @param reach the length to cover each way
+ */
+function calcWindow(
+        pssA: number[][][],
+        pssB: number[][][],
+        k1: number,
+        k2: number,
+        reach: number): [number, number] {
+
+    const n = pssA.length;
+
+    function calcMeanLen(j: number): number {
+        const iA = floor(k1) + j;
+        const iB = floor(k2) + j;
+
+        return (
+            (iA >= 0 && iA < n ? chordLen(pssA[iA]) : 0) +
+            (iB >= 0 && iB < n ? chordLen(pssB[iB]) : 0)
+        ) / 2;
+    }
+
+    let hR = 0;
+    for (let d = 0; d < reach && floor(max(k1, k2)) + hR < n; hR++) {
+        d += calcMeanLen(hR);
+    }
+
+    let hL = 0;
+    for (let d = 0; d < reach && floor(min(k1, k2)) - hL > 0; hL++) {
+        d += calcMeanLen(-hL - 1);
+    }
+
+    return [hL, hR];
+}
+
+
+/**
+ * Returns the rotation best taking the stretch of skeleton `pss0` around
+ * boundary `k0` onto the stretch of `pss1` around `k1` (least squares,
+ * the stretches' centroids matched) - `undefined` if either stretch has
+ * (next to) no extent: its RMS distance from its centroid under
+ * `MIN_EXTENT` of `reach` (e.g. collapsed in one glyph), which leaves its
+ * direction to noise.
+ *
+ * @param pss0 the first skeleton
+ * @param k0 its junction's boundary index
+ * @param pss1 the second skeleton (corresponding boundary for boundary)
+ * @param k1 its junction's boundary index
+ * @param hL the stretch's boundary-index offset left of the junction
+ * @param hR the stretch's offset right of it
+ * @param reach the length the stretch was meant to cover each way
+ */
+function calcWindowRot(
+        pss0: number[][][],
+        k0: number,
+        pss1: number[][][],
+        k1: number,
+        hL: number,
+        hR: number,
+        reach: number): number | undefined {
+
+    const n = pss0.length;
+    const ps0: number[][] = [];
+    const ps1: number[][] = [];
+    for (let j = -hL; j <= hR; j++) {
+        ps0.push(pAtIndex(pss0, min(max(k0 + j, 0), n)));
+        ps1.push(pAtIndex(pss1, min(max(k1 + j, 0), n)));
+    }
+
+    const [x0, y0] = calcCentroid(ps0);
+    const [x1, y1] = calcCentroid(ps1);
+
+    let c = 0;
+    let s = 0;
+    let ss0 = 0;
+    let ss1 = 0;
+    for (let m = 0; m < ps0.length; m++) {
+        const ux = ps0[m][0] - x0;
+        const uy = ps0[m][1] - y0;
+        const vx = ps1[m][0] - x1;
+        const vy = ps1[m][1] - y1;
+        c += ux*vx + uy*vy;
+        s += ux*vy - uy*vx;
+        ss0 += ux*ux + uy*uy;
+        ss1 += vx*vx + vy*vy;
+    }
+
+    const minSs = ps0.length*(MIN_EXTENT*reach)**2;
+
+    return ss0 < minSs || ss1 < minSs ? undefined : atan2(s, c);
+}
+
+
+/**
+ * Returns the angle `θ` on the 2π branch nearest `ref` (`ref` itself if
+ * `θ` is `undefined`).
+ */
+function calcNearBranch(
+        θ: number | undefined,
+        ref: number): number {
+
+    return θ === undefined ? ref : ref + wrapAngle(θ - ref);
+}
+
+
+/** Returns the mean of the points. */
+function calcCentroid(ps: number[][]): number[] {
+    let x = 0;
+    let y = 0;
+    for (const [px, py] of ps) { x += px; y += py; }
+
+    return [x/ps.length, y/ps.length];
+}
+
+
+/** Returns the total chord length of the beziers. */
+function sumOfChords(pss: number[][][]): number {
+    let L = 0;
+    for (const ps of pss) { L += chordLen(ps); }
+
+    return L;
 }
 
 
