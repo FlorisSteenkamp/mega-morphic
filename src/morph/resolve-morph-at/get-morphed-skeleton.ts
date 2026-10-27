@@ -11,8 +11,14 @@ import { wrapAngle } from '../intrinsic-skeleton/wrap-angle.js';
 const { min, max, floor, hypot, round, atan2, PI: π } = Math;
 
 /** a parent stretch spreading less than this (× its reach, RMS) has no
- *  reliable direction (`calcWindowRot`) - a straight one spreads ~0.58 */
-const MIN_EXTENT = 0.1;
+ *  reliable direction (`calcWindowFit`) - a straight one spreads ~0.58 */
+const MIN_EXTENT = 0.05;
+/** ... and from this spread on, a fully reliable one */
+const MAX_EXTENT = 0.1;
+
+/** a glued child's frame reaches at most this many junction radii along
+ *  its parent (`calcReach`) */
+const REACH_RADII = 3;
 
 
 /**
@@ -104,24 +110,24 @@ const getMorphedSkeleton$ = memoize(function(
     const target = pAtIndex(parentPss, kf);
 
     // parent frame rotation beyond its naive lerp - measured over the
-    // parent's stretch around the junction, as long as the child
-    // (`calcWindowRot`), not by the tangent at the junction alone: there a
-    // short bend (e.g. a fork's corner, present in one glyph and collapsed
-    // in the other) can turn the tangent far more than the parent turns,
-    // swinging the child round with it - each rotation fitted directly
-    // between the two skeletons it compares, on the 2π branch of the
-    // tangents' (falling back on them where a stretch has no extent)
+    // parent's stretch around the junction (`calcReach`, `calcWindowFit`),
+    // not by the tangent at the junction alone: there a short bend (e.g. a
+    // fork's corner, present in one glyph and collapsed in the other) can
+    // turn the tangent far more than the parent turns, swinging the child
+    // round with it - each rotation fitted directly between the two
+    // skeletons it compares, on the 2π branch of the tangents' (and blended
+    // into them where a stretch has little extent)
     const reach = calcReach(entries[i]);
     const [hL, hR] = calcWindow(parentA, parentB, k1, k2, reach);
     const ψ = parentPsi(entries, t, e, kf);
     const ψA = staticPsiA(entries, e, k1);
     const ψB = staticPsiB(entries, e, k2);
-    const rotA = calcNearBranch(
-        calcWindowRot(parentA, k1, parentPss, kf, hL, hR, reach), ψ - ψA);
-    const rotB = calcNearBranch(
-        calcWindowRot(parentB, k2, parentPss, kf, hL, hR, reach), ψ - ψB);
-    const rotAB = calcNearBranch(
-        calcWindowRot(parentA, k1, parentB, k2, hL, hR, reach), ψB - ψA);
+    const rotA = calcBlendedRot(
+        calcWindowFit(parentA, k1, parentPss, kf, hL, hR, reach), ψ - ψA);
+    const rotB = calcBlendedRot(
+        calcWindowFit(parentB, k2, parentPss, kf, hL, hR, reach), ψ - ψB);
+    const rotAB = calcBlendedRot(
+        calcWindowFit(parentA, k1, parentB, k2, hL, hR, reach), ψB - ψA);
     // (weighted as the child's own angles progress, so its angle relative
     // to the parent progresses by `s` too)
     let dψ = (1 - s)*rotA + s*rotB;
@@ -207,17 +213,24 @@ function staticPsiB(
 
 
 /**
- * Returns how far along its parent a glued entry's frame reaches: its own
- * length (the longer frame's), but at least its junction disk's radius - a
- * bend within the junction disk is the junction's own shape.
+ * Returns how far along its parent (each way) a glued entry's frame
+ * reaches: its own length (the longer frame's), between its junction disk's
+ * radius and `REACH_RADII` of it.
+ *
+ * * at least the radius - a bend within the junction disk is the
+ *   junction's own shape
+ *
+ * * at most a few radii - the frame stays the junction's: a child as long
+ *   as its whole parent would otherwise take its frame from all of it,
+ *   however the parent deforms far from the junction
  */
 function calcReach(entry: MorphEntry): number {
     const { skelPssA, skelPssB, ra, rb } = entry;
 
-    return max(
-        sumOfChords(skelPssA), sumOfChords(skelPssB),
-        ra[ra.length - 1], rb[rb.length - 1]
-    );
+    const L = max(sumOfChords(skelPssA), sumOfChords(skelPssB));
+    const r = max(ra[ra.length - 1], rb[rb.length - 1]);
+
+    return max(r, min(L, REACH_RADII*r));
 }
 
 
@@ -271,10 +284,13 @@ function calcWindow(
 /**
  * Returns the rotation best taking the stretch of skeleton `pss0` around
  * boundary `k0` onto the stretch of `pss1` around `k1` (least squares,
- * the stretches' centroids matched) - `undefined` if either stretch has
- * (next to) no extent: its RMS distance from its centroid under
- * `MIN_EXTENT` of `reach` (e.g. collapsed in one glyph), which leaves its
- * direction to noise.
+ * the stretches' centroids matched), with how far to trust it (`w`).
+ *
+ * * `w` = 1 while both stretches spread (RMS distance from their centroid)
+ *   at least `MAX_EXTENT` of `reach`, falling continuously to 0 at
+ *   `MIN_EXTENT` - a stretch with (next to) no extent (e.g. collapsed in
+ *   one glyph) leaves its direction to noise; continuous, as a stretch
+ *   shrinks during the morph, so the rotation never jumps
  *
  * @param pss0 the first skeleton
  * @param k0 its junction's boundary index
@@ -284,14 +300,14 @@ function calcWindow(
  * @param hR the stretch's offset right of it
  * @param reach the length the stretch was meant to cover each way
  */
-function calcWindowRot(
+function calcWindowFit(
         pss0: number[][][],
         k0: number,
         pss1: number[][][],
         k1: number,
         hL: number,
         hR: number,
-        reach: number): number | undefined {
+        reach: number): { θ: number; w: number } {
 
     const n = pss0.length;
     const ps0: number[][] = [];
@@ -319,21 +335,26 @@ function calcWindowRot(
         ss1 += vx*vx + vy*vy;
     }
 
-    const minSs = ps0.length*(MIN_EXTENT*reach)**2;
+    // the smaller spread, as a fraction of the reach
+    const spread = Math.sqrt(min(ss0, ss1)/ps0.length)/reach;
+    const w = min(max(
+        (spread - MIN_EXTENT)/(MAX_EXTENT - MIN_EXTENT), 0), 1);
 
-    return ss0 < minSs || ss1 < minSs ? undefined : atan2(s, c);
+    return { θ: atan2(s, c), w };
 }
 
 
 /**
- * Returns the angle `θ` on the 2π branch nearest `ref` (`ref` itself if
- * `θ` is `undefined`).
+ * Returns the fitted rotation `θ` on the 2π branch nearest `ref` (the
+ * tangents' rotation), blended into `ref` by the fit's trust `w`.
  */
-function calcNearBranch(
-        θ: number | undefined,
+function calcBlendedRot(
+        fit: { θ: number; w: number },
         ref: number): number {
 
-    return θ === undefined ? ref : ref + wrapAngle(θ - ref);
+    const { θ, w } = fit;
+
+    return ref + w*wrapAngle(θ - ref);
 }
 
 
