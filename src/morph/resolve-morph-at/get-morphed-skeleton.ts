@@ -4,6 +4,7 @@ import { rotateAbout, translate } from 'flo-bezier3';
 import { getLastP } from '../fs/get-last-p.js';
 import { pAtIndex } from '../fs/p-at-idx.js';
 import { intrinsicSkeletonLerp } from '../intrinsic-skeleton/intrinsic-skeleton.js';
+import { calcAngleProgress } from '../intrinsic-skeleton/calc-angle-progress.js';
 import { unwrappedChordAngles } from '../intrinsic-skeleton/unwrapped-chord-angles.js';
 import { wrapAngle } from '../intrinsic-skeleton/wrap-angle.js';
 
@@ -12,33 +13,41 @@ const { min, max, floor, hypot, round, PI: π } = Math;
 
 /**
  * Returns the drawn beziers at `t` for the given morph entries.
- * 
+ *
  * Skeleton interpolated intrinsically between frames `a` and `b`, then, if
  * the entry is glued, translated so its endpoint rides its parent's drawn
  * skeleton AND rotated about that junction by the parent's local frame
  * rotation there (beyond the naive angle lerp) - so the child's angle
- * RELATIVE to its parent interpolates linearly. All angles are tracked
+ * RELATIVE to its parent interpolates evenly. All angles are tracked
  * UNWRAPPED and continuously in t (the returned `alpha` is the entry's
  * continuous anchor angle), so the rotation never jumps by 2π mid-morph.
  * Parents are resolved recursively on demand; results are memoized per
  * (entries, t, entry index).
+ *
+ * * the angles progress evenly unless a frame is shorter than it is thick
+ *   (`calcAngleProgress`): a branch shrinking to such a nub keeps its own
+ *   direction while it retracts, instead of being swung halfway onto the
+ *   nub's direction when half of it is left
  */
 const getMorphedSkeleton$ = memoize(function(
         entries: MorphEntry[],
         t: number,
         i: number) {
 
-    const { skelPssA, skelPssB, glue } = entries[i];
+    const { skelPssA, skelPssB, ra, rb, glue } = entries[i];
+
+    // the angles' progress
+    const s = calcAngleProgress(skelPssA, skelPssB, ra, rb, t);
 
     // Length + knot-angle interpolation (not a control-point lerp).
-    let pss = intrinsicSkeletonLerp(skelPssA, skelPssB, t);
+    let pss = intrinsicSkeletonLerp(skelPssA, skelPssB, t, s);
 
-    // Continuous anchor angle (matches intrinsicSkeletonLerp's φ0(t)).
+    // Continuous anchor angle (matches intrinsicSkeletonLerp's φ0(s)).
     const ψsAe = unwrappedChordAngles(skelPssA);
     const ψsBe = unwrappedChordAngles(skelPssB);
     const φ0A = ψsAe[0];
     const φ0B = ψsBe[0];
-    let α = φ0A + t*wrapAngle(φ0B - φ0A);
+    let α = φ0A + s*wrapAngle(φ0B - φ0A);
 
     if (glue === undefined) {
         // No-net-rotation gauge (free-floating = trunk; children ride it
@@ -47,8 +56,9 @@ const getMorphedSkeleton$ = memoize(function(
         // of integrated bend (unequal U-turn folds, M→N) all downstream
         // material orbits a full turn just to land where it started.
         // Counter-rotate the WHOLE-TURN part of the material's
-        // length-weighted mean orientation sweep, linearly in t, about the
-        // skeleton's own mean point - 2π-multiples are exact at t=0/1, the
+        // length-weighted mean orientation sweep, as the angles progress
+        // (`s`), about the skeleton's own mean point - 2π-multiples are
+        // exact at t=0/1, the
         // dominant material stays put and the folds unroll locally. The
         // fractional part is genuine rotation and is kept. Skipped at
         // EXACTLY t=0/1: ρ there is a whole turn = identity only up to
@@ -58,7 +68,7 @@ const getMorphedSkeleton$ = memoize(function(
             ? 0
             : netTurns(ψsAe, ψsBe, skelPssA, skelPssB);
         if (m !== 0) {
-            const ρ = -t*2*π*m;
+            const ρ = -s*2*π*m;
             const c = meanPoint(pss);
             pss = pss.map(ps => rotateAbout(ps, ρ, c));
             α += ρ;
@@ -90,12 +100,14 @@ const getMorphedSkeleton$ = memoize(function(
     const ψ = parentPsi(entries, t, e, kf);
     const ψA = staticPsiA(entries, e, k1);
     const ψB = staticPsiB(entries, e, k2);
-    let dψ = (1 - t)*(ψ - ψA) + t*(ψ - ψB);
+    // (weighted as the child's own angles progress, so its angle relative
+    // to the parent progresses by `s` too)
+    let dψ = (1 - s)*(ψ - ψA) + s*(ψ - ψB);
 
     // Take the shortest rotation RELATIVE to the parent, not in
     // absolute terms - so children follow their parent's rotation
     // instead of swinging the other way around (2π-multiple
-    // correction, scaled by t: t=0/1 geometry unaffected). A
+    // correction, scaled by s: t=0/1 geometry unaffected). A
     // collapsed frame has NO orientation (fill angles) - hold the
     // parent-relative angle constant at the REAL frame's value
     // instead (cancelling relΔ rotates only the collapsed point).
@@ -110,9 +122,9 @@ const getMorphedSkeleton$ = memoize(function(
     const relΔ = junctionRot - (ψB - ψA);
 
     const { collapsed } = entries[i];
-    dψ += collapsed === 'b' ? -t*relΔ
-        : collapsed === 'a' ? (1 - t)*relΔ
-        : t*(wrapAngle(relΔ) - relΔ);
+    dψ += collapsed === 'b' ? -s*relΔ
+        : collapsed === 'a' ? (1 - s)*relΔ
+        : s*(wrapAngle(relΔ) - relΔ);
 
     α += dψ;
 

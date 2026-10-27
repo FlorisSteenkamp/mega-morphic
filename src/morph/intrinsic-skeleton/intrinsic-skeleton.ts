@@ -13,11 +13,17 @@ const { cos, sin } = Math;
  * intermediate poses instead of collapsing through straight-line blends.
  * Each segment's curve shape is lerped in its chord frame on top.
  * Exact at t=0 and t=1.
+ *
+ * @param a the skeleton beziers in frame a
+ * @param b the corresponding skeleton beziers in frame b
+ * @param t the morph parameter (start point, chord lengths, curve shapes)
+ * @param s the angles' progress (`calcAngleProgress`)
  */
 function intrinsicSkeletonLerp(
         a: number[][][],
         b: number[][][],
-        t: number): number[][][] {
+        t: number,
+        s: number): number[][][] {
 
     const n = a.length;
     if (n === 0) { return []; }
@@ -27,11 +33,11 @@ function intrinsicSkeletonLerp(
 
     // Absolute chord angles: initial angle the short way round, turning
     // angles (already wrapped) lerped linearly.
-    const phis: number[] = [cA.phi[0] + t*wrapAngle(cB.phi[0] - cA.phi[0])];
+    const phis: number[] = [cA.phi[0] + s*wrapAngle(cB.phi[0] - cA.phi[0])];
     for (let k = 1; k < n; k++) {
         const dA = wrapAngle(cA.phi[k] - cA.phi[k - 1]);
         const dB = wrapAngle(cB.phi[k] - cB.phi[k - 1]);
-        phis.push(phis[k - 1] + (1 - t)*dA + t*dB);
+        phis.push(phis[k - 1] + (1 - s)*dA + s*dB);
     }
 
     let px = a[0][0][0]*(1 - t) + b[0][0][0]*t;
