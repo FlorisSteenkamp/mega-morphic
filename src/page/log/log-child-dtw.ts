@@ -14,7 +14,7 @@ import type { ChildLocation } from '../../debug/eval-child-pair.js';
 import { evalChildPair } from '../../debug/eval-child-pair.js';
 import { drawBeziersAsSinglePath } from '../../draw/draw-beziers-as-single-path.js';
 import { drawAlignSteps, distToPss, svgGroup } from './align-viz.js';
-import { matchColors } from '../events/match-colors.js';
+import { getMatchColor } from '../events/match-colors.js';
 import { lenOf$ } from '../../morph/segment-tree/len-of.js';
 import type { PairInTree } from '../../morph/segment-tree/match-seg-trees/pairs-of.js';
 import { pairsOf } from '../../morph/segment-tree/match-seg-trees/pairs-of.js';
@@ -91,7 +91,7 @@ function logChildDtw(
             ? hitPair.idx === 0
                 ? 'the TRUNK pair route'
                 : `matched pair #${hitPair.idx} (${
-                    matchColors[hitPair.idx % matchColors.length]})`
+                    getMatchColor(hitPair.idx)})`
             : 'an uncovered segment';
 
         if (selA === undefined || selB === undefined) {

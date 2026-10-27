@@ -3,7 +3,7 @@ import type { Debug } from '../../debug/debug.js';
 import type { PageData } from '../page-data.js';
 import { pairsOf } from '../../morph/segment-tree/match-seg-trees/pairs-of.js';
 import type { Segment } from '../../morph/segment-tree/segment.js';
-import { matchColors } from './match-colors.js';
+import { getMatchColor } from './match-colors.js';
 import { geomOf$ } from '../../morph/segment-tree/geom-of.js';
 import { coveredSegsOf } from '../../morph/build-morph-entries/build-morph-entries.js';
 import { drawBeziersAsSinglePath } from '../../draw/draw-beziers-as-single-path.js';
@@ -44,7 +44,7 @@ function drawMatch(
     // Same DFS preorder as buildMorphEntries - colors match the morph view.
     const pairs = pairsOf(pm.trunk);
     for (const { mp, idx } of pairs) {
-        const color = matchColors[idx % matchColors.length];
+        const color = getMatchColor(idx);
         for (const st of mp.routeA) { drawSegment(g1, st.seg, color); }
         for (const st of mp.routeB) { drawSegment(g2, st.seg, color); }
     }

@@ -12,7 +12,7 @@ import { ownAreaOf$, flatten, calcPolygonArea } from '../../morph/segment-tree/o
 import { sum } from '../../utils/sum.js';
 import { drawBeziersAsSinglePath } from '../../draw/draw-beziers-as-single-path.js';
 import { XMLNS } from '../../draw/xmlns.js';
-import { matchColors } from '../events/match-colors.js';
+import { getMatchColor } from '../events/match-colors.js';
 import { distToPss, svgGroup } from './align-viz.js';
 
 
@@ -256,7 +256,7 @@ function calcOwners(
 
 /** Returns the pair's color in the match and morph views. */
 function colorOf(pair: PairInTree): string {
-    return matchColors[pair.idx % matchColors.length];
+    return getMatchColor(pair.idx);
 }
 
 

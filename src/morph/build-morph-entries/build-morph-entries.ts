@@ -14,7 +14,7 @@ import { calcSkelCumKnots } from '../fs/skeleton-knots.js';
 import { getLastP } from '../fs/get-last-p.js';
 import { boundaries } from '../fs/boundaries.js';
 import { clamp } from '../../utils/clamp.js';
-import { matchColors } from '../../page/events/match-colors.js';
+import { getMatchColor } from '../../page/events/match-colors.js';
 import { nearestIdx } from '../nearest-idx.js';
 import { placeTopology } from '../place-topology.js';
 import { getUnit$ } from '../segment-tree/get-unit.js';
@@ -163,7 +163,7 @@ function buildMorphEntriesOfMatch(
             sleeveOut: sides.out,
             sleeveBack: sides.back,
             capSign,
-            classes: `${matchColors[idx % matchColors.length]} thin35 nofill`,
+            classes: `${getMatchColor(idx)} thin35 nofill`,
             ...(glueOf !== undefined
                 ? { glue: glueOf(mA.beziers, mB.beziers) }
                 : {}

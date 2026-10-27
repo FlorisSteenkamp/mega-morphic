@@ -10,4 +10,18 @@ const matchColors = [
 ];
 
 
-export { matchColors }
+/**
+ * Returns the color of the matched pair with the given DFS-preorder index
+ * (`pairsOf`) in the match and morph views.
+ *
+ * * the trunk (index `0`) alone gets the first color - the others cycle
+ *   through the rest, so no branch is ever mistaken for the trunk
+ */
+function getMatchColor(idx: number): string {
+    return idx === 0
+        ? matchColors[0]
+        : matchColors[1 + (idx - 1) % (matchColors.length - 1)];
+}
+
+
+export { getMatchColor }
