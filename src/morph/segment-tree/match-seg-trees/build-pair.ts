@@ -57,8 +57,9 @@ interface Leaders {
  * @param unitA tree A's length normalization
  * @param unitB tree B's length normalization
  * @param weights the path cost weights
- * @param swayW local-sway measurement factor (measured along every DTW
- * warp; part of every decision, never added to `cost`)
+ * @param swayW child pairs' local-sway measurement factor (`childSway` -
+ * measured along every sub-DTW warp; part of every decision, never added
+ * to `cost`)
  */
 function buildPair(
         cheapChildCost_: CalcCheapChildCost,

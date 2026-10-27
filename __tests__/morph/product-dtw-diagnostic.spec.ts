@@ -267,13 +267,13 @@ describe('product-graph DTW vs current matcher (score-only)', () => {
             expect(c1.holes).toBe(0);
         }
     }, 240_000);
-    test('every segment is drawn at t=0 even when drops are free ' +
-            '(delFloor 0)', () => {
+    test('every segment is drawn at t=0 even when small drops are ' +
+            'nearly free', () => {
         // regression: trunk crossing between interior forks left
         // remainders unplaced (children glued 90 units away)
         const gA = loadGraph('v');
         const gB = loadGraph('Q_V');
-        const entries = buildMorphEntries(gA, gB, loopOf(gA), loopOf(gB), { delFloor: 0 });
+        const entries = buildMorphEntries(gA, gB, loopOf(gA), loopOf(gB), {});
         const pts: number[][] = resolveMorphAt(entries, 0).drawn.flat(2);
 
         const missing: string[] = [];

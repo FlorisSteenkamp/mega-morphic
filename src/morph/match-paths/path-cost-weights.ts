@@ -23,8 +23,6 @@ interface PathCostWeights {
     //------------------------------------------------------
     /** unmatched subtree delete/insert (per salience fraction) */
     readonly del: number;
-    /** flat delete/insert floor (small branches aren't free to drop) */
-    readonly delFloor: number;
     /**
      * fork position mismatch through the routes' profile correspondence,
      * per feature interval moved (`calcWarpPosCost`; the cheap estimate
@@ -37,13 +35,29 @@ interface PathCostWeights {
     //------------------------------------------------------
     // --- orientation (trunk selection + child relabel) ---
     //------------------------------------------------------
-    /** LOCAL sway (× shape anisotropy): material-weighted mean local
+    /** trunk LOCAL sway (× shape anisotropy): material-weighted mean local
      *  orientation difference of corresponded samples, MEASURED along each
-     *  candidate's optimal intrinsic DTW warp (objective-neutral - see
-     *  `productDtw`). Added to trunk candidate ranking/selection and to the
-     *  child relabel price - pairings whose corresponded material would
-     *  visibly rotate lose to same-orientation ones / drops */
+     *  trunk candidate's optimal intrinsic DTW warp (objective-neutral - see
+     *  `productDtw`). Added to trunk candidate ranking/selection - pairings
+     *  whose corresponded material would visibly rotate lose to
+     *  same-orientation ones */
     readonly sway: number;
+    /**
+     * child LOCAL sway: as `sway`, measured along a child pair's sub-DTW
+     * warp in its parent's frame (the child's rotation relative to its
+     * parent) - added to the child relabel price, times the pair's size
+     * factor
+     *
+     * * separate from the trunk's: a limb turning against its parent reads
+     *   as a bend in the morph, far less jarring than the whole glyph
+     *   spinning (and the turning profile and fork angle already price part
+     *   of such a bend)
+     *
+     * * not scaled by the glyphs' anisotropy: that only says whether the
+     *   glyph as a whole has an orientation - a limb's turn against its
+     *   parent shows however round the glyph is
+     */
+    readonly childSway: number;
 }
 
 
@@ -53,8 +67,8 @@ const defaultPathWeights: PathCostWeights = {
     position: 2,
     angle: 0.25,
     del: 3,
-    delFloor: 0,
     sway: 3,
+    childSway: 1,
     gapOpen: 0.15,
     gapExtend: 0.06
 };

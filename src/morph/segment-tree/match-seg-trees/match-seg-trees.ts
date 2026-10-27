@@ -47,7 +47,7 @@ function matchSegTrees(
         loopB: number[][][],
         weights: PathCostWeights): SegMatchedPair {
 
-    const { sway } = weights;
+    const { sway, childSway } = weights;
 
     const unitA = getUnit$(loopA);
     const unitB = getUnit$(loopB);
@@ -55,8 +55,9 @@ function matchSegTrees(
 
     const cheapChildCost_ = cheapChildCost(unitA, unitB, weights);
 
-    // local-sway measurement factor (rides every DTW, measured along the
-    // warp, not priced in it)
+    // the trunk's local-sway measurement factor (rides the trunk DTW,
+    // measured along the warp, not priced in it) - child pairs get their
+    // own (`childSway`)
     const swayW = sway*aniso;
 
     const sA = sampleSegTree(gA, unitA, TARGET_SAMPLES, undefined);
@@ -66,7 +67,7 @@ function matchSegTrees(
 
     const { pairOf } = buildPair(
         cheapChildCost_,
-        gA, gB, unitA, unitB, weights, swayW
+        gA, gB, unitA, unitB, weights, childSway
     );
 
     // Trunk candidates re-ranked by RECURSIVE cost too: orientation ties

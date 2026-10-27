@@ -242,7 +242,7 @@ function calcDropCost(
         w: PathCostWeights) {
 
     return function(c: SegChild): number {
-        return w.delFloor + w.del*c.material;
+        return w.del*c.material;
     }
 }
 

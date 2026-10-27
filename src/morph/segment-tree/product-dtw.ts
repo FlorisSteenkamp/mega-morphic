@@ -123,7 +123,8 @@ interface Alt {
  * the gap price comes on top). Score-only: no tails, no pooled-children
  * terms.
  *
- * @param sway LOCAL sway weight (weights.sway × glyph-pair anisotropy).
+ * @param sway LOCAL sway weight (the trunk's: weights.sway × glyph-pair
+ * anisotropy; a child pair's: weights.childSway).
  * MEASURED along the optimal intrinsic warp and reported as `swayCost` =
  * sway × material-weighted MEAN (over corresponded samples) of
  * |wrap(φA−φB)|/π (φ = absolute travel direction): how much corresponded

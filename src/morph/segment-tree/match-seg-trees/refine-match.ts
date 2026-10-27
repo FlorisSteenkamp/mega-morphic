@@ -9,7 +9,6 @@ import { routeEndsOf } from './outline-len-of.js';
 import { routeSegments } from '../route-segments.js';
 import { geomOf$ } from '../geom-of.js';
 import { getUnit$ } from '../get-unit.js';
-import { anisoOf } from './aniso-of.js';
 
 
 /**
@@ -46,11 +45,10 @@ function refineMatch(
 
     const unitA = getUnit$(loopA);
     const unitB = getUnit$(loopB);
-    const swayW = weights.sway*anisoOf(loopA, loopB);
 
     const { pairOfFixed } = buildPair(
         cheapChildCost(unitA, unitB, weights),
-        gA, gB, unitA, unitB, weights, swayW
+        gA, gB, unitA, unitB, weights, weights.childSway
     );
 
     const pair = refinePair(coarse, gA, gB);

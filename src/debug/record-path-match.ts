@@ -36,10 +36,11 @@ function recordPathMatch(
     const ctx: AlignContext = {
         unitA: getUnit$(loopA),
         unitB: getUnit$(loopB),
-        // the matcher's trunk-level sample spacing and sway factor
+        // the matcher's trunk-level sample spacing and sway factors
         δA: lenOfSegs$(gA)/TARGET_SAMPLES,
         δB: lenOfSegs$(gB)/TARGET_SAMPLES,
         sway: weights.sway*anisoOf(loopA, loopB),
+        childSway: weights.childSway,
         weights
     };
 
@@ -62,7 +63,10 @@ interface AlignContext {
     readonly unitB: number;
     readonly δA: number;
     readonly δB: number;
+    /** the trunk's sway factor */
     readonly sway: number;
+    /** child pairs' sway factor */
+    readonly childSway: number;
     /** the match's weights */
     readonly weights: PathCostWeights;
 }
@@ -88,11 +92,11 @@ function withAlign(
         isChild: boolean): SegMatchedPair {
 
     const { routeA, routeB, ops } = pair;
-    const { unitA, unitB, δA, δB, sway, weights } = ctx;
+    const { unitA, unitB, δA, δB, sway, childSway, weights } = ctx;
 
     const align = alignOfRoutes(
         routeA, routeB, unitA, unitB, δA, δB,
-        pairWeights, sway, rotB, isChild);
+        pairWeights, isChild ? childSway : sway, rotB, isChild);
 
     return {
         ...pair,

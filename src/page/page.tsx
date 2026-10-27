@@ -70,9 +70,9 @@ const weightRanges: Record<
     gapOpen: { max: 1, step: 0.05, group: 'dtw' },
     gapExtend: { max: 0.3, step: 0.01, group: 'dtw' },
     del: { max: 10, step: 0.2, group: 'children' },
-    delFloor: { max: 1, step: 0.02, group: 'children' },
     position: { max: 5, step: 0.1, group: 'children' },
     angle: { max: 2, step: 0.125, group: 'children' },
+    childSway: { max: 10, step: 0.25, group: 'children' },
     sway: { max: 20, step: 0.5, group: 'trunk' }
 };
 // console.log(getGlyphNames_);

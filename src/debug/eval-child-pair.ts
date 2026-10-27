@@ -8,7 +8,6 @@ import type { RouteWarp } from '../morph/segment-tree/match-seg-trees/route-warp
 import type { RouteFeatures } from '../morph/segment-tree/match-seg-trees/route-features-of.js';
 import { calcWarpPosCost, calcAngleCost, calcSizeFactor, calcDropCost } from '../morph/segment-tree/match-seg-trees/child-costs.js';
 import { alignOfRoutes } from './align-of-routes.js';
-import { anisoOf } from '../morph/segment-tree/match-seg-trees/aniso-of.js';
 import { getUnit$ } from '../morph/segment-tree/get-unit.js';
 import { lenOfRoute$, lenOfSegs$ } from '../morph/segment-tree/len-of.js';
 import { TARGET_SAMPLES } from '../morph/segment-tree/match-seg-trees/consts.js';
@@ -85,7 +84,7 @@ function evalChildPair(
 
     const unitA = getUnit$(loopA);
     const unitB = getUnit$(loopB);
-    const aniso = anisoOf(loopA, loopB);
+    const { childSway } = weights;
 
     const a = locate(root, segA, 'a');
     const b = locate(root, segB, 'b');
@@ -110,7 +109,7 @@ function evalChildPair(
         routeWarpOf(pairA.routeA, pairB.routeB, unitA, unitB),
         routeFeaturesOf(childrenA, lenOfRoute$(pairA.routeA)),
         routeFeaturesOf(childrenB, lenOfRoute$(pairB.routeB)),
-        weights, weights.sway*aniso,
+        weights, childSway,
         a.child, b.child
     );
     const dropCost = price.deleteCost + price.insertCost;
@@ -130,7 +129,7 @@ function evalChildPair(
     const align = alignOfRoutes(
         routeA, routeB, unitA, unitB,
         lenOfSegs$(gA)/TARGET_SAMPLES, lenOfSegs$(gB)/TARGET_SAMPLES,
-        calcSubWeights(weights, a.child, b.child), weights.sway*aniso,
+        calcSubWeights(weights, a.child, b.child), childSway,
         a.child.routeDir - b.child.routeDir, true);
 
     const verdict =
