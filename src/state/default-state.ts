@@ -52,7 +52,12 @@ const defaultPageState: PageState = {
     viewbox3: [[0,0],[1450,1450]],
     glyph1Name: 'Mt3',
     glyph2Name: 'Mu3',
-    glyphPresets: [['M', 'N'], ['k', 'x']],
+    glyphPresets: [
+        ['M', 'N'], ['T', 'A'], ['k', 'x'], ['E', 'F'],
+        ['six', 'seven'], ['C', 'B'], ['A', 'H'], ['seven', 'three'],
+        ['v', 'Q_V'], ['parenleft', 'parenright'], ['an_one', 'aq_J'],
+        ['five', 'six']
+    ],
     viewMat: true,
     staggeredSat: false,
     simplify: false,
