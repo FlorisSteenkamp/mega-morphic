@@ -3,6 +3,8 @@ import type { SegChild } from './seg-child.js';
 import type { RouteWarp } from './route-warp-of.js';
 import type { RouteFeatures } from './route-features-of.js';
 import { wrapAngle } from '../../intrinsic-skeleton/wrap-angle.js';
+import { geomOf$ } from '../geom-of.js';
+import { POINT_PROTRUSION } from './consts.js';
 
 const { abs, round, min, max, PI: π } = Math;
 
@@ -247,7 +249,62 @@ function calcDropCost(
 }
 
 
+/**
+ * Returns `true` if exactly one of the two children is a point (`isPoint`),
+ * so the two may not be matched.
+ *
+ * * matching a branch to a point is a retraction into it (or a growth from
+ *   it) labelled a match - a drop says what happens
+ *
+ * * two points may still match each other (e.g. the tips at a rounded
+ *   stroke end, the same in both glyphs)
+ *
+ * @param a the child of A
+ * @param b the child of B
+ * @param unitA tree A's length normalization
+ * @param unitB tree B's length normalization
+ */
+function isPointMismatch(
+        a: SegChild,
+        b: SegChild,
+        unitA: number,
+        unitB: number): boolean {
+
+    return isPoint(a, unitA) !== isPoint(b, unitB);
+}
+
+
+/**
+ * Returns `true` if the child is a point: its subtree pokes out of its
+ * junction disk by less than `POINT_PROTRUSION` of its glyph's unit - it
+ * adds (next to) nothing to the shape, however its skeleton runs inside the
+ * disk.
+ *
+ * * the protrusion: how far the subtree's maximal disks reach beyond the
+ *   junction disk (centre distance + radius - the junction's radius)
+ *
+ * @param c the child
+ * @param unit its tree's length normalization
+ */
+function isPoint(
+        c: SegChild,
+        unit: number): boolean {
+
+    const { attachV: { center: [jx, jy], radius: rJ }, segs } = c;
+
+    let reach = 0;
+    for (const s of segs) {
+        const { vertS, vertE } = geomOf$(s);
+        for (const { center: [x, y], radius } of [vertS, vertE]) {
+            reach = max(reach, Math.hypot(x - jx, y - jy) + radius);
+        }
+    }
+
+    return reach - rJ < POINT_PROTRUSION*unit;
+}
+
+
 export {
     calcChildPosCost, calcWarpPosCost, calcAngleCost, calcSizeFactor,
-    calcDropCost
+    calcDropCost, isPointMismatch
 }

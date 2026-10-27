@@ -17,8 +17,14 @@ const TRUNK_RECURSE_CANDS = 16;
 const TRUNK_CHEAP_CANDS = 64;
 const SUB_CHEAP_CANDS = 16;
 
+/** a child poking out of its junction disk by less than this (× its
+ *  glyph's unit, √area - about 1/500 of a glyph's height) is a point
+ *  (`isPoint`): in the test presets points poke out ≤ 0.003, real
+ *  branches ≥ 0.045 */
+const POINT_PROTRUSION = 0.006;
+
 
 export {
     TARGET_SAMPLES, MAX_RECURSE_CANDS, CAND_MARGIN, TRUNK_RECURSE_CANDS,
-    TRUNK_CHEAP_CANDS, SUB_CHEAP_CANDS
+    TRUNK_CHEAP_CANDS, SUB_CHEAP_CANDS, POINT_PROTRUSION
 }

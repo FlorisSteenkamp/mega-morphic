@@ -21,7 +21,8 @@ import { lenOfSegs$, lenOfRoute$ } from '../len-of.js';
 import { childrenOf } from './children-of.js';
 import { subDtwOf } from './sub-dtw-of.js';
 import {
-    calcWarpPosCost, calcAngleCost, calcSizeFactor, calcDropCost
+    calcWarpPosCost, calcAngleCost, calcSizeFactor, calcDropCost,
+    isPointMismatch
 } from './child-costs.js';
 import { pickBest } from './pick-best.js';
 import { scoreOf } from './score-of.js';
@@ -296,6 +297,9 @@ function buildPair(
         function matchCost(
                 a: SegChild,
                 b: SegChild): number {
+
+            // a point matches only a point
+            if (isPointMismatch(a, b, unitA, unitB)) { return Infinity; }
 
             const placeCost = calcPlaceCost(a, b);
             // scores are never negative, so the match can't beat delete +
