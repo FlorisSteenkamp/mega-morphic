@@ -1,5 +1,5 @@
 import type { SleeveSide } from '../../anchored-sleeves.js';
-import { controlPointLinesLength, toCubic } from 'flo-bezier3';
+import { toCubic } from 'flo-bezier3';
 import { boundaryPoint } from '../../anchored-sleeves.js';
 import { wrapAngle } from '../../intrinsic-skeleton/wrap-angle.js';
 import { arcBeziers, calcCapSweep } from './cap-arc-pts.js';
@@ -29,7 +29,7 @@ function reconstructSide(
         t: number): { pieces: number[][][]; first: number[]; last: number[] } {
 
     const { piecesA, piecesB, anchorsA, anchorsB } = side;
-    const gapSweeps = calcGapSweeps(side, isOut, capSign);
+    const gapSweeps = calcGapSweeps$(side, isOut, capSign);
 
     const len = piecesA.length;
     const pieces: number[][][] = [];
@@ -80,7 +80,7 @@ function reconstructSide(
             ]);
             // eps-length pieces carry no geometry, only noise directions -
             // dropping them lets the assembly weld the real neighbors
-            if (controlPointLinesLength(ps) >= 1e-3) { mapped.push(ps); }
+            if (!isTinyPiece(ps)) { mapped.push(ps); }
         }
 
         // Segment-joint tangents interpolated as DATA (τ lerped short-way in
@@ -108,10 +108,37 @@ function reconstructSide(
 
 
 /**
+ * Returns `true` if the piece's control polygon is shorter than `1e-3` -
+ * an eps-length piece (stops measuring as soon as it isn't).
+ *
+ * * flo-bezier3's `controlPointLinesLength`, without its allocations -
+ *   summed the same way, so the same pieces are dropped
+ */
+function isTinyPiece(ps: number[][]): boolean {
+    let L = 0;
+    for (let i = 1; i < ps.length; i++) {
+        const x = ps[i][0] - ps[i - 1][0];
+        const y = ps[i][1] - ps[i - 1][1];
+        L += Math.sqrt(x*x + y*y);
+        if (L >= 1e-3) { return false; }
+    }
+
+    return true;
+}
+
+
+/** the sides' gap sweeps (`calcGapSweeps$`) - they only depend on the side */
+const gapSweepsMemo = new WeakMap<SleeveSide, { sweepA: number; dSweep: number }[]>();
+
+
+/**
  * Returns the sweep of each fork gap's arc (at the start of piece `k`, in
  * outline order) as `sweepA + t·dSweep`: following its two anchors
  * continuously (`dSweep`: the difference of their short-way turns), so it
  * never flips mid-morph.
+ *
+ * * memoized per side - a side is always reconstructed with the same
+ *   `isOut` and `capSign` (its entry's)
  *
  * * where the anchors' turns don't take the gap from its sweep in A to its
  *   sweep in B (`calcCapSweep`) - they differ by whole turns - the arc
@@ -124,6 +151,22 @@ function reconstructSide(
  * back side (pieces in reverse)
  * @param capSign the outline winding
  */
+function calcGapSweeps$(
+        side: SleeveSide,
+        isOut: boolean,
+        capSign: number): { sweepA: number; dSweep: number }[] {
+
+    let sweeps = gapSweepsMemo.get(side);
+    if (sweeps === undefined) {
+        sweeps = calcGapSweeps(side, isOut, capSign);
+        gapSweepsMemo.set(side, sweeps);
+    }
+
+    return sweeps;
+}
+
+
+/** Returns the gap sweeps of the side (see `calcGapSweeps$`). */
 function calcGapSweeps(
         side: SleeveSide,
         isOut: boolean,

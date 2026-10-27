@@ -1,4 +1,4 @@
-import { unwrappedChordAngles } from '../intrinsic-skeleton/unwrapped-chord-angles.js';
+import { unwrappedChordAngles$ } from '../intrinsic-skeleton/unwrapped-chord-angles.js';
 import { calcSkelCumKnots } from './skeleton-knots.js';
 import { valueAt } from './value-at.js';
 import { padTo } from './pad-to.js';
@@ -31,7 +31,7 @@ function sampleProfile(
         arcLen: number) {
 
     const knots = calcSkelCumKnots(pss);
-    const φs = padTo(unwrappedChordAngles(pss), radii.length);
+    const φs = padTo(unwrappedChordAngles$(pss), radii.length);
 
     const u: number[] = [];
     const r: number[] = [];

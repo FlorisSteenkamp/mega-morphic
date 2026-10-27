@@ -1,4 +1,4 @@
-import { chords } from './chords.js';
+import { chords$ } from './chords.js';
 import { sum } from '../../utils/sum.js';
 
 const { max, min } = Math;
@@ -51,7 +51,7 @@ function calcDirWeight(
         pss: number[][][],
         rs: number[]): number {
 
-    const L = sum(chords(pss).L);
+    const L = sum(chords$(pss).L);
     const r = max(0, ...rs);
 
     return r === 0 ? 1 : min(1, L/r);

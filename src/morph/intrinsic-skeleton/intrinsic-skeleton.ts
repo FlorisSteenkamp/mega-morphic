@@ -1,5 +1,5 @@
 import { wrapAngle } from './wrap-angle.js';
-import { chords } from './chords.js';
+import { chords$ } from './chords.js';
 import { toChordFrame } from '../fs/to-chord-frame.js';
 
 const { cos, sin } = Math;
@@ -28,8 +28,8 @@ function intrinsicSkeletonLerp(
     const n = a.length;
     if (n === 0) { return []; }
 
-    const cA = chords(a);
-    const cB = chords(b);
+    const cA = chords$(a);
+    const cB = chords$(b);
 
     // Absolute chord angles: initial angle the short way round, turning
     // angles (already wrapped) lerped linearly.

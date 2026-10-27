@@ -1,6 +1,6 @@
 import type { Samples } from './match-paths/samples.js';
 import { evalDeCasteljau, getTAtLength } from 'flo-bezier3';
-import { unwrappedChordAngles } from './intrinsic-skeleton/unwrapped-chord-angles.js';
+import { unwrappedChordAngles$ } from './intrinsic-skeleton/unwrapped-chord-angles.js';
 import { clamp } from '../utils/clamp.js';
 import { length$ } from './fs/length.js';
 import { calcSkelCumKnots } from './fs/skeleton-knots.js';
@@ -140,7 +140,7 @@ function sampleFeatures(
         u0: number,
         u1: number): Samples {
 
-    const φs = unwrappedChordAngles(bz);
+    const φs = unwrappedChordAngles$(bz);
 
     const u: number[] = [];
     const r: number[] = [];

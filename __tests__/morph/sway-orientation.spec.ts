@@ -12,7 +12,7 @@ import { matchSegTrees } from '../../src/morph/segment-tree/match-seg-trees/matc
 import { composeRouteGeom } from '../../src/morph/segment-tree/compose-segs.js';
 import type { RouteStep } from '../../src/morph/segment-tree/segment.js';
 import { calcProcrustes$ } from '../../src/morph/procrustes/calc-procrustes.js';
-import { unwrappedChordAngles } from '../../src/morph/intrinsic-skeleton/unwrapped-chord-angles.js';
+import { unwrappedChordAngles$ as unwrappedChordAngles } from '../../src/morph/intrinsic-skeleton/unwrapped-chord-angles.js';
 import { wrapAngle } from '../../src/morph/intrinsic-skeleton/wrap-angle.js';
 import { length$ } from '../../src/morph/fs/length.js';
 import { parseSvgFont } from '../../src/load-svg/load-svg-font.js';

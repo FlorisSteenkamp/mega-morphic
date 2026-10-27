@@ -3,7 +3,7 @@ import { closestPointOnBezier } from 'flo-bezier3';
 import { drawFs } from 'flo-draw';
 import { resolveMorphAt } from '../../morph/resolve-morph-at/resolve-morph-at.js';
 import { poseCorrectionAt } from '../../morph/procrustes/pose-ramp.js';
-import { calcProcrustes$ } from '../../morph/procrustes/calc-procrustes.js';
+import { calcPlacement } from '../../morph/procrustes/calc-placement.js';
 import { XMLNS } from '../../draw/xmlns.js';
 import { dirAtStart } from '../../morph/fs/dir-at-start.js';
 import { dirAtEnd } from '../../morph/fs/dir-at-end.js';
@@ -40,7 +40,7 @@ function logMorphBezier(
 
         // Match the DRAWN shape exactly - it is pose-corrected.
         if (outlines.length > 0) {
-            const measured = calcProcrustes$(outlines.flat());
+            const measured = calcPlacement(outlines.flat());
             const tf = poseCorrectionAt(morphPose, t, measured);
             outlines = outlines.map(loop => loop.map(ps => ps.map(tf)));
         }

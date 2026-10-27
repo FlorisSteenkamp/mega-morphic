@@ -1,9 +1,10 @@
 import type { Pose } from './pose.js';
-import { getShapeArea, getShapeCentroid, get2ndMomentOfInertia, getProdMomentOfInertia } from 'flo-boolean';
+import { get2ndMomentOfInertia, getProdMomentOfInertia } from 'flo-boolean';
 import { mapmap } from '../../utils/map-map.js';
 import { memoize } from 'flo-memoize';
+import { calcPlacement } from './calc-placement.js';
 
-const { sqrt, abs, atan2, hypot } = Math;
+const { abs, atan2, hypot } = Math;
 
 
 /**
@@ -21,9 +22,8 @@ const { sqrt, abs, atan2, hypot } = Math;
 const calcProcrustes$ = memoize(function(
         bezierLoop: (number[][])[]): Pose {
 
-    const centroid = getShapeCentroid(bezierLoop);
-    // getShapeArea is signed (negative for clockwise loops); use magnitude.
-    const scale = sqrt(abs(getShapeArea(bezierLoop)));
+    // (measured as the live pose correction measures it)
+    const { centroid, scale } = calcPlacement(bezierLoop);
 
     // Moments are only meaningful about the centroid.
     const centered = mapmap(

@@ -1,4 +1,5 @@
-import { chords } from "./chords.js";
+import { memoize } from 'flo-memoize';
+import { chords$ } from "./chords.js";
 import { wrapAngle } from "./wrap-angle.js";
 
 
@@ -12,11 +13,13 @@ import { wrapAngle } from "./wrap-angle.js";
  * jump - a continuous angle profile along the skeleton.
  * 
  * * chords are the lines between the bezier curve endpoints
+ *
+ * * memoized per `pss` array (see `chords$`) - don't mutate the result
  */
-function unwrappedChordAngles(
+const unwrappedChordAngles$ = memoize(function(
         pss: number[][][]): number[] {
 
-    const { phi } = chords(pss);
+    const { phi } = chords$(pss);
 
     const out = [phi[0]];
     for (let i=0; i<phi.length - 1; i++) {
@@ -24,7 +27,7 @@ function unwrappedChordAngles(
     }
 
     return out;
-}
+});
 
 
-export { unwrappedChordAngles }
+export { unwrappedChordAngles$ }

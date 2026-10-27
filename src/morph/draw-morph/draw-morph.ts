@@ -1,6 +1,6 @@
 import type { PageData } from "../../page/page-data.js";
 import { poseCorrectionAt } from "../procrustes/pose-ramp.js";
-import { calcProcrustes$ } from "../procrustes/calc-procrustes.js";
+import { calcPlacement } from "../procrustes/calc-placement.js";
 import { resolveMorphAt } from "../resolve-morph-at/resolve-morph-at.js";
 import { entryNetTurns } from "../resolve-morph-at/get-morphed-skeleton.js";
 import { drawBeziersAsSinglePath } from "../../draw/draw-beziers-as-single-path.js";
@@ -33,14 +33,14 @@ function drawMorph(
     let { drawn, outlines } = resolved;
     const { outlineEntry } = resolved;
 
-    // Pin the drawn shape's MEASURED pose onto the interpolated pose path
-    // (procrustes): straight centroid line, constant angular rate,
-    // geometric scale - the shape blend alone wanders off the path. Only
-    // the matched components are measured (the ones without a partner
-    // shrink or grow, and ride the matched shape via their tethers).
+    // Pin the drawn shape's MEASURED placement onto the interpolated pose
+    // path: straight centroid line, geometric scale - the shape blend
+    // alone wanders off the path. Only the matched components are measured
+    // (the ones without a partner shrink or grow, and ride the matched
+    // shape via their tethers).
     const mainOutlines = mainOutlinesOf(entries, resolved);
     if (mainOutlines.length > 0) {
-        const measured = calcProcrustes$(mainOutlines.flat());
+        const measured = calcPlacement(mainOutlines.flat());
         const tf = poseCorrectionAt(morphPose, t, measured);
 
         drawn = mapDeep(3, drawn, tf);

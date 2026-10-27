@@ -5,7 +5,7 @@ import { getLastP } from '../fs/get-last-p.js';
 import { pAtIndex } from '../fs/p-at-idx.js';
 import { intrinsicSkeletonLerp } from '../intrinsic-skeleton/intrinsic-skeleton.js';
 import { calcAngleProgress } from '../intrinsic-skeleton/calc-angle-progress.js';
-import { unwrappedChordAngles } from '../intrinsic-skeleton/unwrapped-chord-angles.js';
+import { unwrappedChordAngles$ } from '../intrinsic-skeleton/unwrapped-chord-angles.js';
 import { wrapAngle } from '../intrinsic-skeleton/wrap-angle.js';
 
 const { min, max, floor, hypot, round, atan2, PI: π } = Math;
@@ -53,8 +53,8 @@ const getMorphedSkeleton$ = memoize(function(
     let pss = intrinsicSkeletonLerp(skelPssA, skelPssB, t, s);
 
     // Continuous anchor angle (matches intrinsicSkeletonLerp's φ0(s)).
-    const ψsAe = unwrappedChordAngles(skelPssA);
-    const ψsBe = unwrappedChordAngles(skelPssB);
+    const ψsAe = unwrappedChordAngles$(skelPssA);
+    const ψsBe = unwrappedChordAngles$(skelPssB);
     const φ0A = ψsAe[0];
     const φ0B = ψsBe[0];
     let α = φ0A + s*wrapAngle(φ0B - φ0A);
@@ -177,7 +177,7 @@ function parentPsi(
         k: number): number {
 
     const { alpha, pss } = getMorphedSkeleton$(entries, t, e);
-    const ψs = unwrappedChordAngles(pss);
+    const ψs = unwrappedChordAngles$(pss);
 
     return alpha + (profileAngleAt(ψs, k) - ψs[0]);
 }
@@ -191,7 +191,7 @@ function staticPsiA(
         e: number,
         k: number): number {
 
-    return profileAngleAt(unwrappedChordAngles(entries[e].skelPssA), k);
+    return profileAngleAt(unwrappedChordAngles$(entries[e].skelPssA), k);
 }
 
 
@@ -204,8 +204,8 @@ function staticPsiB(
         e: number,
         k: number): number {
 
-    const ψsA = unwrappedChordAngles(entries[e].skelPssA);
-    const ψsB = unwrappedChordAngles(entries[e].skelPssB);
+    const ψsA = unwrappedChordAngles$(entries[e].skelPssA);
+    const ψsB = unwrappedChordAngles$(entries[e].skelPssB);
     const adj = ψsA[0] + wrapAngle(ψsB[0] - ψsA[0]) - ψsB[0];
 
     return profileAngleAt(ψsB, k) + adj;
@@ -450,8 +450,8 @@ function meanPoint(pss: number[][][]): number[] {
  */
 function entryNetTurns(e: MorphEntry): number {
     return netTurns(
-        unwrappedChordAngles(e.skelPssA),
-        unwrappedChordAngles(e.skelPssB),
+        unwrappedChordAngles$(e.skelPssA),
+        unwrappedChordAngles$(e.skelPssB),
         e.skelPssA, e.skelPssB
     );
 }

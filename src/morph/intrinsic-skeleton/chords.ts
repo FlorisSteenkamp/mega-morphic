@@ -1,3 +1,4 @@
+import { memoize } from 'flo-memoize';
 import { fillGaps } from '../fs/fill-gaps.js';
 
 const { atan2, hypot } = Math;
@@ -9,10 +10,14 @@ const EPS = 1e-9;
 /**
  * Per-segment chord length and angle; degenerate chord angles are filled
  * from the nearest non-degenerate segment.
- * 
+ *
+ * * memoized per `pss` array - a morph entry's static frames are asked for
+ *   on every drawn frame (by it and by its children); don't mutate the
+ *   result
+ *
  * @param pss
  */
-function chords(
+const chords$ = memoize(function(
         pss: number[][][]): { L: number[]; phi: number[] } {
 
     const L: number[] = [];
@@ -37,7 +42,7 @@ function chords(
         .map(φ => Number.isNaN(φ) ? 0 : φ);
 
     return { L, phi };
-}
+});
 
 
-export { chords }
+export { chords$ }

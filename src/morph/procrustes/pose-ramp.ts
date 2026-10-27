@@ -1,4 +1,5 @@
 import type { Pose } from './pose.js';
+import type { Placement } from './calc-placement.js';
 
 
 /**
@@ -17,14 +18,14 @@ interface PoseRamp {
 
 /**
  * The corrective scale+translation pinning the drawn shape onto the pose
- * path at `t`: centroid and scale from the LIVE measured pose
- * (well-conditioned - the seam bias cancels against the ramp's same-metric
- * endpoints).
+ * path at `t`: centroid and scale from the LIVE measured placement
+ * (`calcPlacement` - well-conditioned: the seam bias cancels against the
+ * ramp's same-metric endpoints).
  */
 function poseCorrectionAt(
         r: PoseRamp,
         t: number,
-        measured: Pose): (p: number[]) => number[] {
+        measured: Placement): (p: number[]) => number[] {
 
     const { poseA, poseB } = r;
     const [cAx, cAy] = poseA.centroid;
