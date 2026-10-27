@@ -8,7 +8,7 @@ import type { SegMatchedPair } from '../../morph/segment-tree/match-seg-trees/se
 import { pairsOf } from '../../morph/segment-tree/match-seg-trees/pairs-of.js';
 import { geomOf$ } from '../../morph/segment-tree/geom-of.js';
 import { segmentLoop } from '../../morph/segment-tree/segment-area.js';
-import { ownAreaOf$ } from '../../morph/segment-tree/own-area-of.js';
+import { ownAreaOf$, flatten, calcPolygonArea } from '../../morph/segment-tree/own-area-of.js';
 import { sum } from '../../utils/sum.js';
 import { drawBeziersAsSinglePath } from '../../draw/draw-beziers-as-single-path.js';
 import { XMLNS } from '../../draw/xmlns.js';
@@ -22,12 +22,26 @@ const CLASS = 'own-material';
 /** makes the disk masks' ids unique */
 let maskCount = 0;
 
+/** sides of the polygon a disk is clipped with (areas inside several disks) */
+const DISK_SIDES = 256;
+
+
+/**
+ * A matched pair a segment's owner hangs below, with the junction disk its
+ * own material is measured outside of (`undefined` for the trunk).
+ */
+interface Ancestor {
+    readonly color: string;
+    readonly group: PairInTree;
+    readonly disk: Circle | undefined;
+}
+
 
 /**
  * What a segment's material belongs to in the last match: a matched pair's
  * route or a deleted / inserted child - with the color the match and morph
- * views give it, and the junction disk its material is measured outside of
- * (`ownAreaOf$`).
+ * views give it, the junction disk its material is measured outside of
+ * (`ownAreaOf$`), and the pairs it hangs below.
  */
 interface Owner {
     readonly color: string;
@@ -36,10 +50,22 @@ interface Owner {
     /** the matched pair, or the deleted / inserted child */
     readonly group: PairInTree | SegChild;
     /**
-     * the pair the child hangs off: the segment's part inside the junction
-     * disk is its material (`undefined` for the trunk)
+     * the pairs the owner hangs below, nearest first - the segment's part
+     * inside the junction disk is theirs (`calcShares`)
      */
-    readonly parent: { readonly color: string; readonly group: PairInTree } | undefined;
+    readonly ancestors: readonly Ancestor[];
+}
+
+
+/**
+ * The part of a segment's region one group owns: inside every disk of
+ * `inside`, outside `outside` (if any).
+ */
+interface Share {
+    readonly color: string;
+    readonly group: PairInTree | SegChild;
+    readonly inside: readonly Circle[];
+    readonly outside: Circle | undefined;
 }
 
 
@@ -48,7 +74,8 @@ interface Owner {
  * last match (the morph button's): a child's material outside its junction
  * disk (`ownAreaOf$`), filled in the match view's color - red / green for
  * deleted / inserted children; its part inside the disk is its parent's,
- * filled in the parent's color.
+ * filled in the parent's color - and of that, the part inside the parent's
+ * own junction disk is the grandparent's, and so on up (`calcShares`).
  *
  * * `fullTree`: every branch of both glyphs
  *
@@ -112,7 +139,7 @@ function logOwnMaterial(
 
 /**
  * Draws one branch's material: its segments' regions outside its junction
- * disk, and its children's inside theirs.
+ * disk, and its shares of its descendants' inside theirs (`calcShares`).
  */
 function drawBranch(
         g: SVGGElement,
@@ -122,14 +149,58 @@ function drawBranch(
         delay: number): void {
 
     for (const [seg, owner] of owners) {
-        if (owner.group === group) {
-            drawRegion(g, seg, color, owner.disk, 'outside', delay);
-            drawSkeleton(g, seg, color, delay);
+        for (const share of calcShares(owner)) {
+            if (share.group === group) { drawRegion(g, seg, color, share, delay); }
         }
-        if (owner.parent?.group === group && owner.disk !== undefined) {
-            drawRegion(g, seg, color, owner.disk, 'inside', delay);
-        }
+        if (owner.group === group) { drawSkeleton(g, seg, color, delay); }
     }
+}
+
+
+/**
+ * Returns the parts of a segment's region each group owns:
+ *
+ * * the owner: the part outside its junction disk
+ *
+ * * the pair it hangs off: the part inside that disk, outside the pair's own
+ *   junction disk - the part inside both is the next pair's up, and so on
+ *   (e.g. a grandchild at a fork joined to its grandparent's junction by a
+ *   connector: its part inside the junction is the grandparent's, not its
+ *   parent's)
+ *
+ * * the pairs further up get nothing once the disks no longer overlap
+ */
+function calcShares(owner: Owner): Share[] {
+    const { color, group, disk, ancestors } = owner;
+
+    const shares: Share[] = [{ color, group, inside: [], outside: disk }];
+    const inside: Circle[] = [];
+    let d = disk;
+    for (const a of ancestors) {
+        if (d === undefined) { break; }
+        const last = inside.at(-1);
+        if (last !== undefined && !isOverlapping(last, d)) { break; }
+
+        inside.push(d);
+        shares.push({
+            color: a.color, group: a.group, inside: [...inside], outside: a.disk
+        });
+        d = a.disk;
+    }
+
+    return shares;
+}
+
+
+/** Returns `true` if the two disks overlap. */
+function isOverlapping(
+        c1: Circle,
+        c2: Circle): boolean {
+
+    const { center: [x1, y1], radius: r1 } = c1;
+    const { center: [x2, y2], radius: r2 } = c2;
+
+    return Math.hypot(x2 - x1, y2 - y1) < r1 + r2;
 }
 
 
@@ -159,20 +230,23 @@ function calcOwners(
     for (const pair of pairs) {
         const { mp, attachA, attachB } = pair;
         const color = colorOf(pair);
-        const parent = calcParent(parentOf.get(mp));
+        const parent = parentOf.get(mp);
+        const ancestorsA = calcAncestors(parentOf, parent, 'a');
+        const ancestorsB = calcAncestors(parentOf, parent, 'b');
         for (const { seg } of mp.routeA) {
-            ownersA.set(seg, { color, disk: attachA, group: pair, parent });
+            ownersA.set(seg, { color, disk: attachA, group: pair, ancestors: ancestorsA });
         }
         for (const { seg } of mp.routeB) {
-            ownersB.set(seg, { color, disk: attachB, group: pair, parent });
+            ownersB.set(seg, { color, disk: attachB, group: pair, ancestors: ancestorsB });
         }
     }
 
     for (const pair of pairs) {
-        const parent = calcParent(pair);
+        const ancestorsA = calcAncestors(parentOf, pair, 'a');
+        const ancestorsB = calcAncestors(parentOf, pair, 'b');
         for (const op of pair.mp.ops) {
-            if (op.type === 'delete') { setUnowned(ownersA, op.a, 'red', parent); }
-            if (op.type === 'insert') { setUnowned(ownersB, op.b, 'green', parent); }
+            if (op.type === 'delete') { setUnowned(ownersA, op.a, 'red', ancestorsA); }
+            if (op.type === 'insert') { setUnowned(ownersB, op.b, 'green', ancestorsB); }
         }
     }
 
@@ -186,11 +260,30 @@ function colorOf(pair: PairInTree): string {
 }
 
 
-/** Returns the owner's parent for a child of the given pair. */
-function calcParent(
-        pair: PairInTree | undefined): Owner['parent'] {
+/**
+ * Returns the pair and the pairs above it (nearest first), each with its
+ * junction disk in the glyph of `side` - none for `undefined`.
+ *
+ * @param parentOf each matched sub-pair's parent pair
+ * @param pair the nearest pair
+ * @param side the glyph
+ */
+function calcAncestors(
+        parentOf: Map<SegMatchedPair, PairInTree>,
+        pair: PairInTree | undefined,
+        side: 'a' | 'b'): Ancestor[] {
 
-    return pair === undefined ? undefined : { color: colorOf(pair), group: pair };
+    const ancestors: Ancestor[] = [];
+    for (let p = pair; p !== undefined; p = parentOf.get(p.mp)) {
+        const { attachA, attachB } = p;
+        ancestors.push({
+            color: colorOf(p),
+            group: p,
+            disk: side === 'a' ? attachA : attachB
+        });
+    }
+
+    return ancestors;
 }
 
 
@@ -201,19 +294,19 @@ function setUnowned(
         owners: Map<Segment, Owner>,
         child: SegChild,
         color: string,
-        parent: Owner['parent']): void {
+        ancestors: Ancestor[]): void {
 
     for (const seg of child.segs) {
         if (owners.has(seg)) { continue; }
-        owners.set(seg, { color, disk: child.attachV, group: child, parent });
+        owners.set(seg, { color, disk: child.attachV, group: child, ancestors });
     }
 }
 
 
 /**
- * Draws a segment's material as the full tree shows it: its region outside
- * its owner's junction disk in the owner's color and inside it in the
- * parent's (`fallback` with no owner, unclipped).
+ * Draws a segment's material as the full tree shows it: each group's share
+ * of its region (`calcShares`) in the group's color (`fallback` with no
+ * owner, unclipped).
  */
 function drawOwned(
         g: SVGGElement,
@@ -223,41 +316,55 @@ function drawOwned(
         delay: number): void {
 
     if (owner === undefined) {
-        drawRegion(g, seg, fallback, undefined, 'outside', delay);
+        drawRegion(g, seg, fallback, NO_CLIP, delay);
         drawSkeleton(g, seg, fallback, delay);
         return;
     }
 
-    const { color, disk, parent } = owner;
-    drawRegion(g, seg, color, disk, 'outside', delay);
-    drawSkeleton(g, seg, color, delay);
-    if (disk !== undefined && parent !== undefined) {
-        drawRegion(g, seg, parent.color, disk, 'inside', delay);
+    for (const share of calcShares(owner)) {
+        drawRegion(g, seg, share.color, share, delay);
     }
+    drawSkeleton(g, seg, owner.color, delay);
 }
 
 
+/** a share's clip that leaves the region whole */
+const NO_CLIP: Pick<Share, 'inside' | 'outside'> = { inside: [], outside: undefined };
+
+
 /**
- * Draws the part of a segment's region outside or inside the disk (all of
- * it with no disk), filled in the color.
+ * Draws the part of a segment's region inside every disk of the share's
+ * `inside` and outside its `outside`, filled in the color - each disk masks
+ * a group of its own, nested, so the masks multiply.
  */
 function drawRegion(
         g: SVGGElement,
         seg: Segment,
         color: string,
-        disk: Circle | undefined,
-        part: 'outside' | 'inside',
+        clip: Pick<Share, 'inside' | 'outside'>,
         delay: number): void {
 
     const { vertS, vertE, sleeves, caps } = geomOf$(seg);
     const loop = segmentLoop(vertS, vertE, sleeves, caps);
+    if (loop.length === 0) { return; }
 
-    const [$region] = drawBeziersAsSinglePath(
-        g, loop, `thin5 ${color} fill25 ${CLASS}`, delay);
-    if ($region === undefined || disk === undefined) { return; }
+    const { inside, outside } = clip;
+    const masks = [
+        ...inside.map(disk => addDiskMask(g, disk, 'inside', delay)),
+        ...(outside !== undefined ? [addDiskMask(g, outside, 'outside', delay)] : [])
+    ];
 
-    const maskId = addDiskMask(g, disk, part, delay);
-    $region.setAttributeNS(null, 'mask', `url(#${maskId})`);
+    let $g = g;
+    for (const maskId of masks) {
+        const $masked = document.createElementNS(XMLNS, 'g');
+        $masked.setAttributeNS(null, 'class', CLASS);
+        $masked.setAttributeNS(null, 'mask', `url(#${maskId})`);
+        $g.appendChild($masked);
+        if (delay) { setTimeout(() => $masked.remove(), delay); }
+        $g = $masked;
+    }
+
+    drawBeziersAsSinglePath($g, loop, `thin5 ${color} fill25 ${CLASS}`, delay);
 }
 
 
@@ -347,14 +454,114 @@ function calcFraction(
         total: number): string {
 
     let own = 0;
-    for (const [seg, { group: g, disk, parent }] of owners) {
-        const { material } = geomOf$(seg);
-        const outside = disk === undefined ? material : ownAreaOf$(seg, disk);
-        if (g === group) { own += outside; }
-        if (parent?.group === group) { own += material - outside; }
+    for (const [seg, owner] of owners) {
+        for (const { group: g, inside, outside } of calcShares(owner)) {
+            if (g !== group) { continue; }
+
+            own += calcAreaIn(seg, inside) - (outside === undefined
+                ? 0
+                : calcAreaIn(seg, [...inside, outside]));
+        }
     }
 
     return `${(100*own/total).toFixed(2)}%`;
+}
+
+
+/**
+ * Returns the area of the segment's region inside every one of the disks
+ * (all of it with none).
+ *
+ * * one disk: exactly (`ownAreaOf$`)
+ *
+ * * more: on the flattened region, clipped by each disk's inscribed
+ *   polygon (`DISK_SIDES`)
+ */
+function calcAreaIn(
+        seg: Segment,
+        disks: readonly Circle[]): number {
+
+    const { vertS, vertE, sleeves, caps, material } = geomOf$(seg);
+    if (disks.length === 0) { return material; }
+    if (disks.length === 1) { return material - ownAreaOf$(seg, disks[0]); }
+
+    const loop = segmentLoop(vertS, vertE, sleeves, caps);
+    if (loop.length === 0) { return 0; }
+
+    let ps = flatten(loop);
+    for (const disk of disks) {
+        ps = clipToDisk(ps, disk);
+        if (ps.length < 3) { return 0; }
+    }
+
+    return Math.abs(calcPolygonArea(ps));
+}
+
+
+/**
+ * Returns the polygon clipped to the disk's inscribed polygon
+ * (Sutherland-Hodgman - the clip polygon is convex).
+ */
+function clipToDisk(
+        ps: number[][],
+        disk: Circle): number[][] {
+
+    const { center: [cx, cy], radius: r } = disk;
+
+    // anticlockwise, so the disk's inside is left of each edge
+    let out = ps;
+    for (let k = 0; k < DISK_SIDES && out.length > 0; k++) {
+        const θ0 = 2*Math.PI*k/DISK_SIDES;
+        const θ1 = 2*Math.PI*(k + 1)/DISK_SIDES;
+        const a = [cx + r*Math.cos(θ0), cy + r*Math.sin(θ0)];
+        const b = [cx + r*Math.cos(θ1), cy + r*Math.sin(θ1)];
+
+        out = clipToHalfPlane(out, a, b);
+    }
+
+    return out;
+}
+
+
+/**
+ * Returns the polygon clipped to the half-plane left of the line `a` → `b`.
+ */
+function clipToHalfPlane(
+        ps: number[][],
+        a: number[],
+        b: number[]): number[][] {
+
+    const out: number[][] = [];
+    for (let i = 0; i < ps.length; i++) {
+        const p = ps[i];
+        const q = ps[(i + 1) % ps.length];
+        const sp = calcLeftness(a, b, p);
+        const sq = calcLeftness(a, b, q);
+
+        if (sp >= 0) { out.push(p); }
+        if ((sp >= 0) !== (sq >= 0)) {
+            const t = sp/(sp - sq);
+            out.push([p[0] + t*(q[0] - p[0]), p[1] + t*(q[1] - p[1])]);
+        }
+    }
+
+    return out;
+}
+
+
+/**
+ * Returns how far left of the line `a` → `b` the point `p` is (times the
+ * line's length; negative on the right).
+ */
+function calcLeftness(
+        a: number[],
+        b: number[],
+        p: number[]): number {
+
+    const [ax, ay] = a;
+    const [x, y] = p;
+
+    return (b[0] - ax)*(y - ay) - (b[1] - ay)*(x - ax);
 }
 
 

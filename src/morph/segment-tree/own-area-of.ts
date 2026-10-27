@@ -168,4 +168,4 @@ function calcEdgeDiskArea(
 }
 
 
-export { ownAreaOf$ }
+export { ownAreaOf$, flatten, calcPolygonArea }
