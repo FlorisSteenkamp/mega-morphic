@@ -283,10 +283,31 @@ function isPointMismatch(
  * * the protrusion: how far the subtree's maximal disks reach beyond the
  *   junction disk (centre distance + radius - the junction's radius)
  *
+ * * memoized per child (an alignment prices each child against many)
+ *
  * @param c the child
  * @param unit its tree's length normalization
  */
 function isPoint(
+        c: SegChild,
+        unit: number): boolean {
+
+    let is = isPointMemo.get(c);
+    if (is === undefined) {
+        is = calcIsPoint(c, unit);
+        isPointMemo.set(c, is);
+    }
+
+    return is;
+}
+
+
+/** the children's `isPoint` - a child belongs to one tree, of one unit */
+const isPointMemo = new WeakMap<SegChild, boolean>();
+
+
+/** Returns `true` if the child is a point (see `isPoint`). */
+function calcIsPoint(
         c: SegChild,
         unit: number): boolean {
 

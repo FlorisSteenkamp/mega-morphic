@@ -12,6 +12,8 @@ import { outlineLoopOf } from '../segment-tree/outline-loop.js';
 import { calcProcrustes$ } from '../procrustes/calc-procrustes.js';
 import { mapmap } from '../../utils/map-map.js';
 import { pAtIndex } from '../fs/p-at-idx.js';
+import { identityMatchOf } from '../segment-tree/match-seg-trees/identity-match-of.js';
+import { getUnit$ } from '../segment-tree/get-unit.js';
 
 
 /**
@@ -192,11 +194,10 @@ function calcTether(
  * a point at its centroid (`side` 'a': it exists only in A) or grows from
  * one (`side` 'b').
  *
- * * the entries come from morphing the component onto itself, but only
- *   their real frame (`side`'s) is kept: the other frame is that same frame
- *   shrunk by `SHRINK` about the centroid - the self-match need not be the
- *   identity (a symmetric piece matches itself reversed as cheaply), which
- *   would turn the piece as it shrinks
+ * * the entries come from morphing the component onto itself as the
+ *   identity (`identityMatchOf` - no DTW), but only their real frame
+ *   (`side`'s) is kept: the other frame is that same frame shrunk by
+ *   `SHRINK` about the centroid
  *
  * * the sleeves are stored in local frames (disk-relative anchors,
  *   chord-normalized pieces), so the real frame's sleeves serve the shrunk
@@ -225,7 +226,12 @@ function buildShrinkEntries(
         return [cx + SHRINK*(p[0] - cx), cy + SHRINK*(p[1] - cy)];
     }
 
-    return buildPairEntries(comp, comp, loop, loop, weights).map(e => {
+    const g = segTreeFromCp(comp.cp);
+    const self = buildMorphEntriesOfMatch(
+        identityMatchOf(g, getUnit$(loop)), g, g, loop, loop,
+        { ...defaultPathWeights, ...weights });
+
+    return self.map(e => {
         const { skelPssA, skelPssB, ra, rb, sleeveOut, sleeveBack, glue } = e;
 
         return side === 'a'

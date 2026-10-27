@@ -546,6 +546,12 @@ function runSingle(
         return out;
     }
 
+    /**
+     * offers a path to state `i` of table `T`: `pick` between the path kept
+     * there (if any) and the new one, written out for those two (the DP's
+     * hottest spot) - the same window, keys and tie order: the new path
+     * wins only with a strictly smaller key
+     */
     function offer(
             T: SingleTable,
             i: number,
@@ -556,18 +562,21 @@ function runSingle(
             f: number): void {
 
         if (v < T.best[i]) { T.best[i] = v; }
+        const limit = T.best[i] + W;
 
-        sn = 0;
-        if (T.has[i] === 1) {
-            push(T.v[i], T.cov[i], T.sw[i], T.tie[i], T.from[i]);
+        const isOldIn = T.has[i] === 1 && T.v[i] <= limit;
+        const isNewIn = v <= limit;
+
+        const isNew = isNewIn &&
+            (!isOldIn || v + λ*tie < T.v[i] + λ*T.tie[i]);
+
+        if (isNew) {
+            T.has[i] = 1;
+            T.v[i] = v; T.cov[i] = cov; T.sw[i] = sw; T.tie[i] = tie;
+            T.from[i] = f;
+        } else if (!isOldIn) {
+            T.has[i] = 0;
         }
-        push(v, cov, sw, tie, f);
-        const k = pick(T.best[i]);
-        if (k < 0) { T.has[i] = 0; return; }
-
-        T.has[i] = 1;
-        T.v[i] = sv[k]; T.cov[i] = sc[k]; T.sw[i] = ss[k]; T.tie[i] = st[k];
-        T.from[i] = sf[k];
     }
 
     const a0 = A.starts[0];
