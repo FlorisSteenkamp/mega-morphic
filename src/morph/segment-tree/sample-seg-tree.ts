@@ -25,6 +25,33 @@ function sampleSegTree(
         sampleCount: number,
         rootV: Circle | undefined): SampledSegGraph {
 
+    return sampleSegTreeEndingAt(g, unit, sampleCount, rootV, NO_ENDS);
+}
+
+
+/** no extra route ends (`sampleSegTree`) */
+const NO_ENDS: ReadonlySet<Circle> = new Set();
+
+
+/**
+ * Returns the sampled graph of `sampleSegTree`, with the vertices `endsAt`
+ * route ends too, wherever they are - e.g. a fork that only has two of
+ * its segments in `g` (one DTW over the union of several routes from one
+ * start then prices each route to its own end).
+ *
+ * @param g the glyph's segment tree (or a segment subset sharing vertices)
+ * @param unit length normalization (√ tree round salience, as the matcher)
+ * @param sampleCount approximate total sample count over the whole skeleton
+ * @param rootV pin routes to START at this vertex (`undefined`: any end)
+ * @param endsAt vertices routes may end at besides the usual ones
+ */
+function sampleSegTreeEndingAt(
+        g: Segment[],
+        unit: number,
+        sampleCount: number,
+        rootV: Circle | undefined,
+        endsAt: ReadonlySet<Circle>): SampledSegGraph {
+
     const totalLen = lenOfSegs$(g);
 
     const δ = totalLen/sampleCount;
@@ -101,7 +128,7 @@ function sampleSegTree(
     // would only derail).
     const isEnd = (v: Circle): boolean =>
         degree(v) === 1 || degree(v) >= 3 ||
-        (rootV !== undefined && isPhantomFork(v));
+        (rootV !== undefined && isPhantomFork(v)) || endsAt.has(v);
 
     const starts: number[] = [];
     const ends: number[] = [];
@@ -162,4 +189,4 @@ function topoOrder(succ: number[][]): number[] {
 }
 
 
-export { sampleSegTree }
+export { sampleSegTree, sampleSegTreeEndingAt }

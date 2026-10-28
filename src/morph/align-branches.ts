@@ -201,25 +201,33 @@ function warpPath(
     const nA = fA.u.length;
     const nB = fB.u.length;
 
-    const cost = (i: number, j: number): number =>
-        W_RADIUS*abs(fA.r[i] - fB.r[j])
-        // mirror-invariant turning (mirrored pairs have opposite signs)
-        + W_TURN*abs(abs(fA.turn[i]) - abs(fB.turn[j])) / (2*Math.PI)
-        + W_DRIFT*abs(i/(nA - 1) - j/(nB - 1));
+    // per-sample terms, computed once (the DP visits every cell)
+    const rA = fA.r;
+    const rB = fB.r;
+    const tA = fA.turn.map(abs);
+    const tB = fB.turn.map(abs);
+    const xA = rA.map((_, i) => i/(nA - 1));
+    const xB = rB.map((_, j) => j/(nB - 1));
 
-    const INF = Infinity;
-    const D: number[][] = [];
-    for (let i = 0; i < nA; i++) {
-        D.push(new Array(nB).fill(INF));
+    function cost(i: number, j: number): number {
+        return W_RADIUS*abs(rA[i] - rB[j])
+            // mirror-invariant turning (mirrored pairs have opposite signs)
+            + W_TURN*abs(tA[i] - tB[j]) / (2*Math.PI)
+            + W_DRIFT*abs(xA[i] - xB[j]);
     }
-    D[0][0] = cost(0, 0);
-    for (let i = 1; i < nA; i++) { D[i][0] = D[i - 1][0] + cost(i, 0); }
-    for (let j = 1; j < nB; j++) { D[0][j] = D[0][j - 1] + cost(0, j); }
+
+    // row-major: D[i·nB + j]
+    const D = new Float64Array(nA*nB);
+    D[0] = cost(0, 0);
+    for (let i = 1; i < nA; i++) { D[i*nB] = D[(i - 1)*nB] + cost(i, 0); }
+    for (let j = 1; j < nB; j++) { D[j] = D[j - 1] + cost(0, j); }
 
     for (let i = 1; i < nA; i++) {
+        const row = i*nB;
+        const prev = row - nB;
         for (let j = 1; j < nB; j++) {
-            D[i][j] = cost(i, j) +
-                min(D[i - 1][j - 1], D[i - 1][j], D[i][j - 1]);
+            D[row + j] = cost(i, j) +
+                min(D[prev + j - 1], D[prev + j], D[row + j - 1]);
         }
     }
 
@@ -230,10 +238,12 @@ function warpPath(
         path.push([i, j]);
         if (i === 0) { j--; continue; }
         if (j === 0) { i--; continue; }
-        const d = D[i - 1][j - 1];
+        const d = D[(i - 1)*nB + j - 1];
+        const up = D[(i - 1)*nB + j];
+        const left = D[i*nB + j - 1];
         // prefer the diagonal on ties
-        if (d <= D[i - 1][j] && d <= D[i][j - 1]) { i--; j--; }
-        else if (D[i - 1][j] <= D[i][j - 1]) { i--; }
+        if (d <= up && d <= left) { i--; j--; }
+        else if (up <= left) { i--; }
         else { j--; }
     }
     path.push([0, 0]);

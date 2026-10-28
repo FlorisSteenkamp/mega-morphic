@@ -109,6 +109,26 @@ interface Alt {
 }
 
 
+/** no paths (a state nothing reached) - shared, never mutated */
+const NONE: Alt[] = [];
+
+/** no raise for any of three lists (`select`) */
+const ZEROS_3 = [0, 0, 0];
+
+
+/** Returns the index of the path with the given start, or -1. */
+function indexOfStart(
+        alts: Alt[],
+        start: number): number {
+
+    for (let k = 0; k < alts.length; k++) {
+        if (alts[k].start === start) { return k; }
+    }
+
+    return -1;
+}
+
+
 /**
  * Gotoh affine-gap DTW over the PRODUCT of two sampled segment DAGs: one DP
  * covers every leaf-to-leaf path pair of both glyphs simultaneously (paths
@@ -201,8 +221,49 @@ function productDtwGeneral(
     const total = A.material + B.material;
     const λ = total > 0 ? sway/(total/2) : 0;
 
-    function select(alts: Alt[], best: number): Alt[] {
-        return selectAlts(alts, best, W, λ);
+    // a gap opened from M (`select`'s raise of [M, Ix] / [M, Iy])
+    const gapOpens = [gapOpen, 0];
+
+    /**
+     * `selectAlts` over the paths of the lists, in order, each list's values
+     * raised by its `dv` - without concatenating them, a raised path made
+     * only if kept
+     */
+    function select(
+            lists: Alt[][],
+            dvs: number[],
+            best: number): Alt[] {
+
+        const limit = best + W;
+
+        let kMin = Infinity;
+        for (let l = 0; l < lists.length; l++) {
+            const dv = dvs[l];
+            for (const x of lists[l]) {
+                const v = x.v + dv;
+                const key = v + λ*x.tie;
+                if (v <= limit && key < kMin) { kMin = key; }
+            }
+        }
+
+        const out: Alt[] = [];
+        for (let l = 0; l < lists.length; l++) {
+            const dv = dvs[l];
+            for (const x of lists[l]) {
+                const v = x.v + dv;
+                const key = v + λ*x.tie;
+                if (v > limit || key > kMin + EPS) { continue; }
+
+                const k = indexOfStart(out, x.start);
+                if (k < 0) {
+                    out.push(dv === 0 ? x : { ...x, v });
+                } else if (key < out[k].v + λ*out[k].tie) {
+                    out[k] = dv === 0 ? x : { ...x, v };
+                }
+            }
+        }
+
+        return out;
     }
 
     // Gotoh DP tables, one cell per product state (a,b), each holding the
@@ -221,14 +282,65 @@ function productDtwGeneral(
     const AIx: Alt[][] = new Array(N);
     const AIy: Alt[][] = new Array(N);
 
+    /**
+     * offers the paths `src` to state `i` of a table, each continued by a
+     * step (its value, coverage, sway and tie-break sway raised by `dv`,
+     * `dcov`, `dsw`, `dtie`): the state keeps `selectAlts` of its own paths
+     * followed by the continued ones - a continued path made only if kept
+     */
     function offer(
             B_: Float64Array,
             AT: Alt[][],
             i: number,
-            alts: Alt[]): void {
+            src: Alt[],
+            dv: number,
+            dcov: number,
+            dsw: number,
+            dtie: number): void {
 
-        for (const x of alts) { if (x.v < B_[i]) { B_[i] = x.v; } }
-        AT[i] = select(AT[i] === undefined ? alts : [...AT[i], ...alts], B_[i]);
+        for (const x of src) {
+            const v = x.v + dv;
+            if (v < B_[i]) { B_[i] = v; }
+        }
+        const limit = B_[i] + W;
+        const own = AT[i] ?? NONE;
+
+        let kMin = Infinity;
+        for (const y of own) {
+            const key = y.v + λ*y.tie;
+            if (y.v <= limit && key < kMin) { kMin = key; }
+        }
+        for (const x of src) {
+            const v = x.v + dv;
+            const key = v + λ*(x.tie + dtie);
+            if (v <= limit && key < kMin) { kMin = key; }
+        }
+
+        const out: Alt[] = [];
+        for (const y of own) {
+            const key = y.v + λ*y.tie;
+            if (y.v > limit || key > kMin + EPS) { continue; }
+
+            const k = indexOfStart(out, y.start);
+            if (k < 0) { out.push(y); }
+            else if (key < out[k].v + λ*out[k].tie) { out[k] = y; }
+        }
+        for (const x of src) {
+            const v = x.v + dv;
+            const tie = x.tie + dtie;
+            const key = v + λ*tie;
+            if (v > limit || key > kMin + EPS) { continue; }
+
+            const k = indexOfStart(out, x.start);
+            if (k >= 0 && !(key < out[k].v + λ*out[k].tie)) { continue; }
+
+            const y = {
+                start: x.start, v, cov: x.cov + dcov, sway: x.sway + dsw, tie
+            };
+            if (k < 0) { out.push(y); } else { out[k] = y; }
+        }
+
+        AT[i] = out;
     }
 
     for (const a0 of A.starts) {
@@ -240,7 +352,7 @@ function productDtwGeneral(
                 start: (a0 << 16) | b0,
                 v: calcCost_(a0, b0) - del*cov,
                 cov, sway: w, tie: w
-            }]);
+            }], 0, 0, 0, 0);
         }
     }
 
@@ -259,24 +371,23 @@ function productDtwGeneral(
             const b = rankToB[s - rA];
             const i = a*nB + b;
 
-            const m = AM[i] ?? [];
-            const ix = AIx[i] ?? [];
-            const iy = AIy[i] ?? [];
+            const m = AM[i] ?? NONE;
+            const ix = AIx[i] ?? NONE;
+            const iy = AIy[i] ?? NONE;
             if (m.length === 0 && ix.length === 0 && iy.length === 0) {
                 continue;
             }
 
             // the paths leaving the state on a diagonal: from any table
             const here = select(
-                [...m, ...ix, ...iy], min(BM[i], BIx[i], BIy[i]));
+                [m, ix, iy], ZEROS_3, min(BM[i], BIx[i], BIy[i]));
 
             // gap in A: consume A alone - NO coverage reward (a gap is a
             // retraction: the material keeps its drop price, else gap runs
             // launder drop costs into near-free coverage and mismatched
             // routes/pairings win); opening from M, extending from Ix
-            const opened = m.map(x => ({ ...x, v: x.v + gapOpen }));
             const fromA = select(
-                [...opened, ...ix], min(BM[i] + gapOpen, BIx[i]));
+                [m, ix], gapOpens, min(BM[i] + gapOpen, BIx[i]));
 
             for (const aN of A.succ[a]) {
                 // the gapped sample counts as fully rotated in the
@@ -284,35 +395,25 @@ function productDtwGeneral(
                 const ext = extA(aN);
                 const half = calcMaterialA(aN)/2;
                 if (fromA.length > 0) {
-                    offer(BIx, AIx, aN*nB + b, fromA.map(x => ({
-                        ...x, v: x.v + ext, tie: x.tie + half
-                    })));
+                    offer(BIx, AIx, aN*nB + b, fromA, ext, 0, 0, half);
                 }
                 // diagonal
                 for (const bN of B.succ[b]) {
                     const cov = calcMaterialA(aN) + calcMaterialB(bN);
                     const c = calcCost_(aN, bN) - del*cov;
                     const w = swayOf(aN, bN);
-                    offer(BM, AM, aN*nB + bN, here.map(x => ({
-                        start: x.start,
-                        v: x.v + c,
-                        cov: x.cov + cov,
-                        sway: x.sway + w,
-                        tie: x.tie + w
-                    })));
+                    offer(BM, AM, aN*nB + bN, here, c, cov, w, w);
                 }
             }
 
             // gap in B
             const fromB = select(
-                [...opened, ...iy], min(BM[i] + gapOpen, BIy[i]));
+                [m, iy], gapOpens, min(BM[i] + gapOpen, BIy[i]));
             if (fromB.length > 0) {
                 for (const bN of B.succ[b]) {
                     const ext = extB(bN);
                     const half = calcMaterialB(bN)/2;
-                    offer(BIy, AIy, a*nB + bN, fromB.map(x => ({
-                        ...x, v: x.v + ext, tie: x.tie + half
-                    })));
+                    offer(BIy, AIy, a*nB + bN, fromB, ext, 0, 0, half);
                 }
             }
         }
@@ -332,7 +433,7 @@ function productDtwGeneral(
             // v = shape − del·covered  ⇒  shape = v + del·covered;
             // total re-adds the constant drop price of ALL material.
             const alts = select(
-                [...(AM[i] ?? []), ...(AIx[i] ?? []), ...(AIy[i] ?? [])],
+                [AM[i] ?? NONE, AIx[i] ?? NONE, AIy[i] ?? NONE], ZEROS_3,
                 best);
             for (const alt of alts) {
                 candidates.push({
@@ -764,6 +865,9 @@ function createSingleTable(
  *   pointing the same way); exact ties (within `EPS`) are all kept
  *
  * * a start reached more than one way keeps its best path
+ *
+ * * the reference: the DPs run it without allocating (`productDtwGeneral`'s
+ *   `select` and `offer`, `productDtwSingle`'s `pick` and `offer`)
  *
  * @param alts the paths
  * @param best the best value ever offered at the state

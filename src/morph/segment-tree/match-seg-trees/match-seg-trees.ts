@@ -11,7 +11,8 @@ import { productDtw } from '../product-dtw.js';
 import { outlineLenOf } from './outline-len-of.js';
 import { lenOfSegs$ } from '../len-of.js';
 import { endVariantsOf } from './end-variants-of.js';
-import { routePairCostsOf } from './route-pair-costs-of.js';
+import type { RouteEnds } from './route-pair-costs-of.js';
+import { calcRoutePairsCosts, getRouteCosts } from './route-pair-costs-of.js';
 import { getUnit$ } from '../get-unit.js';
 import { anisoOf } from './aniso-of.js';
 import { recordTrunkEval, recordTrunkCands } from '../../../debug/record-trunk-cands.js';
@@ -21,6 +22,10 @@ import { childrenOf } from './children-of.js';
 import { rankTrunkCandidates } from './rank-trunk-candidates.js';
 import { pickBest } from './pick-best.js';
 import { TARGET_SAMPLES, TRUNK_RECURSE_CANDS, TRUNK_CHEAP_CANDS } from './consts.js';
+
+
+/** stands in for a variant's costs while collecting the route pairs to price */
+const UNPRICED = { shapeCost: 0, swayCost: 0 };
 
 
 /**
@@ -124,11 +129,22 @@ function matchSegTrees(
     // a near-tie to the DP - let the recursion try the alternatives.
     const δA = lenOfSegs$(gA) / TARGET_SAMPLES;
     const δB = lenOfSegs$(gB) / TARGET_SAMPLES;
-    const evaluable = leaders.slice(0, TRUNK_RECURSE_CANDS).flatMap(l =>
+    // The variants' route pairs are priced together - one DTW per start
+    // pair (`calcRoutePairsCosts`): the leaders' variants come from only a
+    // few start pairs.
+    const heads = leaders.slice(0, TRUNK_RECURSE_CANDS);
+    const wanted: RouteEnds[] = [];
+    for (const l of heads) {
+        endVariantsOf(l.c, gA, gB, (startA, endA, startB, endB) => {
+            wanted.push([startA, endA, startB, endB]);
+            return UNPRICED;
+        });
+    }
+    const costs = calcRoutePairsCosts(
+        wanted, routeOfA, routeOfB, unitA, unitB, δA, δB, weights, swayW);
+    const evaluable = heads.flatMap(l =>
         endVariantsOf(l.c, gA, gB, (startA, endA, startB, endB) =>
-            routePairCostsOf(
-                routeOfA(startA, endA), routeOfB(startB, endB),
-                unitA, unitB, δA, δB, weights, swayW, 0)
+            getRouteCosts(costs, startA, endA, startB, endB)
         ).map(c => ({ ...l, c })));
 
     const root = pickBest(evaluable, evaluable.length, l => {
