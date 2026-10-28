@@ -1,8 +1,0 @@
-k->x: single-start DTWs 0, mismatches 0
-M->N: single-start DTWs 0, mismatches 0
-T->A: single-start DTWs 0, mismatches 0
-E->F: single-start DTWs 0, mismatches 0
-six->seven: single-start DTWs 0, mismatches 0
-C->B: single-start DTWs 0, mismatches 0
-A->H: single-start DTWs 0, mismatches 0
-seven->three: single-start DTWs 0, mismatches 0

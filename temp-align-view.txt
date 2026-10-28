@@ -1,4 +1,0 @@
-E->F: pairs 25, aligned 25, malformed 0
-k->x: pairs 22, aligned 22, malformed 0
-M->N: pairs 14, aligned 14, malformed 0
-T->A: pairs 15, aligned 15, malformed 0
