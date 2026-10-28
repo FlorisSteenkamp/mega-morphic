@@ -1,5 +1,6 @@
+import { wrapAngle } from '../../intrinsic-skeleton/wrap-angle.js';
 
-const { atan2, tan, cos, sin, abs, ceil, PI: π } = Math;
+const { atan2, tan, cos, sin, abs, ceil, round, PI: π } = Math;
 
 
 const MIN_LEN = 1e-6;
@@ -12,33 +13,30 @@ const NEAR_FULL_TURN = π/4;
 
 
 /**
- * The arc of the disk at `p` from `from` to `to` as TRUE cubic bezier
- * segments (≤ quarter circle each - visually exact at any zoom), sweeping
- * in the direction given by the outline winding `sign`. Endpoints lie on
- * the circle of radius `r`; sub-MIN_LEN mismatches with the neighboring
- * pieces are welded by `assembleLoop`.
- *
- * * a sweep within `NEAR_FULL_TURN` of a full turn sweeps the short way
- *   back instead: the endpoints nearly coincide (as when the sides meet at
- *   the cap) and `to` has merely drifted behind `from` - a full circle
- *   there would pop in the moment t leaves 0 (where the endpoints coincide
- *   exactly and the arc is empty), and with it the measured pose
- *   (`poseCorrectionAt` would rescale the whole shape). A real cap never
- *   sweeps that far: the route's own prong always takes part of the disk.
+ * The sweep of an arc between two disk-anchored points as `sweepA +
+ * t·dSweep` (`calcSweepRamp`).
+ */
+interface SweepRamp {
+    readonly sweepA: number;
+    readonly dSweep: number;
+}
+
+
+/**
+ * The arc of the disk at `p` of radius `r` from `from` sweeping by `sweep`
+ * as TRUE cubic bezier segments (≤ quarter circle each - visually exact at
+ * any zoom). Endpoints lie on the circle; sub-MIN_LEN mismatches with the
+ * neighboring pieces are welded by `assembleLoop`.
  */
 function capArcBeziers(
         p: number[],
         r: number,
         from: number[],
-        to: number[],
-        sign: number): number[][][] {
-
-    if (r < MIN_LEN) { return []; }
+        sweep: number): number[][][] {
 
     const a0 = atan2(from[1] - p[1], from[0] - p[0]);
-    const a1 = atan2(to[1] - p[1], to[0] - p[0]);
 
-    return arcBeziers(p, r, a0, calcCapSweep(a0, a1, sign));
+    return arcBeziers(p, r, a0, sweep);
 }
 
 
@@ -77,9 +75,19 @@ function arcBeziers(
 
 
 /**
- * Returns the sweep of the cap arc from angle `a0` to `a1` (`capArcBeziers`):
- * in the winding direction given by `sign`, unless within
- * `NEAR_FULL_TURN` of a full turn - then the short way back.
+ * Returns the sweep of the arc from angle `a0` to `a1`: in the winding
+ * direction given by `sign`, unless within `NEAR_FULL_TURN` of a full turn -
+ * then the short way back.
+ *
+ * * the short way back: the endpoints nearly coincide (as when the sides
+ *   meet at the cap) and `a1` has merely drifted behind `a0` - a full
+ *   circle there would pop in the moment t leaves 0 (where the endpoints
+ *   coincide exactly and the arc is empty), and with it the measured pose
+ *   (`poseCorrectionAt` would rescale the whole shape). A real cap never
+ *   sweeps that far: the route's own prong always takes part of the disk.
+ *
+ * * only decides the sweeps at t=0/1 - mid-morph this rule would flip
+ *   the arc the moment it crosses the threshold (`calcSweepRamp`)
  */
 function calcCapSweep(
         a0: number,
@@ -95,4 +103,46 @@ function calcCapSweep(
 }
 
 
-export { capArcBeziers, arcBeziers, calcCapSweep }
+/**
+ * Returns the sweep of the arc from the anchor at angle `fromA` to the one
+ * at `toA` in A (t=0), going to `fromB` → `toB` in B (t=1), as `sweepA +
+ * t·dSweep`: following its two anchors continuously (`dSweep`: the
+ * difference of their short-way turns - the very turns the anchors are
+ * interpolated along), so it never flips mid-morph.
+ *
+ * * angles in the anchors' disk frames (both anchors on the same disk)
+ *
+ * * where the anchors' turns don't take the arc from its sweep in A to its
+ *   sweep in B (`calcCapSweep`) - they differ by whole turns - the arc
+ *   carries the extra full turns at one end, in the winding direction: a
+ *   full turn that way round the disk leaves the filled shape as it is
+ *
+ * @param fromA
+ * @param toA
+ * @param fromB
+ * @param toB
+ * @param sign the outline winding
+ */
+function calcSweepRamp(
+        fromA: number,
+        toA: number,
+        fromB: number,
+        toB: number,
+        sign: number): SweepRamp {
+
+    const sweepA = calcCapSweep(fromA, toA, sign);
+    const sweepB = calcCapSweep(fromB, toB, sign);
+    const dSweep = wrapAngle(toB - toA) - wrapAngle(fromB - fromA);
+
+    // extra forward turns at B (> 0) or, as many, at A (< 0)
+    const turns = round((sweepA + dSweep - sweepB) / (sign*2*π));
+
+    return {
+        sweepA: sweepA + (turns < 0 ? -turns*sign*2*π : 0),
+        dSweep
+    };
+}
+
+
+export { capArcBeziers, arcBeziers, calcCapSweep, calcSweepRamp }
+export type { SweepRamp }

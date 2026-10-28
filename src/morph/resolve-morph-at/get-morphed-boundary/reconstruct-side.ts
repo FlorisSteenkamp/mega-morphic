@@ -1,10 +1,11 @@
 import type { SleeveSide } from '../../anchored-sleeves.js';
+import type { SweepRamp } from './cap-arc-pts.js';
 import { toCubic } from 'flo-bezier3';
 import { boundaryPoint } from '../../anchored-sleeves.js';
 import { wrapAngle } from '../../intrinsic-skeleton/wrap-angle.js';
-import { arcBeziers, calcCapSweep } from './cap-arc-pts.js';
+import { arcBeziers, calcSweepRamp } from './cap-arc-pts.js';
 
-const { cos, sin, hypot, atan2, min, abs, round, PI: π } = Math;
+const { cos, sin, hypot, atan2, min, abs } = Math;
 
 
 const MIN_LEN = 1e-6;
@@ -128,23 +129,16 @@ function isTinyPiece(ps: number[][]): boolean {
 
 
 /** the sides' gap sweeps (`calcGapSweeps$`) - they only depend on the side */
-const gapSweepsMemo = new WeakMap<SleeveSide, { sweepA: number; dSweep: number }[]>();
+const gapSweepsMemo = new WeakMap<SleeveSide, SweepRamp[]>();
 
 
 /**
  * Returns the sweep of each fork gap's arc (at the start of piece `k`, in
- * outline order) as `sweepA + t·dSweep`: following its two anchors
- * continuously (`dSweep`: the difference of their short-way turns), so it
- * never flips mid-morph.
+ * outline order), following its two anchors continuously
+ * (`calcSweepRamp`), so it never flips mid-morph.
  *
  * * memoized per side - a side is always reconstructed with the same
  *   `isOut` and `capSign` (its entry's)
- *
- * * where the anchors' turns don't take the gap from its sweep in A to its
- *   sweep in B (`calcCapSweep`) - they differ by whole turns - the arc
- *   carries the extra full turns at one end, in the winding direction: a
- *   full turn that way round the gap's disk leaves the filled shape as it
- *   is
  *
  * @param side the sleeve side
  * @param isOut whether it is the out side (pieces in outline order) or the
@@ -154,7 +148,7 @@ const gapSweepsMemo = new WeakMap<SleeveSide, { sweepA: number; dSweep: number }
 function calcGapSweeps$(
         side: SleeveSide,
         isOut: boolean,
-        capSign: number): { sweepA: number; dSweep: number }[] {
+        capSign: number): SweepRamp[] {
 
     let sweeps = gapSweepsMemo.get(side);
     if (sweeps === undefined) {
@@ -170,7 +164,7 @@ function calcGapSweeps$(
 function calcGapSweeps(
         side: SleeveSide,
         isOut: boolean,
-        capSign: number): { sweepA: number; dSweep: number }[] {
+        capSign: number): SweepRamp[] {
 
     const { anchorsA, anchorsB } = side;
     const len = anchorsA.length;
@@ -180,19 +174,11 @@ function calcGapSweeps(
         const k = isOut ? m : len - 1 - m;
         const kPrev = isOut ? k - 1 : k + 1;
 
-        const sweepA = calcCapSweep(anchorsA[kPrev][2], anchorsA[k][0], capSign);
-        const sweepB = calcCapSweep(anchorsB[kPrev][2], anchorsB[k][0], capSign);
-        const dSweep =
-            wrapAngle(anchorsB[k][0] - anchorsA[k][0]) -
-            wrapAngle(anchorsB[kPrev][2] - anchorsA[kPrev][2]);
-
-        // extra forward turns at B (> 0) or, as many, at A (< 0)
-        const turns = round((sweepA + dSweep - sweepB) / (capSign*2*π));
-
-        gapSweeps[k] = {
-            sweepA: sweepA + (turns < 0 ? -turns*capSign*2*π : 0),
-            dSweep
-        };
+        gapSweeps[k] = calcSweepRamp(
+            anchorsA[kPrev][2], anchorsA[k][0],
+            anchorsB[kPrev][2], anchorsB[k][0],
+            capSign
+        );
     }
 
     return gapSweeps;

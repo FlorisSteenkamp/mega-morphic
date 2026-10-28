@@ -26,7 +26,7 @@ const options: MatOptions = {
 
 function loadGraph(glyphName: string): Segment[] {
     const font = parseSvgFont(
-        readFileSync(resolve('fonts-test/achispado.svg'), 'utf-8'));
+        readFileSync(resolve('fonts-test/vectors.svg'), 'utf-8'));
     const d = font.find(g => g.name === glyphName)!.d;
     const loops = getPathsFromStr(d);
     const mats = findMats(loops, options);

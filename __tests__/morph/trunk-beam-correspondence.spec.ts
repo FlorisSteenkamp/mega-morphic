@@ -25,7 +25,7 @@ const { sqrt } = Math;
 
 function loadLoops(glyphName: string): number[][][][] {
     const font = parseSvgFont(
-        readFileSync(resolve('fonts-test/achispado.svg'), 'utf-8'));
+        readFileSync(resolve('fonts-test/vectors.svg'), 'utf-8'));
     const d = font.find(g => g.name === glyphName)!.d;
     return getPathsFromStr(d);
 }

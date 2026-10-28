@@ -60,6 +60,15 @@ function ZoomOutIcon() {
     </Icon>;
 }
 
+function FitIcon() {
+    return <Icon>
+        <path d="M4 9V4h5" />
+        <path d="M20 9V4h-5" />
+        <path d="M4 15v5h5" />
+        <path d="M20 15v5h-5" />
+    </Icon>;
+}
+
 function ArrowRightIcon() {
     return <Icon>
         <path d="M5 12h14" />
@@ -78,5 +87,5 @@ function SlidersIcon() {
 
 export {
     PlayIcon, PauseIcon, RotateIcon, FlipHIcon, FlipVIcon, ZoomOutIcon,
-    ArrowRightIcon, SlidersIcon
+    FitIcon, ArrowRightIcon, SlidersIcon
 }

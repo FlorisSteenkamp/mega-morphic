@@ -1,6 +1,6 @@
 {
-    "name": "mat-demo",
-    "description": "Demo for MAT/SAT.",
+    "name": "morph-demo",
+    "description": "Demo for topology aware morphing.",
     "version": "0.0.1",
     "author": {
         "name": "Floris Steenkamp"
@@ -9,7 +9,7 @@
     "type": "module",
     "main": "index.js",
     "engines": {
-        "node": ">=22.0.0"
+        "node": ">=26.0.0"
     },
     "private": false,
     "dependencies": {

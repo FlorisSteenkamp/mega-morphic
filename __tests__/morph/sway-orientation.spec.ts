@@ -33,7 +33,7 @@ let SAT = false;
 
 function loadGraph(glyphName: string): Segment[] {
     const font = parseSvgFont(
-        readFileSync(resolve('fonts-test/achispado.svg'), 'utf-8'));
+        readFileSync(resolve('fonts-test/vectors.svg'), 'utf-8'));
     const d = font.find(g => g.name === glyphName)!.d;
     const mats = findMats(getPathsFromStr(d), { ...options, applySat: SAT });
     return segTreeWithLoop(mats[0].cpNode);

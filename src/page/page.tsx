@@ -20,7 +20,7 @@ import { Checkbox } from '../components/simple-checkbox.js';
 import { ToolGroup, DebugRow, getBtnClass } from '../components/tool-group.js';
 import {
     PlayIcon, PauseIcon, RotateIcon, FlipHIcon, FlipVIcon, ZoomOutIcon,
-    ArrowRightIcon, SlidersIcon
+    FitIcon, ArrowRightIcon, SlidersIcon
 } from '../components/icons.js';
 import { loadDeducedProps } from './load-deduced-props.js';
 import { STAGGER_COARSE, STAGGER_FINE } from '../morph/staggered-sat.js';
@@ -45,7 +45,7 @@ import { beziersToSvgPathStr } from 'flo-boolean';
 
 /** the view toggles, in the views' on-screen order: `showSvgs` index, label */
 const VIEW_TOGGLES: readonly (readonly [number, string])[] = [
-    [2, 'Morph'], [0, 'Glyph 1'], [1, 'Glyph 2']
+    [2, 'Morph'], [0, 'Vector 1'], [1, 'Vector 2']
 ];
 
 
@@ -336,6 +336,17 @@ function Page(props: Props) {
         });
     }
 
+    /**
+     * Resets all three viewboxes to their initial fit around the glyphs (by
+     * reloading them), dropping the zoom history.
+     */
+    function onResetViewClicked() {
+        transientState.viewboxStack1 = [];
+        transientState.viewboxStack2 = [];
+        transientState.viewboxStack3 = [];
+        lazyLoadDeduced(refPageData, true);
+    }
+
     /** Rotate shape 1 a further 15° and rebuild everything (testing). */
     function onRotate15Clicked() {
         updAndReload({ rot1: (pageState.rot1 + 15) % 360 }, false);
@@ -362,7 +373,7 @@ function Page(props: Props) {
     return <>
         <div style={{ height: '100vh', boxSizing: 'border-box', display: 'flex', flexDirection: 'column' }}>
             <header className="ui-toolbar">
-                <ToolGroup label="Glyphs">
+                <ToolGroup label="Vectors">
                     <PresetSelect
                         presets={glyphPresets}
                         glyph1Name={glyph1Name}
@@ -386,17 +397,17 @@ function Page(props: Props) {
                     />
                 </ToolGroup>
                 <ToolGroup label="Transform">
-                    <button className="ui-btn" title="Rotate glyph 1 a further 15°" onClick={onRotate15Clicked}>
+                    <button className="ui-btn" title="Rotate vector 1 a further 15°" onClick={onRotate15Clicked}>
                         <RotateIcon />{pageState.rot1}°
                     </button>
                     <div className="ui-seg">
-                        <button className={getBtnClass(flipH, '')} title="Mirror glyph 1 horizontally" onClick={onFlipHClicked}>
+                        <button className={getBtnClass(flipH, '')} title="Mirror vector 1 horizontally" onClick={onFlipHClicked}>
                             <FlipHIcon />H
                         </button>
-                        <button className={getBtnClass(flipV1, '')} title="Mirror glyph 1 vertically" onClick={onFlipV1Clicked}>
+                        <button className={getBtnClass(flipV1, '')} title="Mirror vector 1 vertically" onClick={onFlipV1Clicked}>
                             <FlipVIcon />V1
                         </button>
-                        <button className={getBtnClass(flipV2, '')} title="Mirror glyph 2 vertically" onClick={onFlipV2Clicked}>
+                        <button className={getBtnClass(flipV2, '')} title="Mirror vector 2 vertically" onClick={onFlipV2Clicked}>
                             <FlipVIcon />V2
                         </button>
                     </div>
@@ -439,8 +450,8 @@ function Page(props: Props) {
                             </button>
                         )}
                     </div>
-                    <button className="ui-btn ui-icon" title="Zoom the morph out 2×" onClick={onZoomOutClicked}>
-                        <ZoomOutIcon />
+                    <button className="ui-btn ui-icon" title="Reset the view to fit the glyphs" onClick={onResetViewClicked}>
+                        <FitIcon />
                     </button>
                 </ToolGroup>
                 <div className="ui-spacer" />
@@ -548,6 +559,9 @@ function Page(props: Props) {
                             onClick={() => { setShowDtw(show => !show); setShowNeedle(false); }}
                         >
                             DTW
+                        </button>
+                        <button className="ui-btn ui-small" title="Zoom the morph out 2×" onClick={onZoomOutClicked}>
+                            <ZoomOutIcon />
                         </button>
                     </div>
                 </DebugRow>

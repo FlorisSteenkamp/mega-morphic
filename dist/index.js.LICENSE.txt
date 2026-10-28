@@ -1,6 +1,1980 @@
+/*! ../../../../error-analysis/error-analysis.js */
+
+/*! ../../../../implicit-form/double-double/get-implicit-form1-dd-with-running-error.js */
+
+/*! ../../../../implicit-form/double-double/get-implicit-form2-dd-with-running-error.js */
+
+/*! ../../../../implicit-form/double-double/get-implicit-form3-dd-with-running-error.js */
+
+/*! ../../../../implicit-form/expansion/e-get-implicit-form1.js */
+
+/*! ../../../../implicit-form/expansion/e-get-implicit-form2.js */
+
+/*! ../../../../implicit-form/expansion/e-get-implicit-form3.js */
+
+/*! ../../../../to-power-basis/to-power-basis/double-double/to-power-basis-dd-with-running-error.js */
+
+/*! ../../../../to-power-basis/to-power-basis/double/to-power-basis-with-running-error.js */
+
+/*! ../../../../to-power-basis/to-power-basis/exact/to-power-basis-exact.js */
+
+/*! ../../../../transformation/degree-or-type/cubic-to-quadratic.js */
+
+/*! ../../../basic/double/negate.js */
+
+/*! ../../../basic/double/remove-leading-zeros.js */
+
+/*! ../../../debug/record-trunk-cands.js */
+
+/*! ../../../error-analysis/error-analysis.js */
+
+/*! ../../../geometry/are-boxes-intersecting.js */
+
+/*! ../../../graph/get-connected-components.js */
+
+/*! ../../../local-properties-at-t/evaluate/double-double/eval-de-casteljau-dd.js */
+
+/*! ../../../local-properties-at-t/evaluate/double/eval-de-casteljau.js */
+
+/*! ../../../local-properties-at-t/evaluate/eval-de-casteljau-error.js */
+
+/*! ../../../sweep-line/sweep-line.js */
+
+/*! ../../../to-power-basis/to-power-basis-1st-derivative/double-double/to-power-basis-1st-derivative-dd.js */
+
+/*! ../../../to-power-basis/to-power-basis-1st-derivative/double/to-power-basis-1st-derivative.js */
+
+/*! ../../../transformation/split/from-to.js */
+
+/*! ../../../transformation/split/from-to/from-to-1-incl-error-bound.js */
+
+/*! ../../../transformation/split/from-to/from-to-2-incl-error-bound.js */
+
+/*! ../../../transformation/split/from-to/from-to-3-incl-error-bound.js */
+
+/*! ../../../utils/clamp.js */
+
+/*! ../../../utils/dual-map.js */
+
+/*! ../../../utils/dual-set.js */
+
+/*! ../../../utils/sum.js */
+
+/*! ../../../utils/time-function-call.js */
+
+/*! ../../../utils/to-p.js */
+
+/*! ../../align-branches.js */
+
+/*! ../../anchored-sleeves.js */
+
+/*! ../../basic/double-double/dd-remove-leading-zeros.js */
+
+/*! ../../basic/double/remove-leading-zeros.js */
+
+/*! ../../bezier/get-bezier-turnarounds.js */
+
+/*! ../../boxes/intersect-boxes.js */
+
+/*! ../../change-variables/double-double/dd-scale-with-inp-err.js */
+
+/*! ../../change-variables/double-double/dd-taylor-shift-with-inp-err.js */
+
+/*! ../../change-variables/double/reflect-about-y-axis.js */
+
+/*! ../../change-variables/double/scale-with-inp-err.js */
+
+/*! ../../change-variables/double/taylor-shift-with-inp-err.js */
+
+/*! ../../change-variables/expansion/e-change-variables-linear.js */
+
+/*! ../../change-variables/expansion/e-scale.js */
+
+/*! ../../change-variables/expansion/e-taylor-shift.js */
+
+/*! ../../containers/get-beziers-to-next-x.js */
+
+/*! ../../containers/get-container-in-outs/get-in-outs-via-sides/get-ts.js */
+
+/*! ../../debug/enable-debug-for-morph.js */
+
+/*! ../../debug/eval-child-pair.js */
+
+/*! ../../debug/record-child-dtw-pair.js */
+
+/*! ../../debug/record-path-match.js */
+
+/*! ../../debug/segment-tree/vertex-ids.js */
+
+/*! ../../draw-elem/draw-branch.js */
+
+/*! ../../draw-elem/draw-leaves.js */
+
+/*! ../../draw-elem/draw-mat.js */
+
+/*! ../../draw-elem/draw-one-prong.js */
+
+/*! ../../draw-elem/draw-three-prong.js */
+
+/*! ../../draw-elem/draw-two-prong.js */
+
+/*! ../../draw-elem/draw-vertex.js */
+
+/*! ../../draw/draw-beziers-as-single-path.js */
+
+/*! ../../draw/draw-cross.js */
+
+/*! ../../draw/get-g.js */
+
+/*! ../../draw/seg-d.js */
+
+/*! ../../draw/xmlns.js */
+
+/*! ../../error-analysis/error-analysis.js */
+
+/*! ../../error-analysis/gamma.js */
+
+/*! ../../error-analysis/max-abs-coordinate.js */
+
+/*! ../../evaluate-1st-derivative/double/evaluate-1st-derivative.js */
+
+/*! ../../evaluate/double-double/dd-horner-with-inp-error.js */
+
+/*! ../../evaluate/double/horner-with-inp-error.js */
+
+/*! ../../evaluate/expansion/e-horner.js */
+
+/*! ../../fs/get-last-p.js */
+
+/*! ../../get-beziers-to-next-x.js */
+
+/*! ../../get-critical-points/get-excessive-curvatures.js */
+
+/*! ../../get-critical-points/get-interface-intersections.js */
+
+/*! ../../get-critical-points/get-intersections.js */
+
+/*! ../../get-critical-points/get-self-intersections.js */
+
+/*! ../../get-critical-points/set-intersection-next-values.js */
+
+/*! ../../get-medial-points/double-double/dd-get-medial-point-coeffs-bez0.js */
+
+/*! ../../get-medial-points/double-double/dd-get-medial-point-coeffs-bez2-same-curve.js */
+
+/*! ../../get-medial-points/double-double/dd-get-medial-point-coeffs-bez3-same-curve.js */
+
+/*! ../../get-medial-points/double-double/dd-get-medial-point-coeffs.js */
+
+/*! ../../global-properties/bounds/get-interval-box/get-interval-box.js */
+
+/*! ../../global-properties/classification/is-collinear.js */
+
+/*! ../../global-properties/classification/is-cubic-really-quad.js */
+
+/*! ../../global-properties/curviness.js */
+
+/*! ../../global-properties/length/control-point-lines-length.js */
+
+/*! ../../implicit-form/double-double/get-implicit-form1-dd-with-running-error.js */
+
+/*! ../../implicit-form/double-double/get-implicit-form2-dd-with-running-error.js */
+
+/*! ../../implicit-form/double-double/get-implicit-form3-dd-with-running-error.js */
+
+/*! ../../implicit-form/double/get-implicit-form2.js */
+
+/*! ../../implicit-form/double/get-implicit-form3.js */
+
+/*! ../../implicit-form/expansion/e-get-implicit-form1.js */
+
+/*! ../../implicit-form/expansion/e-get-implicit-form2.js */
+
+/*! ../../implicit-form/expansion/e-get-implicit-form3.js */
+
+/*! ../../implicit-form/get-error-counters/get-implicit-form2-error-counters.js */
+
+/*! ../../implicit-form/get-error-counters/get-implicit-form3-error-counters.js */
+
+/*! ../../intersection//self-intersection/get-coefficients/double/get-coeffs-bez3-with-running-error.js */
+
+/*! ../../intersection/bezier-bezier-intersection/x.js */
+
+/*! ../../intersection/self-intersection/get-coefficients/exact/get-coeffs-bez3-exact.js */
+
+/*! ../../intrinsic-skeleton/wrap-angle.js */
+
+/*! ../../load-svg/load-svg-font.js */
+
+/*! ../../local-properties-at-t/ds.js */
+
+/*! ../../local-properties-at-t/evaluate/double/eval-de-casteljau.js */
+
+/*! ../../main/add-debug-info-1.js */
+
+/*! ../../main/bezier-pieces-from-out.js */
+
+/*! ../../main/create-root-in-out.js */
+
+/*! ../../main/max-bitlength.js */
+
+/*! ../../match-paths/align-cyclic.js */
+
+/*! ../../match-paths/align-seq.js */
+
+/*! ../../morph/align-branches.js */
+
+/*! ../../morph/build-morph-entries/build-glyph-morph-entries.js */
+
+/*! ../../morph/build-morph-entries/build-morph-entries.js */
+
+/*! ../../morph/draw-morph/draw-morph.js */
+
+/*! ../../morph/fs/get-last-p.js */
+
+/*! ../../morph/fs/skeleton-knots.js */
+
+/*! ../../morph/procrustes/align-entries-b-to-a.js */
+
+/*! ../../morph/procrustes/calc-placement.js */
+
+/*! ../../morph/procrustes/calc-pose-at.js */
+
+/*! ../../morph/procrustes/pose-ramp.js */
+
+/*! ../../morph/resolve-morph-at/resolve-morph-at.js */
+
+/*! ../../morph/segment-tree/geom-of.js */
+
+/*! ../../morph/segment-tree/len-of.js */
+
+/*! ../../morph/segment-tree/match-seg-trees/outline-len-of.js */
+
+/*! ../../morph/segment-tree/match-seg-trees/pairs-of.js */
+
+/*! ../../morph/segment-tree/match-seg-trees/score-of.js */
+
+/*! ../../morph/segment-tree/own-area-of.js */
+
+/*! ../../morph/segment-tree/seg-tree-from-cp.js */
+
+/*! ../../morph/segment-tree/segment-area.js */
+
+/*! ../../next-down.js */
+
+/*! ../../next-up.js */
+
+/*! ../../page/events/draw-trunk-start-crosses.js */
+
+/*! ../../page/events/match-colors.js */
+
+/*! ../../point-on-shape/compare-poss.js */
+
+/*! ../../point-on-shape/is-pos-sharp-corner.js */
+
+/*! ../../procrustes/calc-procrustes.js */
+
+/*! ../../shape/get-shape-area.js */
+
+/*! ../../shape/get-shape-centroid.js */
+
+/*! ../../shape/get-turning-number.js */
+
+/*! ../../state/to-draw.js */
+
+/*! ../../svg/beziers-to-svg-path-str.js */
+
+/*! ../../tangent/double-double/dd-tangent2.js */
+
+/*! ../../to-power-basis/to-power-basis-1st-derivative/double-double/to-power-basis-1st-derivative-dd.js */
+
+/*! ../../to-power-basis/to-power-basis-1st-derivative/double/to-power-basis-1st-derivative.js */
+
+/*! ../../to-power-basis/to-power-basis-2nd-derivative/double-double/to-power-basis-2nd-derivative-dd.js */
+
+/*! ../../to-power-basis/to-power-basis-2nd-derivative/double/to-power-basis-2nd-derivative.js */
+
+/*! ../../to-power-basis/to-power-basis/double-double/to-power-basis-dd-with-running-error.js */
+
+/*! ../../to-power-basis/to-power-basis/double/to-power-basis.js */
+
+/*! ../../to-power-basis/to-power-basis/exact/to-power-basis-exact.js */
+
+/*! ../../to-power-basis/to-power-basis/to-power-basis-error-counters.js */
+
+/*! ../../transformation/degree-or-type/cubic-to-quadratic.js */
+
+/*! ../../transformation/reduce-order-if-possible.js */
+
+/*! ../../transformation/split/from-to.js */
+
+/*! ../../utils/clamp */
+
+/*! ../../utils/clamp.js */
+
+/*! ../../utils/get-beziers-from-tangents.js */
+
+/*! ../../utils/get-closest-bezier-in-mats */
+
+/*! ../../utils/get-closest-bezier-in-mats.js */
+
+/*! ../../utils/get-nearest.js */
+
+/*! ../../utils/map-deep.js */
+
+/*! ../../utils/map-map.js */
+
+/*! ../../utils/sum.js */
+
+/*! ../../utils/time-function-call.js */
+
+/*! ../../utils/to-p.js */
+
+/*! ../add-n-prong.ts/add-n-prong.js */
+
+/*! ../add-n-prong.ts/add-to-vertex.js */
+
+/*! ../add-n-prong.ts/get-vertex-on-same-disk.js */
+
+/*! ../add-n-prong.ts/join-spokes.js */
+
+/*! ../add-n-prong.ts/merge-vertices-on-same-disk.js */
+
+/*! ../adj-of.js */
+
+/*! ../align-branches.js */
+
+/*! ../anchored-sleeves.js */
+
+/*! ../basic/reduce-significand.js */
+
+/*! ../basic/split-factor.js */
+
+/*! ../basic/two-diff.js */
+
+/*! ../basic/two-product.js */
+
+/*! ../bezier-bezier-intersection-shared-endpoint/roots-with-shared-endpoint.js */
+
+/*! ../bezier-bezier-intersection/x.js */
+
+/*! ../bezier/get-bezier-min-y.js */
+
+/*! ../bezier/reverse-bezier-piece.js */
+
+/*! ../btn-styles.js */
+
+/*! ../calc-paths/complete-paths/complete-paths.js */
+
+/*! ../calc-paths/get-beziers-to-next-container.js */
+
+/*! ../calc-paths/get-loops-from-tree.js */
+
+/*! ../calc-paths/get-shape-bounds.js */
+
+/*! ../calc-paths/order-loop-ascending-by-min-y.js */
+
+/*! ../calc-paths/split-loop-trees.js */
+
+/*! ../closest-and-furthest-point-on-bezier/closest-point-on-bezier.js */
+
+/*! ../closest-and-furthest-point-on-bezier/furthest-point-on-bezier.js */
+
+/*! ../closest-boundary-point/cull-curve-pieces.js */
+
+/*! ../closest-boundary-point/get-close-boundary-points-certified.js */
+
+/*! ../color.js */
+
+/*! ../common/doctype.js */
+
+/*! ../common/error-codes.js */
+
+/*! ../common/foreign-content.js */
+
+/*! ../common/html.js */
+
+/*! ../common/token.js */
+
+/*! ../common/unicode.js */
+
+/*! ../components/icons.js */
+
+/*! ../components/match-components.js */
+
+/*! ../components/simple-button-group.js */
+
+/*! ../components/simple-checkbox.js */
+
+/*! ../components/simple-select.js */
+
+/*! ../components/simple-slider.js */
+
+/*! ../components/tool-group.js */
+
+/*! ../compose-segs.js */
+
+/*! ../containers/compare-xs.js */
+
+/*! ../containers/get-containers/get-all-x-pairs.js */
+
+/*! ../containers/get-containers/get-containers.js */
+
+/*! ../containers/xs-has-min-y.js */
+
+/*! ../corner/compare-curvatures-at-interface.js */
+
+/*! ../corner/get-corner.js */
+
+/*! ../cp-node/fs/clone.js */
+
+/*! ../cp-node/fs/cp-node-comparator.js */
+
+/*! ../cp-node/fs/get-all-on-circle.js */
+
+/*! ../cp-node/fs/get-all-on-loop.js */
+
+/*! ../cp-node/fs/get-branch.js */
+
+/*! ../cp-node/fs/get-distance-to-next.js */
+
+/*! ../cp-node/fs/get-mat-curve-between.js */
+
+/*! ../cp-node/fs/get-mat-curve-to-next.js */
+
+/*! ../cp-node/fs/get-non-terminating-on-circle.js */
+
+/*! ../cp-node/fs/get-prong-count.js */
+
+/*! ../cp-node/fs/insert-cp-node.js */
+
+/*! ../cp-node/fs/is-fully-terminating.js */
+
+/*! ../cp-node/fs/is-on-same-circle.js */
+
+/*! ../cp-node/fs/is-one-prong.js */
+
+/*! ../cp-node/fs/is-sharp.js */
+
+/*! ../cp-node/fs/is-special.js */
+
+/*! ../cp-node/fs/is-terminating.js */
+
+/*! ../cp-node/fs/remove-cp-node.js */
+
+/*! ../cp-node/fs/traverse-cp.js */
+
+/*! ../cp-node/fs/traverse-edges.js */
+
+/*! ../debug/debug.js */
+
+/*! ../descartes/roots.js */
+
+/*! ../distance-and-length/length-squared.js */
+
+/*! ../double-double/binary/dd-div-dd.js */
+
+/*! ../double-expansion/e-compress.js */
+
+/*! ../double-expansion/e-diff.js */
+
+/*! ../double-expansion/e-estimate.js */
+
+/*! ../double-expansion/e-sign.js */
+
+/*! ../double-expansion/fast-expansion-sum.js */
+
+/*! ../double-representation/bit-length.js */
+
+/*! ../double-representation/msb-exponent.js */
+
+/*! ../double/get-degenerate-direction.js */
+
+/*! ../draw-fs.js */
+
+/*! ../draw/draw-beziers-as-single-path.js */
+
+/*! ../draw/draw-disk.js */
+
+/*! ../error-analysis/gamma.js */
+
+/*! ../eval-de-casteljau-error.js */
+
+/*! ../evaluate/double/eval-certified.js */
+
+/*! ../evaluate/double/horner.js */
+
+/*! ../evaluate/expansion/e-horner.js */
+
+/*! ../events/match-colors.js */
+
+/*! ../far-end.js */
+
+/*! ../find-2-prong/find-and-add-2-prongs-on-all-loops.js */
+
+/*! ../find-2-prong/find-and-add-hole-closing-2-prongs.js */
+
+/*! ../find-3-prong/find-and-add-3-prongs-on-loop.js */
+
+/*! ../fs-consts-types/get-viewbox-xy.js */
+
+/*! ../fs-consts-types/viewbox.js */
+
+/*! ../fs/boundaries.js */
+
+/*! ../fs/fill-gaps.js */
+
+/*! ../fs/get-last-p.js */
+
+/*! ../fs/length.js */
+
+/*! ../fs/p-at-idx.js */
+
+/*! ../fs/sample-profile.js */
+
+/*! ../fs/skeleton-knots.js */
+
+/*! ../fs/to-chord-frame.js */
+
+/*! ../geom-of.js */
+
+/*! ../geometry/are-boxes-intersecting.js */
+
+/*! ../geometry/do-convex-polygons-intersect.js */
+
+/*! ../geometry/get-bounding-box-.js */
+
+/*! ../geometry/get-bounds-.js */
+
+/*! ../geometry/get-closest-square-distance-to-rect.js */
+
+/*! ../geometry/get-closest-squared-distance-to-rotated-rect.js */
+
+/*! ../get-big-box.js */
+
+/*! ../get-nearest/get-nearest-cp-node.js */
+
+/*! ../get-nearest/get-nearest-curve.js */
+
+/*! ../get-nearest/get-nearest-mat-curve.js */
+
+/*! ../get-nearest/get-nearest-vertex.js */
+
+/*! ../get-tightest-containing-loop.js */
+
+/*! ../get-unit.js */
+
+/*! ../global-properties/classification/is-cubic-really-quad.js */
+
+/*! ../global-properties/classification/is-quad-really-line.js */
+
+/*! ../global-properties/classification/is-really-point.js */
+
+/*! ../global-properties/length/integrate-adaptive.js */
+
+/*! ../global-properties/length/length-bez2.js */
+
+/*! ../global-properties/length/length-bez3.js */
+
+/*! ../global-properties/length/speed-stationary-points.js */
+
+/*! ../heap.js */
+
+/*! ../internal/decode-shared.js */
+
+/*! ../intrinsic-skeleton/calc-angle-progress.js */
+
+/*! ../intrinsic-skeleton/intrinsic-skeleton.js */
+
+/*! ../intrinsic-skeleton/unwrapped-chord-angles.js */
+
+/*! ../intrinsic-skeleton/wrap-angle.js */
+
+/*! ../is-loop-in-loop/is-loop-in-loop.js */
+
+/*! ../len-of.js */
+
+/*! ../length/control-point-lines-length.js */
+
+/*! ../local-properties-at-t/ds.js */
+
+/*! ../log/log-child-dtw.js */
+
+/*! ../log/log-cp-node.js */
+
+/*! ../log/log-curve.js */
+
+/*! ../log/log-k.js */
+
+/*! ../log/log-mat-curve.js */
+
+/*! ../log/log-morph-bezier.js */
+
+/*! ../log/log-nearest-bezier.js */
+
+/*! ../log/log-nearest-loop-set.js */
+
+/*! ../log/log-nearest-loop-simplified.js */
+
+/*! ../log/log-own-material.js */
+
+/*! ../log/log-path-match-result.js */
+
+/*! ../log/log-profile-alignment.js */
+
+/*! ../log/log-salience.js */
+
+/*! ../log/log-three-prong.js */
+
+/*! ../log/log-two-prong.js */
+
+/*! ../log/show-and-log-cp */
+
+/*! ../loop/get-max-coordinate.js */
+
+/*! ../loop/merge-touching-loops.js */
+
+/*! ../main/bezier-pieces-from-out.js */
+
+/*! ../mat/add-to-cp-tree.js */
+
+/*! ../mat/create-new-cp-trees.js */
+
+/*! ../mat/get-boundary-piece-beziers.js */
+
+/*! ../mat/get-closeby-cp-if-exist.js */
+
+/*! ../mat/get-cp-node-neighbors.js */
+
+/*! ../mat/get-largest-vertex.js */
+
+/*! ../mat/simplify-mat.js */
+
+/*! ../match-paths/gap-extend-of.js */
+
+/*! ../match-paths/path-cost-weights.js */
+
+/*! ../match-paths/step-cost-of.js */
+
+/*! ../matrix/det.js */
+
+/*! ../mobius/mobius-precise.js */
+
+/*! ../morph/draw-morph/draw-morph.js */
+
+/*! ../morph/match-paths/path-cost-weights.js */
+
+/*! ../morph/segment-tree/compose-segs.js */
+
+/*! ../morph/segment-tree/geom-of.js */
+
+/*! ../morph/segment-tree/get-unit.js */
+
+/*! ../morph/segment-tree/len-of.js */
+
+/*! ../morph/segment-tree/match-seg-trees/aniso-of.js */
+
+/*! ../morph/segment-tree/match-seg-trees/build-pair.js */
+
+/*! ../morph/segment-tree/match-seg-trees/calc-sub-weights.js */
+
+/*! ../morph/segment-tree/match-seg-trees/cheap-child-cost.js */
+
+/*! ../morph/segment-tree/match-seg-trees/child-costs.js */
+
+/*! ../morph/segment-tree/match-seg-trees/consts.js */
+
+/*! ../morph/segment-tree/match-seg-trees/outline-len-of.js */
+
+/*! ../morph/segment-tree/match-seg-trees/route-features-of.js */
+
+/*! ../morph/segment-tree/match-seg-trees/route-warp-of.js */
+
+/*! ../morph/segment-tree/match-seg-trees/score-of.js */
+
+/*! ../morph/segment-tree/match-seg-trees/sub-dtw-of.js */
+
+/*! ../morph/segment-tree/product-dtw.js */
+
+/*! ../morph/segment-tree/sample-seg-tree.js */
+
+/*! ../morph/staggered-sat.js */
+
+/*! ../nearest-idx.js */
+
+/*! ../order-in-outs.js */
+
+/*! ../own-area-of.js */
+
+/*! ../page/fs-consts-types/create-empty-generated-svgs.js */
+
+/*! ../page/fs-consts-types/to-draw-key-to-text.js */
+
+/*! ../parse.js */
+
+/*! ../path-data-polyfill/arc-to-cubic-curves.js */
+
+/*! ../place-topology.js */
+
+/*! ../point-on-shape/calc-pos-order.js */
+
+/*! ../point-on-shape/compare-poss.js */
+
+/*! ../point-on-shape/get-osculating-circle.js */
+
+/*! ../point-on-shape/get-pos-corner.js */
+
+/*! ../point-on-shape/is-pos-corner.js */
+
+/*! ../point-on-shape/is-pos-sharp-corner.js */
+
+/*! ../point-on-shape/to-p.js */
+
+/*! ../positive-to-negative-bound-with-err.js */
+
+/*! ../procrustes/calc-placement.js */
+
+/*! ../procrustes/calc-procrustes.js */
+
+/*! ../procrustes/main-outlines-of.js */
+
+/*! ../procrustes/pose-ramp.js */
+
+/*! ../product-dtw.js */
+
+/*! ../reduce-interval.js */
+
+/*! ../refine-certified.js */
+
+/*! ../remove-leading-zero-coeffs.js */
+
+/*! ../resolve-morph-at/get-morphed-skeleton.js */
+
+/*! ../resolve-morph-at/resolve-morph-at.js */
+
+/*! ../route-segments.js */
+
+/*! ../sample-seg-tree.js */
+
+/*! ../sat/to-scale-axis.js */
+
+/*! ../segment-tree/compose-segs.js */
+
+/*! ../segment-tree/get-unit.js */
+
+/*! ../segment-tree/len-of.js */
+
+/*! ../segment-tree/match-seg-trees/identity-match-of.js */
+
+/*! ../segment-tree/match-seg-trees/match-seg-trees.js */
+
+/*! ../segment-tree/match-seg-trees/pairs-of.js */
+
+/*! ../segment-tree/match-seg-trees/refine-match.js */
+
+/*! ../segment-tree/outline-loop.js */
+
+/*! ../segment-tree/seg-tree-from-cp.js */
+
+/*! ../set-next-and-prev-around.js */
+
+/*! ../shape/get-jordan-turning-number.js */
+
+/*! ../shape/get-min-y.js */
+
+/*! ../shape/get-shape-area.js */
+
+/*! ../shape/loop-from-beziers.js */
+
+/*! ../shape/normalize/get-max-coordinate.js */
+
+/*! ../shape/normalize/normalize-loop.js */
+
+/*! ../shape/reverse-shape-orientation.js */
+
+/*! ../simultaneous-properties/get-interface-rotation.js */
+
+/*! ../sort.js */
+
+/*! ../state/default-state.js */
+
+/*! ../state/to-draw.js */
+
+/*! ../static.js */
+
+/*! ../svg/get-min-y-pos.js */
+
+/*! ../svg/get-shape-bounds.js */
+
+/*! ../sweep-line/sweep-line.js */
+
+/*! ../to-power-basis/to-power-basis-1st-derivative/double/to-power-basis-1st-derivative.js */
+
+/*! ../tokenizer/index.js */
+
+/*! ../transformation/split/from-to.js */
+
+/*! ../transformation/split/from-to/from-to-2.js */
+
+/*! ../transformation/split/from-to/from-to-3.js */
+
+/*! ../transpose-poly.js */
+
+/*! ../tree-adapters/default.js */
+
+/*! ../utils.js */
+
+/*! ../utils/clamp.js */
+
+/*! ../utils/map-map.js */
+
+/*! ../utils/sum.js */
+
+/*! ../utils/time-function-call.js */
+
+/*! ../utils/to-p.js */
+
+/*! ../vertex/remove-vertex.js */
+
+/*! ./Parser.js */
+
+/*! ./Tokenizer.js */
+
+/*! ./abs-horner.js */
+
+/*! ./add-1-prong.js */
+
+/*! ./add-2-prong.js */
+
+/*! ./add-debug-info-2.js */
+
+/*! ./add-debug-info.js */
+
+/*! ./add-to-vertex.js */
+
+/*! ./adj-of.js */
+
+/*! ./aliases.js */
+
+/*! ./align-of-routes.js */
+
+/*! ./align-outline.js */
+
+/*! ./align-viz.js */
+
+/*! ./anchored-sleeves.js */
+
+/*! ./aniso-of.js */
+
+/*! ./api/attributes.js */
+
+/*! ./api/css.js */
+
+/*! ./api/extract.js */
+
+/*! ./api/forms.js */
+
+/*! ./api/manipulation.js */
+
+/*! ./api/traversing.js */
+
+/*! ./are-all-points-different.js */
+
+/*! ./are-containers-intersecting.js */
+
+/*! ./assemble-loop.js */
+
+/*! ./assign-big-boxes-to-containers.js */
+
+/*! ./assoc-path.js */
+
+/*! ./assoc.js */
+
+/*! ./attributes.js */
+
+/*! ./b-abs.js */
+
+/*! ./b-cbrt.js */
+
+/*! ./b-sign.js */
+
+/*! ./b-sqrt.js */
+
+/*! ./bezier-from-bezier-piece.js */
+
+/*! ./bezier-pieces-from-out.js */
+
+/*! ./bezier.js */
+
+/*! ./bigint-to-expansion.js */
+
+/*! ./build-morph-entries.js */
+
+/*! ./build-pair.js */
+
+/*! ./calc-better-x.js */
+
+/*! ./calc-exact-cube-root.js */
+
+/*! ./calc-exact-square-root.js */
+
+/*! ./calc-initial-3-prong-center.js */
+
+/*! ./calc-placement.js */
+
+/*! ./calc-procrustes.js */
+
+/*! ./calc-separation-tolerance.js */
+
+/*! ./calc-sub-weights.js */
+
+/*! ./cap-arc-pts.js */
+
+/*! ./cheap-child-cost.js */
+
+/*! ./cheerio.js */
+
+/*! ./child-costs.js */
+
+/*! ./children-of.js */
+
+/*! ./chord-dir.js */
+
+/*! ./chords.js */
+
+/*! ./circle.js */
+
+/*! ./cjs/react-dom-client.development.js */
+
+/*! ./cjs/react-dom.development.js */
+
+/*! ./cjs/react-jsx-dev-runtime.development.js */
+
+/*! ./cjs/react.development.js */
+
+/*! ./cjs/scheduler.development.js */
+
+/*! ./classification/classify.js */
+
+/*! ./clear-overlay.js */
+
+/*! ./clip-options.js */
+
+/*! ./closest-point-on-beziers.js */
+
+/*! ./collect-subtree.js */
+
+/*! ./combine-bezier-pieces.js */
+
+/*! ./combine-overlapping-containers/combine-overlapping-containers.js */
+
+/*! ./common/error-codes.js */
+
+/*! ./common/foreign-content.js */
+
+/*! ./common/html.js */
+
+/*! ./common/token.js */
+
+/*! ./compare-curvatures-at-interface.js */
+
+/*! ./compile.js */
+
+/*! ./complete-loop.js */
+
+/*! ./complete-path.js */
+
+/*! ./components/dtw-window.js */
+
+/*! ./components/needle-window.js */
+
+/*! ./components/preset-select.js */
+
+/*! ./connect-container-in-outs.js */
+
+/*! ./connect-endpoints.js */
+
+/*! ./consts.js */
+
+/*! ./create-initial-cp-tree.js */
+
+/*! ./create-more-functions.js */
+
+/*! ./create-new-cp-trees.js */
+
+/*! ./cross-hair.js */
+
+/*! ./cubic-bezier.js */
+
+/*! ./cull-curve-pieces.js */
+
+/*! ./cull.js */
+
+/*! ./dd-compare.js */
+
+/*! ./dd-do-ris-overlap.js */
+
+/*! ./dd-get-medial-point-coeffs-bez0.js */
+
+/*! ./dd-get-medial-point-coeffs-bez1.js */
+
+/*! ./dd-get-medial-point-coeffs-bez2.js */
+
+/*! ./dd-get-medial-point-coeffs-bez3.js */
+
+/*! ./dd-get-shape-area.js */
+
+/*! ./dd-remove-leading-zeros.js */
+
+/*! ./dd-tangent.js */
+
+/*! ./decode-codepoint.js */
+
+/*! ./default-class.js */
+
+/*! ./default-state */
+
+/*! ./degree-or-type/cubic-to-quadratic.js */
+
+/*! ./delete-svgs.js */
+
+/*! ./distribute-beziers-evenly.js */
+
+/*! ./do-ris-overlap.js */
+
+/*! ./dot.js */
+
+/*! ./double-double/get-coeffs-bez1-bez1-dd.js */
+
+/*! ./double-double/get-coeffs-bez1-bez1-shared-start-dd.js */
+
+/*! ./double-double/get-coeffs-bez1-bez2-dd.js */
+
+/*! ./double-double/get-coeffs-bez1-bez2-shared-start-dd.js */
+
+/*! ./double-double/get-coeffs-bez1-bez3-dd.js */
+
+/*! ./double-double/get-coeffs-bez1-bez3-shared-start-dd.js */
+
+/*! ./double-double/get-coeffs-bez2-bez1-dd.js */
+
+/*! ./double-double/get-coeffs-bez2-bez1-shared-start-dd.js */
+
+/*! ./double-double/get-coeffs-bez2-bez2-dd.js */
+
+/*! ./double-double/get-coeffs-bez2-bez2-shared-start-dd.js */
+
+/*! ./double-double/get-coeffs-bez2-bez3-dd.js */
+
+/*! ./double-double/get-coeffs-bez2-bez3-shared-start-dd.js */
+
+/*! ./double-double/get-coeffs-bez3-bez1-dd.js */
+
+/*! ./double-double/get-coeffs-bez3-bez1-shared-start-dd.js */
+
+/*! ./double-double/get-coeffs-bez3-bez2-dd.js */
+
+/*! ./double-double/get-coeffs-bez3-bez2-shared-start-dd.js */
+
+/*! ./double-double/get-coeffs-bez3-bez3-dd.js */
+
+/*! ./double-double/get-coeffs-bez3-bez3-shared-start-dd.js */
+
+/*! ./double-view.js */
+
+/*! ./draw-bounding-hull.js */
+
+/*! ./draw-circle-percent.js */
+
+/*! ./draw-container.js */
+
+/*! ./draw-elem/draw-elem.js */
+
+/*! ./draw-intersection.js */
+
+/*! ./draw-loop-pre.js */
+
+/*! ./draw-loop.js */
+
+/*! ./draw-loops-as-path.js */
+
+/*! ./draw-loops-pre.js */
+
+/*! ./draw-loops.js */
+
+/*! ./draw-loose-bounding-box.js */
+
+/*! ./draw-match.js */
+
+/*! ./draw-min-y.js */
+
+/*! ./draw-overlay.js */
+
+/*! ./draw-pose-gizmo.js */
+
+/*! ./draw-shape.js */
+
+/*! ./draw-tight-bounding-box.js */
+
+/*! ./draw-trunk-start-crosses.js */
+
+/*! ./draw/bezier-piece.js */
+
+/*! ./draw/bezier.js */
+
+/*! ./draw/beziers.js */
+
+/*! ./draw/circle.js */
+
+/*! ./draw/cross-hair.js */
+
+/*! ./draw/cubic-bezier.js */
+
+/*! ./draw/dot.js */
+
+/*! ./draw/line.js */
+
+/*! ./draw/loop.js */
+
+/*! ./draw/polygon.js */
+
+/*! ./draw/polyline.js */
+
+/*! ./draw/quad-bezier.js */
+
+/*! ./draw/rect.js */
+
+/*! ./draw/text.js */
+
+/*! ./e-compress.js */
+
+/*! ./e-diff.js */
+
+/*! ./e-estimate.js */
+
+/*! ./e-get-implicit-form1.js */
+
+/*! ./e-get-implicit-form2.js */
+
+/*! ./e-negative-of.js */
+
+/*! ./e-scale.js */
+
+/*! ./e-sign.js */
+
+/*! ./e-taylor-shift.js */
+
+/*! ./e-to-bitlength.js */
+
+/*! ./eft-horner.js */
+
+/*! ./end-variants-of.js */
+
+/*! ./ensure-range.js */
+
+/*! ./er-compare.js */
+
+/*! ./er-estimate.js */
+
+/*! ./eval-de-casteljau-dd.js */
+
+/*! ./evaluate-bezier.js */
+
+/*! ./events/draw-overlay.js */
+
+/*! ./events/on-morph-clicked.js */
+
+/*! ./exact/get-coeffs-bez1-bez1-exact.js */
+
+/*! ./exact/get-coeffs-bez1-bez1-shared-start-exact.js */
+
+/*! ./exact/get-coeffs-bez1-bez2-exact.js */
+
+/*! ./exact/get-coeffs-bez1-bez2-shared-start-exact.js */
+
+/*! ./exact/get-coeffs-bez1-bez3-exact.js */
+
+/*! ./exact/get-coeffs-bez1-bez3-shared-start-exact.js */
+
+/*! ./exact/get-coeffs-bez2-bez1-exact.js */
+
+/*! ./exact/get-coeffs-bez2-bez1-shared-start-exact.js */
+
+/*! ./exact/get-coeffs-bez2-bez2-exact.js */
+
+/*! ./exact/get-coeffs-bez2-bez2-shared-start-exact.js */
+
+/*! ./exact/get-coeffs-bez2-bez3-exact.js */
+
+/*! ./exact/get-coeffs-bez2-bez3-shared-start-exact.js */
+
+/*! ./exact/get-coeffs-bez3-bez1-exact.js */
+
+/*! ./exact/get-coeffs-bez3-bez1-shared-start-exact.js */
+
+/*! ./exact/get-coeffs-bez3-bez2-exact.js */
+
+/*! ./exact/get-coeffs-bez3-bez2-shared-start-exact.js */
+
+/*! ./exact/get-coeffs-bez3-bez3-exact.js */
+
+/*! ./exact/get-coeffs-bez3-bez3-shared-start-exact.js */
+
+/*! ./expansion-product.js */
+
+/*! ./exponent.js */
+
+/*! ./far-end.js */
+
+/*! ./fast-expansion-sum.js */
+
+/*! ./feeds.js */
+
+/*! ./filter-loops-by-min-allowed-area.js */
+
+/*! ./filters.js */
+
+/*! ./find-2-prong.js */
+
+/*! ./find-3-prong-for-delta3s.js */
+
+/*! ./find-3-prong.js */
+
+/*! ./find-and-add-2-prongs.js */
+
+/*! ./find-and-add-3-prong.js */
+
+/*! ./find-and-add-3-prongs.js */
+
+/*! ./find-mat.js */
+
+/*! ./fix-bezier-by-point-spacing.js */
+
+/*! ./fix-beziers.js */
+
+/*! ./foreignNames.js */
+
+/*! ./formatting-element-list.js */
+
+/*! ./from-to.js */
+
+/*! ./from-to/from-to-1.js */
+
+/*! ./from-to/from-to-2.js */
+
+/*! ./from-to/from-to-3.js */
+
+/*! ./fs-consts-types/draw-elems.js */
+
+/*! ./fs-consts-types/load-path.js */
+
+/*! ./fs-consts-types/to-draw-key-to-text.js */
+
+/*! ./fs-consts-types/upd-debug-global */
+
+/*! ./fs-consts-types/viewbox */
+
+/*! ./fs-consts-types/viewbox.js */
+
+/*! ./fs/boundaries.js */
+
+/*! ./fs/clone.js */
+
+/*! ./fs/cp-node-comparator.js */
+
+/*! ./fs/cubic-section.js */
+
+/*! ./fs/dir-at-end.js */
+
+/*! ./fs/dir-at-start.js */
+
+/*! ./fs/enhance-cp-node.js */
+
+/*! ./fs/fill-gaps.js */
+
+/*! ./fs/get-all-on-circle.js */
+
+/*! ./fs/get-all-on-loop.js */
+
+/*! ./fs/get-all-vertices.js */
+
+/*! ./fs/get-angle-between-mat-curves.js */
+
+/*! ./fs/get-boundary-bezier-parts-to-next.js */
+
+/*! ./fs/get-boundary-beziers-between.js */
+
+/*! ./fs/get-boundary-beziers-to-next.js */
+
+/*! ./fs/get-branch-beziers.js */
+
+/*! ./fs/get-branch.js */
+
+/*! ./fs/get-children.js */
+
+/*! ./fs/get-edge-direction.js */
+
+/*! ./fs/get-first-exit.js */
+
+/*! ./fs/get-hole-closers.js */
+
+/*! ./fs/get-last-p.js */
+
+/*! ./fs/get-mat-curve-between.js */
+
+/*! ./fs/get-mat-curve-to-next.js */
+
+/*! ./fs/get-mat-curves-between.js */
+
+/*! ./fs/get-prong-count.js */
+
+/*! ./fs/get-real-prong-count.js */
+
+/*! ./fs/get-salience.js */
+
+/*! ./fs/get-vertex-forward-children.js */
+
+/*! ./fs/is-fully-terminating.js */
+
+/*! ./fs/is-on-same-circle.js */
+
+/*! ./fs/is-one-prong.js */
+
+/*! ./fs/is-sharp.js */
+
+/*! ./fs/is-terminating.js */
+
+/*! ./fs/is-two-prong.js */
+
+/*! ./fs/knot-idx-at.js */
+
+/*! ./fs/length.js */
+
+/*! ./fs/quad-section.js */
+
+/*! ./fs/skeleton-knots.js */
+
+/*! ./fs/to-chord-frame.js */
+
+/*! ./fs/traverse-cp.js */
+
+/*! ./fs/traverse-edges.js */
+
+/*! ./fs/traverse-vertices.js */
+
+/*! ./fs/value-at.js */
+
+/*! ./gauss-kronrod-15.js */
+
+/*! ./general.js */
+
+/*! ./generated/decode-data-html.js */
+
+/*! ./generated/decode-data-xml.js */
+
+/*! ./geom-of.js */
+
+/*! ./get-abs-curvature-extrema-polys-dd.js */
+
+/*! ./get-abs-curvature-extrema-polys.js */
+
+/*! ./get-all-between.js */
+
+/*! ./get-all-on-circle.js */
+
+/*! ./get-all-on-loop.js */
+
+/*! ./get-best-distance-squared.js */
+
+/*! ./get-beziers-from-raw-paths.js */
+
+/*! ./get-boundary-bezier-parts-to-next.js */
+
+/*! ./get-boundary-beziers-between.js */
+
+/*! ./get-boundary-beziers-to-next.js */
+
+/*! ./get-bounding-box.js */
+
+/*! ./get-branch.js */
+
+/*! ./get-branches.js */
+
+/*! ./get-candidates.js */
+
+/*! ./get-closest-points.js */
+
+/*! ./get-coefficients/double/get-coeffs-bez3-with-running-error.js */
+
+/*! ./get-coefficients/exact/get-coeffs-bez3-exact.js */
+
+/*! ./get-coefficients/get-coeffs-bez-bez.js */
+
+/*! ./get-coefficients/get-coeffs-shared-start.js */
+
+/*! ./get-coeffs-bez1-bez1-exact.js */
+
+/*! ./get-coeffs-bez1-bez2-exact.js */
+
+/*! ./get-coeffs-bez1-bez3-exact.js */
+
+/*! ./get-coeffs-bez2-bez1-exact.js */
+
+/*! ./get-coeffs-bez2-bez2-exact.js */
+
+/*! ./get-coeffs-bez2-bez3-exact.js */
+
+/*! ./get-coeffs-bez3-bez1-exact.js */
+
+/*! ./get-coeffs-bez3-bez2-exact.js */
+
+/*! ./get-coeffs/double-double/get-footpoint-poly-1-dd.js */
+
+/*! ./get-coeffs/double-double/get-footpoint-poly-2-dd.js */
+
+/*! ./get-coeffs/double-double/get-footpoint-poly-3-dd.js */
+
+/*! ./get-coeffs/double/get-footpoint-poly-1.js */
+
+/*! ./get-coeffs/double/get-footpoint-poly-2.js */
+
+/*! ./get-coeffs/double/get-footpoint-poly-3.js */
+
+/*! ./get-coeffs/exact/get-footpoint-poly-1-exact.js */
+
+/*! ./get-coeffs/exact/get-footpoint-poly-2-exact.js */
+
+/*! ./get-coeffs/exact/get-footpoint-poly-3-exact.js */
+
+/*! ./get-coeffs/get-closest-on-bezier-from-point-error-counters.js */
+
+/*! ./get-container-in-outs/get-in-outs-via-sides/compare-in-out.js */
+
+/*! ./get-containers-from-x-pairs.js */
+
+/*! ./get-cp-node-neighbors.js */
+
+/*! ./get-cp-node-ordering.js */
+
+/*! ./get-crossing-count-at-endpoints.js */
+
+/*! ./get-curvature-extrema-quadratic-poly-dd.js */
+
+/*! ./get-curvature-extrema-quadratic-poly.js */
+
+/*! ./get-curves-intersections.js */
+
+/*! ./get-degenerate-direction.js */
+
+/*! ./get-dull-corners-on-loop.js */
+
+/*! ./get-edge-direction.js */
+
+/*! ./get-endpoint-info.js */
+
+/*! ./get-endpoint-ts.js */
+
+/*! ./get-first-side-crossing.js */
+
+/*! ./get-foot-points-polys-on-bezier-certified.js */
+
+/*! ./get-for-1-prongs-on-loop.js */
+
+/*! ./get-for-2-prongs-on-loop.js */
+
+/*! ./get-highest-set-bit.js */
+
+/*! ./get-implicit-form1-at-start-dd.js */
+
+/*! ./get-implicit-form1-at-start-exact.js */
+
+/*! ./get-implicit-form2-at-start-dd.js */
+
+/*! ./get-implicit-form2-at-start-exact.js */
+
+/*! ./get-implicit-form3-at-start-dd.js */
+
+/*! ./get-implicit-form3-at-start-exact.js */
+
+/*! ./get-in-out-side-idx.js */
+
+/*! ./get-initial-bezier-pieces.js */
+
+/*! ./get-initial-x.js */
+
+/*! ./get-interface-ccw.js */
+
+/*! ./get-intersection.js */
+
+/*! ./get-interval-box/get-interval-box.js */
+
+/*! ./get-last-p.js */
+
+/*! ./get-leaves.js */
+
+/*! ./get-loop-bounds.js */
+
+/*! ./get-lowest-set-bit.js */
+
+/*! ./get-mat-curve-between.js */
+
+/*! ./get-mat-curve-to-next.js */
+
+/*! ./get-medial/get-antipodal-points.js */
+
+/*! ./get-meta.js */
+
+/*! ./get-morphed-boundary/get-morphed-boundary.js */
+
+/*! ./get-morphed-skeleton.js */
+
+/*! ./get-nearest.js */
+
+/*! ./get-next-exit.js */
+
+/*! ./get-obj-path.js */
+
+/*! ./get-other-t.js */
+
+/*! ./get-pos-corner.js */
+
+/*! ./get-potential-closest-points-on-curve-certified.js */
+
+/*! ./get-prong-count.js */
+
+/*! ./get-real-prong-count.js */
+
+/*! ./get-sat-culls.js */
+
+/*! ./get-shape-area.js */
+
+/*! ./get-shared-endpoint.js */
+
+/*! ./get-sharp-corners.js */
+
+/*! ./get-smallest-idx-y-then-x.js */
+
+/*! ./get-total-shape-curvature.js */
+
+/*! ./get-transform-1.js */
+
+/*! ./get-transform-2.js */
+
+/*! ./get-transform-3.js */
+
+/*! ./get-ts.js */
+
+/*! ./get-turnarounds.js */
+
+/*! ./get-vertex-forward-children.js */
+
+/*! ./get-vertex-on-same-disk.js */
+
+/*! ./get-x-bounds-tight.js */
+
+/*! ./get-y-bounds-tight.js */
+
+/*! ./has-more-data.js */
+
+/*! ./hausdorff-distance-one-sided-exceeds.js */
+
+/*! ./helpers.js */
+
+/*! ./horner-with-running-error.js */
+
+/*! ./horner.js */
+
+/*! ./html.js */
+
+/*! ./initial-command-is-move-to.js */
+
+/*! ./integrate-adaptive.js */
+
+/*! ./internal/bin-trie-flags.js */
+
+/*! ./intrinsic-skeleton/unwrapped-chord-angles.js */
+
+/*! ./is-collinear.js */
+
+/*! ./is-cubic-really-line.js */
+
+/*! ./is-cubic-really-quad.js */
+
+/*! ./is-current-space.js */
+
+/*! ./is-fully-terminating.js */
+
+/*! ./is-loop-not-in-loop.js */
+
+/*! ./is-order-correct.js */
+
+/*! ./is-point-on-bezier-extension-1.js */
+
+/*! ./is-point-on-bezier-extension-2.js */
+
+/*! ./is-point-on-bezier-extension-3.js */
+
+/*! ./is-pos-corner.js */
+
+/*! ./is-quad-really-line.js */
+
+/*! ./is-really-point.js */
+
+/*! ./is-sharp.js */
+
+/*! ./is-terminating.js */
+
+/*! ./is-trivial.js */
+
+/*! ./isolate-roots.js */
+
+/*! ./join-spokes.js */
+
+/*! ./knot-idx-at.js */
+
+/*! ./legacy.js */
+
+/*! ./len-of.js */
+
+/*! ./length-bez1.js */
+
+/*! ./length-bez2.js */
+
+/*! ./length-bez3.js */
+
+/*! ./length.js */
+
+/*! ./line-to-cubic.js */
+
+/*! ./line.js */
+
+/*! ./load-deduced-props.js */
+
+/*! ./load-parse.js */
+
+/*! ./load.js */
+
+/*! ./log/log-some-stuff.js */
+
+/*! ./loop-from-out.js */
+
+/*! ./loopss-from-outsets.js */
+
+/*! ./main-outlines-of.js */
+
+/*! ./make-simple-x.js */
+
+/*! ./manipulation.js */
+
+/*! ./mat-options.js */
+
+/*! ./match-colors.js */
+
+/*! ./max-bitlength.js */
+
+/*! ./max-distance-to-control-points.js */
+
+/*! ./mean-dir.js */
+
+/*! ./merge-containers.js */
+
+/*! ./merge.js */
+
+/*! ./morphing-fill.js */
+
+/*! ./mouse/mouse-down.js */
+
+/*! ./mouse/mouse-move.js */
+
+/*! ./mouse/mouse-up.js */
+
+/*! ./mouse/on-click.js */
+
+/*! ./mouse/pan.js */
+
+/*! ./mult-by-pow-2.js */
+
+/*! ./nearest-idx.js */
+
+/*! ./needle-window.js */
+
+/*! ./newton-foot.js */
+
+/*! ./node.js */
+
+/*! ./number-in-outs.js */
+
+/*! ./open-element-stack.js */
+
+/*! ./options.js */
+
+/*! ./outline-len-of.js */
+
+/*! ./pad-to.js */
+
+/*! ./page/page.js */
+
+/*! ./parse-arc-flag.js */
+
+/*! ./parse-number.js */
+
+/*! ./parse-segment.js */
+
+/*! ./parse.js */
+
+/*! ./parser/index.js */
+
+/*! ./parsers/parse5-adapter.js */
+
+/*! ./path-data-polyfill/parse-path-data-string.js */
+
+/*! ./path-segment/a.js */
+
+/*! ./path-segment/c.js */
+
+/*! ./path-segment/h.js */
+
+/*! ./path-segment/l.js */
+
+/*! ./path-segment/q.js */
+
+/*! ./path-segment/s.js */
+
+/*! ./path-segment/t.js */
+
+/*! ./path-segment/v.js */
+
+/*! ./path-segment/z.js */
+
+/*! ./pick-best.js */
+
+/*! ./pose-ramp.js */
+
+/*! ./positionals.js */
+
+/*! ./positive-root-upper-bound-lmq-with-err.js */
+
+/*! ./positive-root-upper-bound-lmq.js */
+
+/*! ./post-process.js */
+
+/*! ./preprocessor.js */
+
+/*! ./process-polyfill.js */
+
+/*! ./pseudo-selectors/index.js */
+
+/*! ./pseudo-selectors/subselects.js */
+
+/*! ./pseudos.js */
+
+/*! ./quad-bezier.js */
+
+/*! ./quadratic-to-cubic.js */
+
+/*! ./querying.js */
+
+/*! ./rank-trunk-candidates.js */
+
+/*! ./reconstruct-side.js */
+
+/*! ./record-child-dtw-pair.js */
+
+/*! ./reduce-radius.js */
+
+/*! ./remove-leading-zeros.js */
+
+/*! ./root-bounds/lmq/negative-root-lower-bound-lmq-with-err.js */
+
+/*! ./root-bounds/lmq/positive-root-upper-bound-lmq-with-err.js */
+
+/*! ./root-interval-to-distance-squared-interval.js */
+
+/*! ./route-features-of.js */
+
+/*! ./route-pair-costs-of.js */
+
+/*! ./route-warp-of.js */
+
+/*! ./scale-expansion.js */
+
+/*! ./score-of.js */
+
+/*! ./seg-d.js */
+
+/*! ./segment-area.js */
+
+/*! ./segment-tree/adj-of.js */
+
+/*! ./segment-tree/compose-segs.js */
+
+/*! ./segment-tree/geom-of.js */
+
+/*! ./segment-tree/len-of.js */
+
+/*! ./segment-tree/seg-tree-from-cp.js */
+
+/*! ./segment-tree/split-disks.js */
+
+/*! ./send-containers-to-grid.js */
+
+/*! ./serializer/index.js */
+
+/*! ./show-and-log-cp.js */
+
+/*! ./show-vertex-nums.js */
+
+/*! ./skeleton-knots.js */
+
+/*! ./skip-optional-spaces-or-delimiter.js */
+
+/*! ./skip-optional-spaces.js */
+
+/*! ./sort.js */
+
+/*! ./speed-stationary-points.js */
+
+/*! ./split-at.js */
+
+/*! ./split-disks.js */
+
+/*! ./split-factor.js */
+
+/*! ./split-loop-at-self-touches.js */
+
+/*! ./squared-distance-between-dd.js */
+
+/*! ./squared-distance-between.js */
+
+/*! ./state-control/upd.js */
+
+/*! ./state/default-state.js */
+
+/*! ./state/get-initial-state.js */
+
+/*! ./static.js */
+
+/*! ./steps-of.js */
+
+/*! ./stringify.js */
+
+/*! ./sub-dtw-of.js */
+
+/*! ./sub-leaders-of.js */
+
+/*! ./subselects.js */
+
+/*! ./sum-bigints.js */
+
+/*! ./sum.js */
+
+/*! ./tangent.js */
+
+/*! ./tanh-sinh.js */
+
+/*! ./to-command.js */
+
+/*! ./to-draw.js */
+
+/*! ./to-grid.js */
+
+/*! ./to-poly-for-positive-root-upper-bound-lmq.js */
+
+/*! ./to-power-basis-1st-derivative-dd-46-o.js */
+
+/*! ./to-power-basis-root-at.js */
+
+/*! ./tokenizer/index.js */
+
+/*! ./traversal.js */
+
+/*! ./traverse-vertices.js */
+
+/*! ./tree-adapters/default.js */
+
+/*! ./types */
+
+/*! ./upd-obj */
+
+/*! ./utils.js */
+
+/*! ./value-at.js */
+
+/*! ./wrap-angle.js */
+
+/*! ./xmlns.js */
+
+/*! ./xs-has-min-y.js */
+
+/*! big-float-ts */
+
+/*! boolbase */
+
+/*! cheerio */
+
+/*! cheerio-select */
+
+/*! css-select */
+
+/*! css-what */
+
+/*! dom-serializer */
+
+/*! domelementtype */
+
+/*! domhandler */
+
+/*! domutils */
+
+/*! double-double */
+
+/*! entities */
+
+/*! entities/decode */
+
+/*! entities/escape */
+
+/*! flo-bezier3 */
+
+/*! flo-boolean */
+
+/*! flo-draw */
+
+/*! flo-graham-scan */
+
+/*! flo-ll-rb-tree */
+
+/*! flo-mat */
+
+/*! flo-memoize */
+
+/*! flo-poly */
+
+/*! flo-vector2d */
+
+/*! htmlparser2 */
+
+/*! munkres-ts */
+
+/*! nth-check */
+
+/*! parse5 */
+
+/*! parse5-htmlparser2-tree-adapter */
+
+/*! react */
+
+/*! react-dom */
+
+/*! react-dom/client */
+
+/*! react/jsx-dev-runtime */
+
+/*! scheduler */
+
 /**
  * @license React
- * react-dom-client.production.js
+ * react-dom-client.development.js
  *
  * Copyright (c) Meta Platforms, Inc. and affiliates.
  *
@@ -10,7 +1984,7 @@
 
 /**
  * @license React
- * react-dom.production.js
+ * react-dom.development.js
  *
  * Copyright (c) Meta Platforms, Inc. and affiliates.
  *
@@ -20,7 +1994,7 @@
 
 /**
  * @license React
- * react-is.production.js
+ * react-jsx-dev-runtime.development.js
  *
  * Copyright (c) Meta Platforms, Inc. and affiliates.
  *
@@ -30,38 +2004,9 @@
 
 /**
  * @license React
- * react-jsx-runtime.production.js
+ * scheduler.development.js
  *
  * Copyright (c) Meta Platforms, Inc. and affiliates.
- *
- * This source code is licensed under the MIT license found in the
- * LICENSE file in the root directory of this source tree.
- */
-
-/**
- * @license React
- * react.production.js
- *
- * Copyright (c) Meta Platforms, Inc. and affiliates.
- *
- * This source code is licensed under the MIT license found in the
- * LICENSE file in the root directory of this source tree.
- */
-
-/**
- * @license React
- * scheduler.production.js
- *
- * Copyright (c) Meta Platforms, Inc. and affiliates.
- *
- * This source code is licensed under the MIT license found in the
- * LICENSE file in the root directory of this source tree.
- */
-
-/** @license React v16.13.1
- * react-is.production.min.js
- *
- * Copyright (c) Facebook, Inc. and its affiliates.
  *
  * This source code is licensed under the MIT license found in the
  * LICENSE file in the root directory of this source tree.

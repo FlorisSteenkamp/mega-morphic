@@ -1,8 +1,9 @@
 import type { MorphEntry } from '../../morph-entry.js';
+import type { SweepRamp } from './cap-arc-pts.js';
 import { getLastP } from '../../fs/get-last-p.js';
 import { wrapAngle } from '../../intrinsic-skeleton/wrap-angle.js';
 import { boundaryTangents } from '../../anchored-sleeves.js';
-import { capArcBeziers } from './cap-arc-pts.js';
+import { capArcBeziers, calcSweepRamp } from './cap-arc-pts.js';
 import { assembleLoop } from './assemble-loop.js';
 import { toCubic } from 'flo-bezier3';
 import { reconstructSide } from './reconstruct-side.js';
@@ -11,6 +12,13 @@ const { atan2, hypot, cos, sin, abs, min, PI: π } = Math;
 
 /** joints kinked more than this are treated as corners (left alone) */
 const SMOOTH_MAX_KINK = 25 * π/180;
+
+
+/** an entry's tip cap sweeps (`calcCapSweeps$`) */
+interface CapSweeps {
+    readonly start: SweepRamp;
+    readonly end: SweepRamp;
+}
 
 
 /**
@@ -46,6 +54,7 @@ function getMorphedBoundary(
 
     const pStart = skelPss[0][0];
     const pEnd = getLastP(skelPss);
+    const { start, end } = calcCapSweeps$(entry);
 
     // out runs tip → end, back runs end → tip (outline direction).
     // A glued entry closes through its JUNCTION (= pEnd, glued onto the
@@ -55,10 +64,13 @@ function getMorphedBoundary(
     const endCap = entry.glue !== undefined
         ? [[pEnd]]  // waypoint: close through the junction
         : capArcBeziers(
-            pEnd, radii[radii.length - 1], out.last, back.first, capSign);
+            pEnd, radii[radii.length - 1], out.last,
+            end.sweepA + t*end.dSweep
+        );
 
     const startCap = capArcBeziers(
-        pStart, radii[0], back.last, out.first, capSign
+        pStart, radii[0], back.last,
+        start.sweepA + t*start.dSweep
     );
 
     const loop = assembleLoop([
@@ -78,6 +90,50 @@ function getMorphedBoundary(
     }
 
     return loop;
+}
+
+
+/** the entries' tip cap sweeps (`calcCapSweeps$`) */
+const capSweepsMemo = new WeakMap<MorphEntry, CapSweeps>();
+
+
+/**
+ * Returns the sweeps of the entry's start and end tip cap arcs, following
+ * their anchors continuously (`calcSweepRamp`) - like the fork gaps' - so a
+ * cap never flips mid-morph (memoized per entry).
+ *
+ * * start: from the back side's last anchor to the out side's first, on the
+ *   first disk
+ *
+ * * end: from the out side's last anchor to the back side's first, on the
+ *   last disk (unused for a glued entry)
+ */
+function calcCapSweeps$(entry: MorphEntry): CapSweeps {
+    let sweeps = capSweepsMemo.get(entry);
+    if (sweeps === undefined) {
+        sweeps = calcCapSweeps(entry);
+        capSweepsMemo.set(entry, sweeps);
+    }
+
+    return sweeps;
+}
+
+
+/** Returns the entry's tip cap sweeps (see `calcCapSweeps$`). */
+function calcCapSweeps(entry: MorphEntry): CapSweeps {
+    const { sleeveOut, sleeveBack, capSign } = entry;
+    const { anchorsA: outA, anchorsB: outB } = sleeveOut;
+    const { anchorsA: backA, anchorsB: backB } = sleeveBack;
+    const l = outA.length - 1;
+
+    return {
+        start: calcSweepRamp(
+            backA[0][2], outA[0][0], backB[0][2], outB[0][0], capSign
+        ),
+        end: calcSweepRamp(
+            outA[l][2], backA[l][0], outB[l][2], backB[l][0], capSign
+        )
+    };
 }
 
 

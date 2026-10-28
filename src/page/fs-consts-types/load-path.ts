@@ -1,7 +1,7 @@
 import { loadSvgFont } from "../../load-svg/load-svg-font.js";
 
 
-const path = './fonts-test/achispado.svg';
+const path = './fonts-test/vectors.svg';
 
 
 const _font = loadSvgFont(path);
