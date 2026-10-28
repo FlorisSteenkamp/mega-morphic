@@ -6,6 +6,7 @@ import { entryNetTurns } from "../resolve-morph-at/get-morphed-skeleton.js";
 import { drawBeziersAsSinglePath } from "../../draw/draw-beziers-as-single-path.js";
 import { drawLoopsAsPath } from './draw-loops-as-path.js';
 import { drawPoseGizmo } from './draw-pose-gizmo.js';
+import { addMorphingFill, calcMorphColor, VIEW_BACKGROUND } from './morphing-fill.js';
 import { mapDeep } from "../../utils/map-deep.js";
 import { mainOutlinesOf } from "../procrustes/main-outlines-of.js";
 import { getG } from "../../draw/get-g.js";
@@ -23,15 +24,14 @@ function drawMorph(
     const { state: { appState } } = stateControl;
     const { pageState } = appState;
     const { morphPose } = pageState.deduced;
-    const { morphFillOnly, showPose, showMorphBounds } = pageState;
-    
+    const { morphFillOnly, morphPattern, showPose } = pageState;
+
 
     const entries = morphRef.current;
     if (!entries) { return; }
 
     const resolved = resolveMorphAt(entries, t);
     let { drawn, outlines } = resolved;
-    const { outlineEntry } = resolved;
 
     // Pin the drawn shape's MEASURED placement onto the interpolated pose
     // path: straight centroid line, geometric scale - the shape blend
@@ -50,11 +50,25 @@ function drawMorph(
     const g3 = getG(svgRef3.current!);
     g3.replaceChildren();
 
-    // The morphed boundary, drawn first so skeletons render on top.
-    drawLoopsAsPath(
+    // fill only: a dark view, for the morph's colors
+    svgRef3.current!.style.background = morphFillOnly ? VIEW_BACKGROUND : '';
+
+    // The morphed boundary, drawn first so skeletons render on top - fill
+    // only: in a texture that morphs along with the glyph, or in a solid
+    // color that morphs
+    const $outline = drawLoopsAsPath(
         g3, outlines,
-        morphFillOnly ? 'black nostroke' : 'gray thin10 fill25'
+        morphFillOnly ? 'nostroke' : 'gray thin10 fill25'
     );
+    if (morphFillOnly && $outline !== undefined) {
+        if (morphPattern) {
+            const { fill, filter } = addMorphingFill(g3, t, morphPose);
+            $outline.style.fill = fill;
+            $outline.style.filter = filter;
+        } else {
+            $outline.style.fill = calcMorphColor(t);
+        }
+    }
 
     if (showPose) {
         // Tisserand readout: the trunk gauge's whole-turn count + current
@@ -68,15 +82,6 @@ function drawMorph(
     }
 
     if (morphFillOnly) { return; }
-
-    // Per-entry boundary loops in the entry's color (over the gray union).
-    if (showMorphBounds) {
-        for (let k = 0; k < outlines.length; k++) {
-            const { classes } = entries[outlineEntry[k]];
-            drawLoopsAsPath(g3, [outlines[k]],
-                classes.replace(/thin\d+/, 'thin10'));
-        }
-    }
 
     for (let i = 0; i < entries.length; i++) {
         const pss = drawn[i];

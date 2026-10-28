@@ -19,16 +19,16 @@ function loadDeducedProps(
     const { appState } = state;
     const { pageState } = appState;
     const {
-        viewMat, staggeredSat, simplify, satScale, rot1, flipH, flipV
+        viewMat, staggeredSat, simplify, satScale, rot1, flipH, flipV1, flipV2
     } = pageState;
 
     const bezierLoops1 = rotateLoops(
-        flipLoops(getPathsFromStr(pathStr1), flipH, flipV),
+        flipLoops(getPathsFromStr(pathStr1), flipH, flipV1),
         rot1
     );
 
     const viewbox1 = getViewBoxForShape(bezierLoops1);
-    const bezierLoops2 = getPathsFromStr(pathStr2);
+    const bezierLoops2 = flipLoops(getPathsFromStr(pathStr2), false, flipV2);
     const viewbox2 = getViewBoxForShape(bezierLoops2);
 
     const timeStart = performance.now();

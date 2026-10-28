@@ -14,16 +14,32 @@ const SNAP_LEN = 1e-3;
  * Chains ordered open pieces into one closed loop: consecutive pieces are
  * snapped together when their endpoints (nearly) coincide, else bridged with
  * a line segment; single-point pieces act as polyline waypoints.
+ *
+ * * a waypoint before the first piece (e.g. a glued entry's junction, when
+ *   a side has no pieces left - a blob's sides can shrink below the
+ *   tiny-piece cut) is bridged to the first piece too, never dropped: else
+ *   the loop could vanish in one frame and reappear in the next, and with it
+ *   the area the pose correction measures (a size jump)
  */
 function assembleLoop(
         pieces: number[][][]): number[][][] | undefined {
 
     const loop: number[][][] = [];
+    /** a waypoint before the first piece */
+    let lead: number[] | undefined;
 
     for (let ps of pieces) {
         const prev = loop[loop.length - 1];
         if (prev === undefined) {
-            if (ps.length >= 2) { loop.push(ps); }
+            if (ps.length < 2) {
+                lead ??= ps[0];
+                continue;
+            }
+            if (lead !== undefined &&
+                    hypot(ps[0][0] - lead[0], ps[0][1] - lead[1]) > MIN_LEN) {
+                loop.push([lead, ps[0]]);
+            }
+            loop.push(ps);
             continue;
         }
 

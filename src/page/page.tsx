@@ -33,7 +33,6 @@ import { drawMatch } from './events/draw-match.js';
 import { showVertexNums } from './events/show-vertex-nums.js';
 import { NeedleWindow } from './components/needle-window.js';
 import { DtwWindow } from './components/dtw-window.js';
-import { DiagnosticsPanel } from './components/diagnostics-panel.js';
 import { PresetSelect } from './components/preset-select.js';
 import { onMorphClicked } from './events/on-morph-clicked.js';
 import { drawMorph } from '../morph/draw-morph/draw-morph.js';
@@ -77,15 +76,31 @@ const weightRanges: Record<
 };
 // console.log(getGlyphNames_);
 
+/** the morph's playback: one pass, glyph 1 → glyph 2, at speed 1 (seconds) */
+const MORPH_PASS_SECONDS = 3;
+
+/** a playing morph (`onPlayPauseClicked`) */
+interface Playback {
+    /** the pending animation frame's id */
+    raf: number;
+    /** the current t (0 to 100, as the slider) */
+    t: number;
+    /** playing towards glyph 2 (1) or back towards glyph 1 (-1) */
+    dir: 1 | -1;
+    /** the last frame's time (ms) */
+    last: number;
+}
+
 
 function Page(props: Props) {
     // Props
     const { stateControl, pageState } = props;
     const { upd, transientState } = stateControl;
     const {
-        toDraw, viewbox1, viewbox2, viewbox3, deduced, showSvgs, flipH, flipV,
+        toDraw, viewbox1, viewbox2, viewbox3, deduced, showSvgs,
+        flipH, flipV1, flipV2,
         showWeights, glyph1Name, glyph2Name, glyphPresets, clickFor,
-        simplify, viewMat, staggeredSat, morphFillOnly,
+        simplify, viewMat, staggeredSat, morphFillOnly, morphPattern,
         showPose, satScale, showDelay, pathWeights,
         morphT,
     } = pageState;
@@ -108,12 +123,52 @@ function Page(props: Props) {
     const [showNeedle, setShowNeedle] = useState(false);
     const [showDtw, setShowDtw] = useState(false);
 
+    // the morph's playback (`onPlayPauseClicked`) - and its t while
+    // playing, for the slider (the page state is only set when it ends)
+    const playRef = useRef<Playback | null>(null);
+    const [playT, setPlayT] = useState<number | undefined>(undefined);
+
     const refPageData = useRef<PageData>(null);
     refPageData.current = {
         props, svgRef1, svgRef2, svgRef3, morphRef,
     };
 
     useEffect(function() { lazyLoadDeduced(refPageData, false) }, []); // run only once
+
+    // no frames after the page is gone
+    useEffect(function() {
+        return () => {
+            if (playRef.current !== null) {
+                cancelAnimationFrame(playRef.current.raf);
+            }
+        };
+    }, []);
+
+
+    /**
+     * Draws the next frame of the playback: t advanced by the time since the
+     * last frame, turning back at either glyph.
+     *
+     * * reads everything through refs, so the first render's copy serves
+     *   every frame (the speed is the page state's latest)
+     */
+    function playStep(now: number) {
+        const play = playRef.current;
+        if (play === null) { return; }
+
+        const { morphSpeed } = refPageData.current!.props.pageState;
+        const dt = (now - play.last)/1000;
+        play.last = now;
+
+        let t = play.t + play.dir*100*morphSpeed*dt/MORPH_PASS_SECONDS;
+        if (t >= 100) { t = 200 - t; play.dir = -1; }
+        else if (t <= 0) { t = -t; play.dir = 1; }
+        play.t = Math.min(Math.max(t, 0), 100);
+
+        drawMorph(refPageData, play.t / 100);
+        setPlayT(play.t);
+        play.raf = requestAnimationFrame(playStep);
+    }
 
 
     /** Updates the page state, then reloads the shapes (and everything deduced). */
@@ -161,6 +216,39 @@ function Page(props: Props) {
         // setMorphT(t);
         upd(pageState, { morphT: t })
         drawMorph(refPageData, t / 100);
+
+        // dragging the slider while playing moves the play position
+        if (playRef.current !== null) { playRef.current.t = t; }
+    }
+
+
+    /**
+     * Plays the morph from the current t - back and forth between the two
+     * glyphs, at `morphSpeed`, each frame drawn directly (`playStep`) - or,
+     * if playing, pauses it where it is (the page state only set then).
+     */
+    function onPlayPauseClicked() {
+        const play = playRef.current;
+        if (play !== null) {
+            cancelAnimationFrame(play.raf);
+            playRef.current = null;
+            setPlayT(undefined);
+            upd(pageState, { morphT: play.t });
+            drawMorph(refPageData, play.t / 100);
+
+            return;
+        }
+
+        const next: Playback = {
+            raf: 0, t: morphT, dir: morphT >= 100 ? -1 : 1,
+            last: performance.now()
+        };
+        playRef.current = next;
+        next.raf = requestAnimationFrame(playStep);
+    }
+
+    function morphSpeedChanged(morphSpeed: number) {
+        upd(pageState, { morphSpeed });
     }
 
     function onShowMatchChanged(show: boolean) {
@@ -234,14 +322,19 @@ function Page(props: Props) {
         updAndReload({ flipH: !flipH }, false);
     }
 
-    /** Toggle shape 1's vertical mirror and rebuild everything (testing). */
-    function onFlipVClicked() {
-        updAndReload({ flipV: !flipV }, false);
+    /** Toggle shape 1's vertical mirror and rebuild everything. */
+    function onFlipV1Clicked() {
+        updAndReload({ flipV1: !flipV1 }, false);
+    }
+
+    /** Toggle shape 2's vertical mirror and rebuild everything. */
+    function onFlipV2Clicked() {
+        updAndReload({ flipV2: !flipV2 }, false);
     }
 
     return <>
         <div style={{ height: '100vh', boxSizing: 'border-box', padding: '10px', display: 'flex', flexDirection: 'column' }}>
-            <div style={{ position: 'relative' }}>
+            <div>
                 <div>
                 {toDrawKeys.map(key =>
                     <Checkbox
@@ -324,7 +417,7 @@ function Page(props: Props) {
                     <Checkbox checked={!viewMat} styles={toDrawCheckboxStyles} text="SAT enabled" onChanged={satEnabled => updAndReload({ viewMat: !satEnabled }, false)} />
                     <Checkbox checked={staggeredSat} styles={toDrawCheckboxStyles} text={`staggered SAT (${STAGGER_COARSE} → ${STAGGER_FINE})`} onChanged={staggeredSat => updAndReload({ staggeredSat }, false)} />
                     <Checkbox checked={morphFillOnly} styles={toDrawCheckboxStyles} text="fill only" onChanged={morphFillOnly => updAndRedrawMorph({ morphFillOnly })} />
-                    <Checkbox checked={pageState.showMorphBounds} styles={toDrawCheckboxStyles} text="bounds" onChanged={showMorphBounds => updAndRedrawMorph({ showMorphBounds })} />
+                    <Checkbox checked={morphPattern} styles={toDrawCheckboxStyles} text="pattern" onChanged={morphPattern => updAndRedrawMorph({ morphPattern })} />
                     <Checkbox checked={showPose} styles={toDrawCheckboxStyles} text="pose" onChanged={showPose => updAndRedrawMorph({ showPose })} />
                 </div>
                 <div style={{ display: 'flex', gap: '16px', alignItems: 'flex-end', paddingBottom: '8px' }}>
@@ -390,10 +483,18 @@ function Page(props: Props) {
                     </div>
                     <div style={{ display: 'flex' }}>
                         <button
-                            onClick={onFlipVClicked}
-                            style={flipV ? btnStyleBlueFlipped : btnStyleBlue}
+                            onClick={onFlipV1Clicked}
+                            style={flipV1 ? btnStyleBlueFlipped : btnStyleBlue}
                         >
-                            flip v
+                            flip v1
+                        </button>
+                    </div>
+                    <div style={{ display: 'flex' }}>
+                        <button
+                            onClick={onFlipV2Clicked}
+                            style={flipV2 ? btnStyleBlueFlipped : btnStyleBlue}
+                        >
+                            flip v2
                         </button>
                     </div>
                     {/* <div style={{ display: 'flex', gap: '6px' }}>
@@ -419,11 +520,31 @@ function Page(props: Props) {
                             Morph
                         </p>
                         <Slider
-                            value={morphT}
+                            value={playT ?? morphT}
                             aria-labelledby="slider"
                             min={0} max={100} step={1}
                             valueLabelDisplay="auto"
                             onChange={morphChanged}
+                        />
+                    </div>
+                    <div style={{ display: 'flex', gap: '6px', alignItems: 'flex-end' }}>
+                        <button
+                            title={playT !== undefined ? 'pause' : 'play'}
+                            onClick={onPlayPauseClicked}
+                            style={toggleBtnStyle(false, false)}
+                        >
+                            {playT !== undefined ? '❚❚' : '▶'}
+                        </button>
+                    </div>
+                    <div style={{ minWidth: '120px'}}>
+                        <p id="speed-slider" style={{ marginTop: 0, marginBottom: '0.35em' }}>
+                            Speed {pageState.morphSpeed.toFixed(1)}×
+                        </p>
+                        <Slider
+                            value={pageState.morphSpeed}
+                            aria-labelledby="speed-slider"
+                            min={0.1} max={4} step={0.1}
+                            onChange={morphSpeedChanged}
                         />
                     </div>
                     <div style={{ display: 'flex', gap: '6px', alignItems: 'flex-end' }}>
@@ -487,14 +608,6 @@ function Page(props: Props) {
                         DTW
                     </button>
                 </div>}
-                <DiagnosticsPanel
-                    show={pageState.showDiagnostics}
-                    onToggle={() => upd(pageState, { showDiagnostics: !pageState.showDiagnostics })}
-                    glyph1Name={glyph1Name}
-                    glyph2Name={glyph2Name}
-                    mats1={mats1}
-                    mats2={mats2}
-                />
             </div>
             <span ref={refX} style={{ userSelect: 'none', position: 'fixed', bottom: '13px', left: '10px' }} />
             <span ref={refY} style={{ userSelect: 'none', position: 'fixed', bottom: '13px', left: '120px' }} />
@@ -588,12 +701,15 @@ async function lazyLoadDeduced(
 
     upd$(stateControl.state.appState.pageState.deduced, {
         bezierLoops1,
-        // Regenerated from the (possibly rotated) loops so the drawn
-        // outline always matches what the MAT consumed.
+        // Regenerated from the (possibly rotated / flipped) loops so the
+        // drawn outlines always match what the MATs consumed.
         pathStr1: bezierLoops1
             .map(loop => beziersToSvgPathStr(loop)).join(' '),
         mats1,
-        bezierLoops2, pathStr2, mats2,
+        bezierLoops2,
+        pathStr2: bezierLoops2
+            .map(loop => beziersToSvgPathStr(loop)).join(' '),
+        mats2,
         coarseMats1, coarseMats2
     });
 

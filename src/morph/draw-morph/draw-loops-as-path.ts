@@ -2,11 +2,14 @@ import { XMLNS } from "../../draw/xmlns.js";
 import { segD } from "../../draw/seg-d.js";
 
 
-/** Draws multiple closed loops as one (nonzero fill-rule) compound path. */
+/**
+ * Draws multiple closed loops as one (nonzero fill-rule) compound path and
+ * returns it (`undefined` if there is nothing to draw).
+ */
 function drawLoopsAsPath(
         g: SVGGElement,
         loops: number[][][][],
-        classes: string) {
+        classes: string): SVGPathElement | undefined {
 
     let d = '';
     for (const loop of loops) {
@@ -15,12 +18,14 @@ function drawLoopsAsPath(
         for (const ps of loop) { d += segD(ps); }
         d += 'Z ';
     }
-    if (d === '') { return; }
+    if (d === '') { return undefined; }
 
     const $path = document.createElementNS(XMLNS, 'path');
     $path.setAttributeNS(null, 'd', d);
     $path.setAttributeNS(null, 'class', classes);
     g.appendChild($path);
+
+    return $path;
 }
 
 

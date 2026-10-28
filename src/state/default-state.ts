@@ -63,18 +63,19 @@ const defaultPageState: PageState = {
     simplify: false,
     showSvgs: [true, true, true],
     showWeights: true,
-    showDiagnostics: true,
     morphFillOnly: false,
+    morphPattern: true,
     showPose: false,
     showMatch: false,
     showMatchBoundary: false,
-    showMorphBounds: false,
     showBranchNums: false,
     rot1: 0,
     flipH: false,
-    flipV: false,
+    flipV1: false,
+    flipV2: false,
     pathWeights: defaultPathWeights,
-    morphT: 0
+    morphT: 0,
+    morphSpeed: 1
 }
 
 

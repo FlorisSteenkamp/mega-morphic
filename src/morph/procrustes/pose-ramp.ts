@@ -27,17 +27,8 @@ function poseCorrectionAt(
         t: number,
         measured: Placement): (p: number[]) => number[] {
 
-    const { poseA, poseB } = r;
-    const [cAx, cAy] = poseA.centroid;
-    const [cBx, cBy] = poseB.centroid;
-    const { scale: sA } = poseA;
-    const { scale: sB } = poseB;
+    const { centroid: [cDx, cDy], scale: sD } = calcPoseOnRamp(r, t);
     const [mx, my] = measured.centroid;
-
-    // desired centroid (straight line) and scale (geometric)
-    const cDx = (1 - t)*cAx + t*cBx;
-    const cDy = (1 - t)*cAy + t*cBy;
-    const sD = Math.pow(sA, 1 - t) * Math.pow(sB, t);
 
     const s = sD / measured.scale;
 
@@ -48,5 +39,27 @@ function poseCorrectionAt(
 }
 
 
-export { poseCorrectionAt }
+/**
+ * Returns the placement the drawn shape is pinned to at `t`: the centroid
+ * on the straight line between the endpoints' centroids, the scale
+ * geometric between their scales.
+ */
+function calcPoseOnRamp(
+        r: PoseRamp,
+        t: number): Placement {
+
+    const { poseA, poseB } = r;
+    const [cAx, cAy] = poseA.centroid;
+    const [cBx, cBy] = poseB.centroid;
+    const { scale: sA } = poseA;
+    const { scale: sB } = poseB;
+
+    return {
+        centroid: [(1 - t)*cAx + t*cBx, (1 - t)*cAy + t*cBy],
+        scale: Math.pow(sA, 1 - t) * Math.pow(sB, t)
+    };
+}
+
+
+export { poseCorrectionAt, calcPoseOnRamp }
 export type { PoseRamp }
