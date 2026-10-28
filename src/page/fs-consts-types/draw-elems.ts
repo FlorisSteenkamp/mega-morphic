@@ -60,6 +60,9 @@ function drawElements(
     // (the key list, not `toDraws`' own keys - a saved state may carry
     // stale ones)
     for (const elemType of toDrawKeys) {
+        // the match's overlays are drawn by `drawOverlay`
+        if (elemType === 'match' || elemType === 'vertexNums') { continue; }
+
         const toDraw = toDraws[elemType];
 
         const svgElems = $svgs[elemType] || [];

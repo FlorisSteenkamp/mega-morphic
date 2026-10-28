@@ -154,11 +154,13 @@ function SimpleSelect(props: Props) {
                     alignItems: 'center',
                     justifyContent: 'space-between',
                     gap: '8px',
-                    padding: '7px 12px',
-                    background: '#dbffdc',
-                    border: '1px solid #91be91',
-                    borderRadius: '4px',
-                    color: 'black',
+                    height: 'var(--ui-height)',
+                    padding: '0 10px 0 12px',
+                    background: 'var(--ui-surface)',
+                    border: `1px solid ${open ? 'var(--ui-accent)' : 'var(--ui-border)'}`,
+                    borderRadius: 'var(--ui-radius)',
+                    boxShadow: open ? '0 0 0 3px var(--ui-accent-weak)' : 'none',
+                    color: 'var(--ui-text)',
                     cursor: 'pointer',
                     font: 'inherit',
                     boxSizing: 'border-box',
@@ -169,8 +171,9 @@ function SimpleSelect(props: Props) {
                 </span>
                 <span
                     style={{
-                        fontSize: '9px',
+                        fontSize: '8px',
                         lineHeight: 1,
+                        color: 'var(--ui-muted)',
                         transform: open ? 'rotate(180deg)' : 'none',
                         transition: 'transform .15s ease',
                     }}
@@ -191,10 +194,10 @@ function SimpleSelect(props: Props) {
                         listStyle: 'none',
                         maxHeight: `${20 * 30}px`,
                         overflowY: 'auto',
-                        background: '#fff',
-                        border: '1px solid #91be91',
-                        borderRadius: '4px',
-                        boxShadow: '0 4px 12px rgba(0, 0, 0, .15)',
+                        background: 'var(--ui-surface)',
+                        border: '1px solid var(--ui-border)',
+                        borderRadius: 'var(--ui-radius)',
+                        boxShadow: '0 8px 24px rgba(16, 24, 40, .12)',
                     }}
                 >
                     {options.map((option, idx) => {
@@ -215,9 +218,10 @@ function SimpleSelect(props: Props) {
                                     cursor: 'pointer',
                                     whiteSpace: 'nowrap',
                                     background: selected
-                                        ? '#dbffdc'
-                                        : active ? '#eefdef' : 'transparent',
-                                    fontWeight: selected ? 600 : 400,
+                                        ? 'var(--ui-accent-weak)'
+                                        : active ? 'var(--ui-hover)' : 'transparent',
+                                    color: selected ? 'var(--ui-accent)' : 'var(--ui-text)',
+                                    fontWeight: selected ? 500 : 400,
                                 }}
                             >
                                 {option}

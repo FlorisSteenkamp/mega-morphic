@@ -18,16 +18,15 @@ function ButtonGroup<T extends string>(props: Props<T>) {
     }
 
     return (
-        <div className='btn-group'>
+        <div className='ui-chips'>
             {Object.entries(options).map(option => {
                 const key = option[0] as T;
                 const value = option[1] as { text: string };
-                // return <button key={key} onClick={onClick(key)}>{value.text}</button>
                 return (
-                    <button 
-                        key={key} 
+                    <button
+                        key={key}
                         onClick={onClick(key)}
-                        style={selectedValue === key ? { backgroundColor: '#3e8e41' } : {} }
+                        className={selectedValue === key ? 'is-on' : undefined}
                     >
                         {value.text}
                     </button>

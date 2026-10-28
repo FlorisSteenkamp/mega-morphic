@@ -9,11 +9,13 @@ const toDrawKeyToText = {
     threeProng: "3-prongs",
     vertex: 'Vertices',
     mat: "MAT",
-    // sat: "SAT",
     leaves: "Leaves",
     cull: "Culls",
     branch: "branches",
     holeCloser: "Hole-closers",
+    // overlays of the last morph's match (`drawOverlay`), not of the MATs
+    match: "Match",
+    vertexNums: "Vertex #s",
 } as const;
 
 

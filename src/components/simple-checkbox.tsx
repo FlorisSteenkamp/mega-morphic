@@ -16,7 +16,6 @@ interface Props {
 
 const Checkbox = memo(function(props: Props) {
     const { styles, text, onChanged, checked } = props;
-    const idStr = Math.random().toString();
 
     function onChange(event: React.ChangeEvent<HTMLInputElement>) {
         if (onChanged !== undefined) {
@@ -25,10 +24,10 @@ const Checkbox = memo(function(props: Props) {
     }
 
     return (
-        <div style={styles ? styles.div : undefined}>
-            <input type="checkbox" id={idStr} onChange={onChange} checked={checked} />
-            <label htmlFor={idStr}>{text}</label>
-        </div>
+        <label className="ui-check" style={styles ? styles.div : undefined}>
+            <input type="checkbox" onChange={onChange} checked={checked} />
+            {text}
+        </label>
     );
 });
 

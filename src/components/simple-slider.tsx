@@ -39,7 +39,7 @@ const Slider = memo(function SimpleSlider(props: Props) {
                 <span
                     style={{
                         position: 'absolute',
-                        top: '-16px',
+                        top: '-18px',
                         left: `${percent}%`,
                         transform: 'translateX(-50%)',
                         padding: '1px 5px',
@@ -66,7 +66,8 @@ const Slider = memo(function SimpleSlider(props: Props) {
                 onMouseLeave={() => setActive(false)}
                 onFocus={() => setActive(true)}
                 onBlur={() => setActive(false)}
-                style={{ width: '100%', accentColor: color }}
+                className="ui-range"
+                style={{ '--c': color, '--p': `${percent}%` } as React.CSSProperties}
             />
         </div>
     );

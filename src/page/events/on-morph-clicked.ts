@@ -5,8 +5,7 @@ import type { GlyphComponent } from '../../morph/build-morph-entries/build-glyph
 import { buildGlyphMorphEntries } from '../../morph/build-morph-entries/build-glyph-morph-entries.js';
 import { alignEntriesBToA } from '../../morph/procrustes/align-entries-b-to-a.js';
 import { drawMorph } from '../../morph/draw-morph/draw-morph.js';
-import { drawMatch } from './draw-match.js';
-import { showVertexNums } from './show-vertex-nums.js';
+import { drawOverlay } from './draw-overlay.js';
 import { calcPoseAt } from '../../morph/procrustes/calc-pose-at.js';
 import { drawTrunkStartCrosses } from './draw-trunk-start-crosses.js';
 
@@ -23,8 +22,7 @@ function onMorphClicked(
     const { upd, state: { appState } } = stateControl;
     const { pageState } = appState;
     const {
-        deduced, morphT, pathWeights, showMatchBoundary, showBranchNums,
-        showMatch
+        deduced, morphT, pathWeights, toDraw
     } = pageState;
     const { mats1, mats2, coarseMats1, coarseMats2 } = deduced;
 
@@ -56,8 +54,8 @@ function onMorphClicked(
     drawMorph(refPageData, morphT / 100);
 
     // Refresh the overlay for the newly built match.
-    if (showMatch) { drawMatch(refPageData, true, showMatchBoundary); }
-    if (showBranchNums) { showVertexNums(refPageData, true); }
+    drawOverlay(refPageData, 'match', toDraw.match);
+    drawOverlay(refPageData, 'vertexNums', toDraw.vertexNums);
 }
 
 

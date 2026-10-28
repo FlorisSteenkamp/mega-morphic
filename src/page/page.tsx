@@ -3,6 +3,7 @@ import type { Debug } from '../debug/debug.js';
 import type { ToDrawKey } from '../state/to-draw.js';
 import { toDrawKeys } from '../state/to-draw.js';
 import type { ClickFor } from '../state/click-for.js';
+import { defaultPageState } from '../state/default-state.js';
 import type { Props } from './props.js';
 import type { PageData } from './page-data.js';
 import type { MorphEntry } from '../morph/morph-entry.js';
@@ -10,13 +11,17 @@ import type { PathCostWeights } from '../morph/match-paths/path-cost-weights.js'
 import type { PageState } from '../state/page-state.js';
 import type { Mat } from 'flo-mat';
 import type { GlyphPreset } from '../state/glyph-preset.js';
-import { btnStyleBlue, btnStyleBlueFlipped, toggleBtnStyle } from './btn-styles.js';
 import { defaultPathWeights } from '../morph/match-paths/path-cost-weights.js';
 import { useRef, useEffect, useState } from 'react';
 import { Slider } from '../components/simple-slider.js';
 import { SimpleSelect } from '../components/simple-select.js';
 import { ButtonGroup } from '../components/simple-button-group.js';
-import { Checkbox, CheckboxStyles } from '../components/simple-checkbox.js';
+import { Checkbox } from '../components/simple-checkbox.js';
+import { ToolGroup, DebugRow, getBtnClass } from '../components/tool-group.js';
+import {
+    PlayIcon, PauseIcon, RotateIcon, FlipHIcon, FlipVIcon, ZoomOutIcon,
+    ArrowRightIcon, SlidersIcon
+} from '../components/icons.js';
 import { loadDeducedProps } from './load-deduced-props.js';
 import { STAGGER_COARSE, STAGGER_FINE } from '../morph/staggered-sat.js';
 import { logSomeStuff } from './log/log-some-stuff.js';
@@ -29,8 +34,7 @@ import { mouseUp } from './mouse/mouse-up.js';
 import { panMouseDown } from './mouse/pan.js';
 import { drawElements } from './fs-consts-types/draw-elems.js';
 import { getGlyphNames, loadPath } from './fs-consts-types/load-path.js';
-import { drawMatch } from './events/draw-match.js';
-import { showVertexNums } from './events/show-vertex-nums.js';
+import { drawOverlay } from './events/draw-overlay.js';
 import { NeedleWindow } from './components/needle-window.js';
 import { DtwWindow } from './components/dtw-window.js';
 import { PresetSelect } from './components/preset-select.js';
@@ -39,14 +43,10 @@ import { drawMorph } from '../morph/draw-morph/draw-morph.js';
 import { beziersToSvgPathStr } from 'flo-boolean';
 
 
-const toDrawCheckboxStyles: CheckboxStyles = { 
-    div: {
-        display: 'inline-block', 
-        marginBottom: '5px', 
-        fontWeight: 400,
-        width: '120px'
-    }
-}
+/** the view toggles, in the views' on-screen order: `showSvgs` index, label */
+const VIEW_TOGGLES: readonly (readonly [number, string])[] = [
+    [2, 'Morph'], [0, 'Glyph 1'], [1, 'Glyph 2']
+];
 
 
 const getGlyphNames_ = await getGlyphNames();
@@ -78,6 +78,9 @@ const weightRanges: Record<
 
 /** the morph's playback: one pass, glyph 1 → glyph 2, at speed 1 (seconds) */
 const MORPH_PASS_SECONDS = 3;
+/** the playback's hold at either glyph before turning back (seconds, at
+ *  any speed) */
+const MORPH_HOLD_SECONDS = 1;
 
 /** a playing morph (`onPlayPauseClicked`) */
 interface Playback {
@@ -89,6 +92,8 @@ interface Playback {
     dir: 1 | -1;
     /** the last frame's time (ms) */
     last: number;
+    /** holding at a glyph until this time (ms; 0: not holding) */
+    holdUntil: number;
 }
 
 
@@ -99,10 +104,10 @@ function Page(props: Props) {
     const {
         toDraw, viewbox1, viewbox2, viewbox3, deduced, showSvgs,
         flipH, flipV1, flipV2,
-        showWeights, glyph1Name, glyph2Name, glyphPresets, clickFor,
+        showDebug, glyph1Name, glyph2Name, glyphPresets, clickFor,
         simplify, viewMat, staggeredSat, morphFillOnly, morphPattern,
         showPose, satScale, showDelay, pathWeights,
-        morphT,
+        morphT, morphSpeed,
     } = pageState;
     const { mats1, mats2, pathStr1, pathStr2 } = deduced;
 
@@ -133,7 +138,17 @@ function Page(props: Props) {
         props, svgRef1, svgRef2, svgRef3, morphRef,
     };
 
-    useEffect(function() { lazyLoadDeduced(refPageData, false) }, []); // run only once
+    // run only once - fitting the viewboxes to the glyphs if they're still
+    // the defaults' placeholders (a fresh state: a stored one is parsed, so
+    // never the same object) - and resume the playback if it was left playing
+    useEffect(function() {
+        const isFresh = viewbox1 === defaultPageState.viewbox1;
+        lazyLoadDeduced(refPageData, isFresh).then(() => {
+            if (refPageData.current!.props.pageState.morphPlaying) {
+                startPlayback();
+            }
+        });
+    }, []);
 
     // no frames after the page is gone
     useEffect(function() {
@@ -147,7 +162,8 @@ function Page(props: Props) {
 
     /**
      * Draws the next frame of the playback: t advanced by the time since the
-     * last frame, turning back at either glyph.
+     * last frame - on reaching either glyph, held there for
+     * `MORPH_HOLD_SECONDS`, then turning back.
      *
      * * reads everything through refs, so the first render's copy serves
      *   every frame (the speed is the page state's latest)
@@ -156,14 +172,25 @@ function Page(props: Props) {
         const play = playRef.current;
         if (play === null) { return; }
 
+        // holding at a glyph: nothing moves (and the hold's time is not
+        // played on afterwards)
+        if (now < play.holdUntil) {
+            play.last = now;
+            play.raf = requestAnimationFrame(playStep);
+            return;
+        }
+
         const { morphSpeed } = refPageData.current!.props.pageState;
         const dt = (now - play.last)/1000;
         play.last = now;
 
         let t = play.t + play.dir*100*morphSpeed*dt/MORPH_PASS_SECONDS;
-        if (t >= 100) { t = 200 - t; play.dir = -1; }
-        else if (t <= 0) { t = -t; play.dir = 1; }
-        play.t = Math.min(Math.max(t, 0), 100);
+        if (t >= 100 || t <= 0) {
+            t = t >= 100 ? 100 : 0;
+            play.dir = t === 100 ? -1 : 1;
+            play.holdUntil = now + 1000*MORPH_HOLD_SECONDS;
+        }
+        play.t = t;
 
         drawMorph(refPageData, play.t / 100);
         setPlayT(play.t);
@@ -187,6 +214,10 @@ function Page(props: Props) {
     function toDrawChanged(key: ToDrawKey) {
         return (shouldDraw: boolean) => {
             upd(pageState.toDraw, { [key]: shouldDraw });
+            if (key === 'match' || key === 'vertexNums') {
+                drawOverlay(refPageData, key, shouldDraw);
+                return;
+            }
             redrawElements(refPageData.current!, mats1, mats2, viewbox1, viewbox2);
         }
     }
@@ -233,15 +264,23 @@ function Page(props: Props) {
             cancelAnimationFrame(play.raf);
             playRef.current = null;
             setPlayT(undefined);
-            upd(pageState, { morphT: play.t });
+            upd(pageState, { morphT: play.t, morphPlaying: false });
             drawMorph(refPageData, play.t / 100);
 
             return;
         }
 
+        upd(pageState, { morphPlaying: true });
+        startPlayback();
+    }
+
+
+    /** Starts the playback from the page state's t (see `playStep`). */
+    function startPlayback() {
+        const { morphT } = refPageData.current!.props.pageState;
         const next: Playback = {
             raf: 0, t: morphT, dir: morphT >= 100 ? -1 : 1,
-            last: performance.now()
+            last: performance.now(), holdUntil: 0
         };
         playRef.current = next;
         next.raf = requestAnimationFrame(playStep);
@@ -249,21 +288,6 @@ function Page(props: Props) {
 
     function morphSpeedChanged(morphSpeed: number) {
         upd(pageState, { morphSpeed });
-    }
-
-    function onShowMatchChanged(show: boolean) {
-        upd(pageState, { showMatch: show });
-        drawMatch(refPageData, show, pageState.showMatchBoundary);
-    }
-
-    function onShowMatchBoundaryChanged(show: boolean) {
-        upd(pageState, { showMatchBoundary: show });
-        drawMatch(refPageData, pageState.showMatch, show);
-    }
-
-    function onShowBranchNumsChanged(show: boolean) {
-        upd(pageState, { showBranchNums: show });
-        showVertexNums(refPageData, show);
     }
 
     function pathWeightChanged(key: keyof PathCostWeights) {
@@ -332,38 +356,115 @@ function Page(props: Props) {
         updAndReload({ flipV2: !flipV2 }, false);
     }
 
+    const t = playT ?? morphT;
+    const isPlaying = playT !== undefined;
+
     return <>
-        <div style={{ height: '100vh', boxSizing: 'border-box', padding: '10px', display: 'flex', flexDirection: 'column' }}>
-            <div>
-                <div>
-                {toDrawKeys.map(key =>
-                    <Checkbox
-                        key={key}
-                        checked={toDraw[key]}
-                        styles={toDrawCheckboxStyles}
-                        text={toDrawKeyToText[key]}
-                        onChanged={toDrawChanged(key)}
+        <div style={{ height: '100vh', boxSizing: 'border-box', display: 'flex', flexDirection: 'column' }}>
+            <header className="ui-toolbar">
+                <ToolGroup label="Glyphs">
+                    <PresetSelect
+                        presets={glyphPresets}
+                        glyph1Name={glyph1Name}
+                        glyph2Name={glyph2Name}
+                        onSelected={onPresetSelected}
+                        onAdded={onPresetAdded}
+                        onDeleted={onPresetDeleted}
                     />
-                )}
-                <Checkbox
-                    checked={pageState.showMatch}
-                    styles={toDrawCheckboxStyles}
-                    text="match"
-                    onChanged={onShowMatchChanged}
-                />
-                <Checkbox
-                    checked={pageState.showMatchBoundary}
-                    styles={toDrawCheckboxStyles}
-                    text="match bnds"
-                    onChanged={onShowMatchBoundaryChanged}
-                />
-                <Checkbox
-                    checked={pageState.showBranchNums}
-                    styles={toDrawCheckboxStyles}
-                    text="vertex #s"
-                    onChanged={onShowBranchNumsChanged}
-                />
-                </div>
+                    <SimpleSelect
+                        value={glyph1Name}
+                        options={getGlyphNames_}
+                        style={{ minWidth: '140px' }}
+                        onChanged={glyph1Name => updAndReload({ glyph1Name }, true)}
+                    />
+                    <span className="ui-arrow"><ArrowRightIcon /></span>
+                    <SimpleSelect
+                        value={glyph2Name}
+                        options={getGlyphNames_}
+                        style={{ minWidth: '140px' }}
+                        onChanged={glyph2Name => updAndReload({ glyph2Name }, true)}
+                    />
+                </ToolGroup>
+                <ToolGroup label="Transform">
+                    <button className="ui-btn" title="Rotate glyph 1 a further 15°" onClick={onRotate15Clicked}>
+                        <RotateIcon />{pageState.rot1}°
+                    </button>
+                    <div className="ui-seg">
+                        <button className={getBtnClass(flipH, '')} title="Mirror glyph 1 horizontally" onClick={onFlipHClicked}>
+                            <FlipHIcon />H
+                        </button>
+                        <button className={getBtnClass(flipV1, '')} title="Mirror glyph 1 vertically" onClick={onFlipV1Clicked}>
+                            <FlipVIcon />V1
+                        </button>
+                        <button className={getBtnClass(flipV2, '')} title="Mirror glyph 2 vertically" onClick={onFlipV2Clicked}>
+                            <FlipVIcon />V2
+                        </button>
+                    </div>
+                </ToolGroup>
+                <ToolGroup label="Morph">
+                    <button className="ui-btn ui-play" title={isPlaying ? 'Pause' : 'Play'} onClick={onPlayPauseClicked}>
+                        {isPlaying ? <PauseIcon /> : <PlayIcon />}
+                    </button>
+                    <div className="ui-slider-field" style={{ width: '160px' }}>
+                        <Slider
+                            value={t}
+                            min={0} max={100} step={1}
+                            onChange={morphChanged}
+                        />
+                        <span className="ui-value">{(t / 100).toFixed(2)}</span>
+                    </div>
+                    <span className="ui-inline-label">Speed</span>
+                    <div className="ui-slider-field" style={{ width: '110px' }}>
+                        <Slider
+                            value={morphSpeed}
+                            min={0.1} max={4} step={0.1}
+                            onChange={morphSpeedChanged}
+                        />
+                        <span className="ui-value">{morphSpeed.toFixed(1)}×</span>
+                    </div>
+                </ToolGroup>
+                <ToolGroup label="Display">
+                    <div className="ui-seg">
+                        <button className={getBtnClass(morphFillOnly, '')} onClick={() => updAndRedrawMorph({ morphFillOnly: !morphFillOnly })}>
+                            Fill only
+                        </button>
+                        <button className={getBtnClass(morphPattern, '')} onClick={() => updAndRedrawMorph({ morphPattern: !morphPattern })}>
+                            Pattern
+                        </button>
+                    </div>
+                    <div className="ui-seg">
+                        {VIEW_TOGGLES.map(([i, label]) =>
+                            <button key={i} className={getBtnClass(showSvgs[i], '')} onClick={() => toggleSvg(i)}>
+                                {label}
+                            </button>
+                        )}
+                    </div>
+                    <button className="ui-btn ui-icon" title="Zoom the morph out 2×" onClick={onZoomOutClicked}>
+                        <ZoomOutIcon />
+                    </button>
+                </ToolGroup>
+                <div className="ui-spacer" />
+                <button
+                    className={getBtnClass(showDebug, '')}
+                    title="Show the debug controls"
+                    onClick={() => upd(pageState, { showDebug: !showDebug })}
+                >
+                    <SlidersIcon />Debug
+                </button>
+            </header>
+            {showDebug &&
+            <section className="ui-debug">
+                <DebugRow label="Draw">
+                    {toDrawKeys.map(key =>
+                        <Checkbox
+                            key={key}
+                            checked={toDraw[key]}
+                            text={toDrawKeyToText[key]}
+                            onChanged={toDrawChanged(key)}
+                        />
+                    )}
+                </DebugRow>
+                <DebugRow label="Click">
                 <ButtonGroup<ClickFor>
                     options={{
                         twoProng: { text: '2-prong' },
@@ -386,198 +487,38 @@ function Page(props: Props) {
                     value={clickFor}
                     onChanged={onClickForChanged}
                 />
-                <div style={{ display: 'flex', gap: '16px', alignItems: 'center', marginTop: '10px', marginBottom: '2px' }}>
-                    <div>
-                        <PresetSelect
-                            presets={glyphPresets}
-                            glyph1Name={glyph1Name}
-                            glyph2Name={glyph2Name}
-                            onSelected={onPresetSelected}
-                            onAdded={onPresetAdded}
-                            onDeleted={onPresetDeleted}
-                        />
-                    </div>
-                    <div>
-                        <SimpleSelect
-                            value={glyph1Name}
-                            options={getGlyphNames_}
-                            style={{ minWidth: '187px' }}
-                            onChanged={glyph1Name => updAndReload({ glyph1Name }, true)}
-                        />
-                    </div>
-                    <div>
-                        <SimpleSelect
-                            value={glyph2Name}
-                            options={getGlyphNames_}
-                            style={{ minWidth: '187px' }}
-                            onChanged={glyph2Name => updAndReload({ glyph2Name }, true)}
-                        />
-                    </div>
-                    <Checkbox checked={simplify} styles={toDrawCheckboxStyles} text="simplify" onChanged={simplify => updAndReload({ simplify }, false)} />
-                    <Checkbox checked={!viewMat} styles={toDrawCheckboxStyles} text="SAT enabled" onChanged={satEnabled => updAndReload({ viewMat: !satEnabled }, false)} />
-                    <Checkbox checked={staggeredSat} styles={toDrawCheckboxStyles} text={`staggered SAT (${STAGGER_COARSE} → ${STAGGER_FINE})`} onChanged={staggeredSat => updAndReload({ staggeredSat }, false)} />
-                    <Checkbox checked={morphFillOnly} styles={toDrawCheckboxStyles} text="fill only" onChanged={morphFillOnly => updAndRedrawMorph({ morphFillOnly })} />
-                    <Checkbox checked={morphPattern} styles={toDrawCheckboxStyles} text="pattern" onChanged={morphPattern => updAndRedrawMorph({ morphPattern })} />
-                    <Checkbox checked={showPose} styles={toDrawCheckboxStyles} text="pose" onChanged={showPose => updAndRedrawMorph({ showPose })} />
-                </div>
-                <div style={{ display: 'flex', gap: '16px', alignItems: 'flex-end', paddingBottom: '8px' }}>
-                    <div style={{ minWidth: '225px'}}>
-                        <p id="slider" style={{ marginTop: 0, marginBottom: '0.35em' }}>
-                            SAT Scale
-                        </p>
+                </DebugRow>
+                <DebugRow label="Options">
+                    <Checkbox checked={simplify} text="simplify" onChanged={simplify => updAndReload({ simplify }, false)} />
+                    <Checkbox checked={!viewMat} text="SAT enabled" onChanged={satEnabled => updAndReload({ viewMat: !satEnabled }, false)} />
+                    <Checkbox checked={staggeredSat} text={`staggered SAT (${STAGGER_COARSE} → ${STAGGER_FINE})`} onChanged={staggeredSat => updAndReload({ staggeredSat }, false)} />
+                    <Checkbox checked={showPose} text="pose" onChanged={showPose => updAndRedrawMorph({ showPose })} />
+                    <div className="ui-field" style={{ width: '200px' }}>
+                        <span className="ui-field-label">SAT scale · {satScale}</span>
                         <Slider
                             value={satScale}
-                            aria-labelledby="slider"
                             min={1} max={10} step={0.1}
-                            valueLabelDisplay="auto"
                             onChange={satScaleChanged}
                         />
                     </div>
-                    <div style={{ minWidth: '225px'}}>
-                        <p id="slider" style={{ marginTop: 0, marginBottom: '0.35em' }}>
-                            Show delay
-                        </p>
+                    <div className="ui-field" style={{ width: '200px' }}>
+                        <span className="ui-field-label">Show delay · {showDelay} ms</span>
                         <Slider
                             value={showDelay}
-                            aria-labelledby="slider"
                             min={0} max={50_000} step={200}
-                            valueLabelDisplay="auto"
                             onChange={showDelayChanged}
                         />
                     </div>
-                    <div style={{ display: 'flex' }}>
-                        <button
-                            onClick={onZoomOutClicked}
-                            style={btnStyleBlue}
-                        >
-                            zoom out
-                        </button>
-                    </div>
-                    <div style={{ display: 'flex', position: 'relative' }}>
-                        <span style={{
-                            position: 'absolute',
-                            top: '-16px',
-                            left: '50%',
-                            transform: 'translateX(-50%)',
-                            fontSize: '12px',
-                            color: '#1976d2',
-                            userSelect: 'none',
-                            whiteSpace: 'nowrap',
-                        }}>
-                            {pageState.rot1}°
-                        </span>
-                        <button
-                            onClick={onRotate15Clicked}
-                            style={btnStyleBlue}
-                        >
-                            rotate 15
-                        </button>
-                    </div>
-                    <div style={{ display: 'flex' }}>
-                        <button
-                            onClick={onFlipHClicked}
-                            style={flipH ? btnStyleBlueFlipped : btnStyleBlue}
-                        >
-                            flip h
-                        </button>
-                    </div>
-                    <div style={{ display: 'flex' }}>
-                        <button
-                            onClick={onFlipV1Clicked}
-                            style={flipV1 ? btnStyleBlueFlipped : btnStyleBlue}
-                        >
-                            flip v1
-                        </button>
-                    </div>
-                    <div style={{ display: 'flex' }}>
-                        <button
-                            onClick={onFlipV2Clicked}
-                            style={flipV2 ? btnStyleBlueFlipped : btnStyleBlue}
-                        >
-                            flip v2
-                        </button>
-                    </div>
-                    {/* <div style={{ display: 'flex', gap: '6px' }}>
-                        <button
-                            onClick={() => onMorphClicked(refPageData)}
-                            style={{
-                                padding: '9px 20px',
-                                fontSize: '14px',
-                                fontWeight: 500,
-                                lineHeight: '1',
-                                color: '#fff',
-                                backgroundColor: '#1976d2',
-                                border: 'none',
-                                borderRadius: '4px',
-                                cursor: 'pointer',
-                            }}
-                        >
-                            morph
-                        </button>
-                    </div> */}
-                    <div style={{ minWidth: '225px'}}>
-                        <p id="slider" style={{ marginTop: 0, marginBottom: '0.35em' }}>
-                            Morph
-                        </p>
-                        <Slider
-                            value={playT ?? morphT}
-                            aria-labelledby="slider"
-                            min={0} max={100} step={1}
-                            valueLabelDisplay="auto"
-                            onChange={morphChanged}
-                        />
-                    </div>
-                    <div style={{ display: 'flex', gap: '6px', alignItems: 'flex-end' }}>
-                        <button
-                            title={playT !== undefined ? 'pause' : 'play'}
-                            onClick={onPlayPauseClicked}
-                            style={toggleBtnStyle(false, false)}
-                        >
-                            {playT !== undefined ? '❚❚' : '▶'}
-                        </button>
-                    </div>
-                    <div style={{ minWidth: '120px'}}>
-                        <p id="speed-slider" style={{ marginTop: 0, marginBottom: '0.35em' }}>
-                            Speed {pageState.morphSpeed.toFixed(1)}×
-                        </p>
-                        <Slider
-                            value={pageState.morphSpeed}
-                            aria-labelledby="speed-slider"
-                            min={0.1} max={4} step={0.1}
-                            onChange={morphSpeedChanged}
-                        />
-                    </div>
-                    <div style={{ display: 'flex', gap: '6px', alignItems: 'flex-end' }}>
-                        {[0, 1, 2].map(i => {
-                            const on = showSvgs[i];
-                            return (
-                                <button
-                                    key={i}
-                                    onClick={() => toggleSvg(i)}
-                                    style={toggleBtnStyle(on, false)}
-                                >
-                                    {i + 1}
-                                </button>
-                            );
-                        })}
-                        <button
-                            onClick={() => upd(pageState, { showWeights: !showWeights })}
-                            style={toggleBtnStyle(showWeights, false)}
-                        >
-                            weights
-                        </button>
-                    </div>
-                </div>
-                {showWeights &&
-                <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap', alignItems: 'flex-end', paddingBottom: '6px' }}>
+                </DebugRow>
+                <DebugRow label="Weights">
                     {(Object.keys(weightRanges) as (keyof PathCostWeights)[])
                         .map(key => {
                             const color = weightGroupColors[weightRanges[key].group];
                             return (
-                                <div key={key} style={{ minWidth: '110px' }}>
-                                    <p style={{ marginTop: 0, marginBottom: '0.1em', fontSize: '12px', color }}>
-                                        {key}: {pathWeights[key]}
-                                    </p>
+                                <div key={key} className="ui-field" style={{ width: '120px' }}>
+                                    <span className="ui-field-label" style={{ color }}>
+                                        {key} · {pathWeights[key]}
+                                    </span>
                                     <Slider
                                         value={pathWeights[key]}
                                         min={0}
@@ -589,31 +530,33 @@ function Page(props: Props) {
                                 </div>
                             );
                         })}
-                    <button
-                        onClick={() => upd(pageState, { pathWeights: defaultPathWeights })}
-                        style={toggleBtnStyle(false, true)}
-                    >
-                        reset
-                    </button>
-                    <button
-                        onClick={() => { setShowNeedle(show => !show); setShowDtw(false); }}
-                        style={toggleBtnStyle(showNeedle, true)}
-                    >
-                        needle
-                    </button>
-                    <button
-                        onClick={() => { setShowDtw(show => !show); setShowNeedle(false); }}
-                        style={toggleBtnStyle(showDtw, true)}
-                    >
-                        DTW
-                    </button>
-                </div>}
-            </div>
-            <span ref={refX} style={{ userSelect: 'none', position: 'fixed', bottom: '13px', left: '10px' }} />
-            <span ref={refY} style={{ userSelect: 'none', position: 'fixed', bottom: '13px', left: '120px' }} />
+                    <div style={{ display: 'flex', gap: '6px' }}>
+                        <button
+                            className="ui-btn ui-small"
+                            onClick={() => upd(pageState, { pathWeights: defaultPathWeights })}
+                        >
+                            Reset
+                        </button>
+                        <button
+                            className={getBtnClass(showNeedle, 'ui-small')}
+                            onClick={() => { setShowNeedle(show => !show); setShowDtw(false); }}
+                        >
+                            Needle
+                        </button>
+                        <button
+                            className={getBtnClass(showDtw, 'ui-small')}
+                            onClick={() => { setShowDtw(show => !show); setShowNeedle(false); }}
+                        >
+                            DTW
+                        </button>
+                    </div>
+                </DebugRow>
+            </section>}
+            <span ref={refX} className="ui-readout" style={{ left: '16px' }} />
+            <span ref={refY} className="ui-readout" style={{ left: '110px' }} />
             {showNeedle && <NeedleWindow onClose={() => setShowNeedle(false)} />}
             {showDtw && <DtwWindow onClose={() => setShowDtw(false)} />}
-            <div style={{ display: 'flex', gap: '16px', flex: 1, minHeight: 0 }}>
+            <div style={{ display: 'flex', gap: '16px', flex: 1, minHeight: 0, padding: '12px 16px 28px' }}>
             <svg 
                 id="svg3"
                 ref={svgRef3}

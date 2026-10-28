@@ -30,8 +30,9 @@ interface PageState {
     readonly simplify: boolean;
     /** Which of the three SVGs are shown (shape 1, shape 2, morph). */
     readonly showSvgs: readonly [boolean, boolean, boolean];
-    /** Show the path-matching weight sliders. */
-    readonly showWeights: boolean;
+    /** Show the debug controls (debug elements, click-for buttons, MAT
+     *  options, sliders and the path-matching weights). */
+    readonly showDebug: boolean;
     /** Draw the morph as filled area only (no MAT skeletons, no outline stroke). */
     readonly morphFillOnly: boolean;
     /** fill only: fill with the morphing texture (`addMorphingFill`) instead
@@ -40,12 +41,6 @@ interface PageState {
     /** Draw a pose gizmo on the morph (centroid ring ∝ √area + principal
      *  axis line), measured from the drawn outlines. */
     readonly showPose: boolean;
-    /** Show the last morph's match overlay on svgs 1 and 2. */
-    readonly showMatch: boolean;
-    /** also draw each matched piece's boundary in the pair's color */
-    readonly showMatchBoundary: boolean;
-    /** Show the fat trees' branch indices on svgs 1 and 2. */
-    readonly showBranchNums: boolean;
     /** rotation of shape 1 (degrees, applied before the MAT) */
     readonly rot1: number;
     /** horizontal mirror of shape 1 (applied before the MAT) */
@@ -60,6 +55,8 @@ interface PageState {
     /** morph playback speed: 1 = one pass, glyph 1 → glyph 2, in
      *  `MORPH_PASS_SECONDS` */
     readonly morphSpeed: number;
+    /** the morph is playing (back and forth, see `onPlayPauseClicked`) */
+    readonly morphPlaying: boolean;
 }
 
 

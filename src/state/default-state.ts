@@ -1,9 +1,9 @@
-import { AppState } from './app-state.js';
-import { TransientState } from './transient-state.js';
-import { PageState } from './page-state.js';
-import { createEmptyGeneratedSvgs } from '../page/fs-consts-types/create-empty-generated-svgs.js';
-import { DeducedState } from './deduced-state.js';
+import type { AppState } from './app-state.js';
+import type { TransientState } from './transient-state.js';
+import type { PageState } from './page-state.js';
+import type { DeducedState } from './deduced-state.js';
 import type { ToDraw } from './to-draw.js';
+import { createEmptyGeneratedSvgs } from '../page/fs-consts-types/create-empty-generated-svgs.js';
 import { toDrawKeys } from './to-draw.js';
 import { defaultPathWeights } from '../morph/match-paths/path-cost-weights.js';
 
@@ -23,9 +23,9 @@ const defaultTransientState: TransientState = {
 }
 
 
-/** only the MAT is drawn initially */
+/** only the match is drawn initially */
 const defaultToDraw = Object.fromEntries(
-    toDrawKeys.map(k => [k, k === 'mat'])
+    toDrawKeys.map(k => [k, k === 'match'])
 ) as ToDraw;
 
 
@@ -44,38 +44,40 @@ const defaultDeduced: DeducedState = {
 const defaultPageState: PageState = {
     deduced: defaultDeduced,
     showDelay: 1000,
-    clickFor: 'twoProng',
+    clickFor: undefined,
     satScale: 2,
     toDraw: defaultToDraw,
     viewbox1: [[0,0],[1450,1450]],
     viewbox2: [[0,0],[1450,1450]],
     viewbox3: [[0,0],[1450,1450]],
-    glyph1Name: 'Mt3',
-    glyph2Name: 'Mu3',
+    glyph1Name: 'zoo-horse',
+    glyph2Name: 'zoo-cat',
     glyphPresets: [
-        ['M', 'N'], ['T', 'A'], ['k', 'x'], ['E', 'F'],
-        ['six', 'seven'], ['C', 'B'], ['A', 'H'], ['seven', 'three'],
-        ['v', 'Q_V'], ['parenleft', 'parenright'], ['an_one', 'aq_J'],
-        ['five', 'six']
+        ['zoo-horse', 'zoo-cat'], ['k', 'x'], ['seven', 'three']
     ],
+    // Leave these alone
+    // glyphPresets: [
+    //     ['M', 'N'], ['T', 'A'], ['k', 'x'], ['E', 'F'],
+    //     ['six', 'seven'], ['C', 'B'], ['A', 'H'], ['seven', 'three'],
+    //     ['v', 'Q_V'], ['parenleft', 'parenright'], ['an_one', 'aq_J'],
+    //     ['five', 'six']
+    // ],
     viewMat: true,
-    staggeredSat: false,
+    staggeredSat: true,
     simplify: false,
-    showSvgs: [true, true, true],
-    showWeights: true,
-    morphFillOnly: false,
-    morphPattern: true,
+    showSvgs: [false, true, true],
+    showDebug: false,
+    morphFillOnly: true,
+    morphPattern: false,
     showPose: false,
-    showMatch: false,
-    showMatchBoundary: false,
-    showBranchNums: false,
     rot1: 0,
     flipH: false,
-    flipV1: false,
-    flipV2: false,
+    flipV1: true,
+    flipV2: true,
     pathWeights: defaultPathWeights,
     morphT: 0,
-    morphSpeed: 1
+    morphSpeed: 1,
+    morphPlaying: true
 }
 
 
