@@ -1,6 +1,6 @@
 {
-    "name": "morph-demo",
-    "description": "Demo for topology aware morphing.",
+    "name": "mega-morphic",
+    "description": "Mega-morphic: a demo of topology-aware morphing.",
     "version": "0.0.1",
     "author": {
         "name": "Floris Steenkamp"

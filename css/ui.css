@@ -22,6 +22,68 @@
 }
 
 
+/* the title band */
+
+.app-header {
+	display: flex;
+	align-items: center;
+	gap: 12px;
+	padding: 12px 16px;
+	background: linear-gradient(90deg, #0f172a, #1e1b4b);
+	color: #f8fafc;
+}
+
+.app-header-titles { min-width: 0; }
+
+.app-header-title {
+	margin: 0;
+	font-size: 18px;
+	font-weight: 500;
+	letter-spacing: .2px;
+}
+
+.app-header-tagline {
+	margin-top: 2px;
+	font-size: 12.5px;
+	color: #a5b4cf;
+	white-space: nowrap;
+	overflow: hidden;
+	text-overflow: ellipsis;
+}
+
+.app-header-links {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	margin-left: auto;
+	flex: none;
+}
+.app-header-links a {
+	padding: 6px 12px;
+	font-size: 13px;
+	font-weight: 500;
+	color: #e2e8f0;
+	text-decoration: none;
+	border: 1px solid rgba(255, 255, 255, .18);
+	border-radius: var(--ui-radius);
+	transition: background .12s, border-color .12s;
+}
+.app-header-links a:hover {
+	background: rgba(255, 255, 255, .08);
+	border-color: rgba(255, 255, 255, .35);
+}
+.app-header-links a.app-header-cta {
+	color: #0f172a;
+	background: linear-gradient(90deg, #ff4fa3, #22d3ee);
+	border-color: transparent;
+}
+.app-header-links a.app-header-cta:hover { filter: brightness(1.08); }
+
+@media (max-width: 640px) {
+	.app-header-tagline { display: none; }
+}
+
+
 /* the bar */
 
 .ui-toolbar {

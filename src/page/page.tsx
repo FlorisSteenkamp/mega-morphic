@@ -18,6 +18,7 @@ import { SimpleSelect } from '../components/simple-select.js';
 import { ButtonGroup } from '../components/simple-button-group.js';
 import { Checkbox } from '../components/simple-checkbox.js';
 import { ToolGroup, DebugRow, getBtnClass } from '../components/tool-group.js';
+import { AppHeader } from '../components/app-header.js';
 import {
     PlayIcon, PauseIcon, RotateIcon, FlipHIcon, FlipVIcon, ZoomOutIcon,
     FitIcon, ArrowRightIcon, SlidersIcon
@@ -372,6 +373,7 @@ function Page(props: Props) {
 
     return <>
         <div style={{ height: '100vh', boxSizing: 'border-box', display: 'flex', flexDirection: 'column' }}>
+            <AppHeader />
             <header className="ui-toolbar">
                 <ToolGroup label="Vectors">
                     <PresetSelect

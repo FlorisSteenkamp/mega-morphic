@@ -1,11 +1,15 @@
-# Topology-aware morphing
+# Mega-morphic
+
+*Topology-aware shape morphing.*
+
+**[▶ Live demo](https://florissteenkamp.github.io/mega-morphic/)**
 
 > **Need this in your product?** I offer integration, custom features and
 > support. Email me at
 > [steenkampfloris@gmail.com](mailto:steenkampfloris@gmail.com?subject=Morphing).
 
 A browser demo that morphs one vector shape into another: a letter into a
-letter, a digit into a digit, a horse into a cat. It works on the shapes'
+letter, a horse into a cat, or even a digit into a platypus. It works on the shapes'
 *skeletons* rather than their outlines, so strokes bend, branches grow or
 shrink away and holes open or close, instead of one outline sliding
 sideways into the other.
