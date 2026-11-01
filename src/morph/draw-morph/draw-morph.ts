@@ -12,6 +12,13 @@ import { mainOutlinesOf } from "../procrustes/main-outlines-of.js";
 import { getG } from "../../draw/get-g.js";
 import { drawCross } from "../../draw/draw-cross.js";
 import { CROSS_SIZE, CROSS_CLASSES } from "../../page/events/draw-trunk-start-crosses.js";
+import { XMLNS } from "../../draw/xmlns.js";
+
+
+/** the id of the morph view's hole mask (`addHoleMask`) */
+const HOLE_MASK_ID = 'morph-hole-mask';
+/** the hole mask's half-extent - covers any glyph's coordinates */
+const HOLE_MASK_EXTENT = 1e6;
 
 
 /** Interpolate every morph drawable at `t` ∈ [0,1] and draw. */
@@ -53,13 +60,22 @@ function drawMorph(
     // fill only: a dark view, for the morph's colors
     svgRef3.current!.style.background = morphFillOnly ? VIEW_BACKGROUND : '';
 
+    // The holes' outlines (`splitHoles`) are cut out of the others'.
+    const { outlineEntry } = resolved;
+    const solids = outlines.filter((_, k) => entries[outlineEntry[k]].hole !== true);
+    const holes = outlines.filter((_, k) => entries[outlineEntry[k]].hole === true);
+
     // The morphed boundary, drawn first so skeletons render on top - fill
     // only: in a texture that morphs along with the glyph, or in a solid
     // color that morphs
     const $outline = drawLoopsAsPath(
-        g3, outlines,
+        g3, solids,
         morphFillOnly ? 'nostroke' : 'gray thin10 fill25'
     );
+    if ($outline !== undefined && holes.length > 0) {
+        $outline.setAttributeNS(null, 'mask', `url(#${addHoleMask(g3, holes)})`);
+        if (!morphFillOnly) { drawLoopsAsPath(g3, holes, 'gray thin10 nofill'); }
+    }
     if (morphFillOnly && $outline !== undefined) {
         if (morphPattern) {
             const { fill, filter } = addMorphingFill(g3, t, morphPose);
@@ -75,7 +91,7 @@ function drawMorph(
         // gauge rotation.
         const trunk = entries.find(
             e => e.glue === undefined && e.collapsed === undefined);
-        drawPoseGizmo(g3, outlines, {
+        drawPoseGizmo(g3, solids, {
             m: trunk !== undefined ? entryNetTurns(trunk) : 0,
             t
         });
@@ -94,6 +110,46 @@ function drawMorph(
     if (drawn.length > 0) {
         drawCross(g3, drawn[0][0][0], CROSS_SIZE, CROSS_CLASSES);
     }
+}
+
+
+/**
+ * Adds a mask that hides the union of the given loops (each loop's inside,
+ * as a nonzero fill) and returns its id.
+ *
+ * * a mask rather than reversed loops in the outline's path: the entries'
+ *   loops overlap at their seams, so winding numbers can't cut a hole
+ *   reliably
+ *
+ * @param g the group to add the mask to
+ * @param holes the holes' loops
+ */
+function addHoleMask(
+        g: SVGGElement,
+        holes: number[][][][]): string {
+
+    const $mask = document.createElementNS(XMLNS, 'mask');
+    $mask.setAttributeNS(null, 'id', HOLE_MASK_ID);
+    $mask.setAttributeNS(null, 'maskUnits', 'userSpaceOnUse');
+    $mask.setAttributeNS(null, 'x', `${-HOLE_MASK_EXTENT}`);
+    $mask.setAttributeNS(null, 'y', `${-HOLE_MASK_EXTENT}`);
+    $mask.setAttributeNS(null, 'width', `${2*HOLE_MASK_EXTENT}`);
+    $mask.setAttributeNS(null, 'height', `${2*HOLE_MASK_EXTENT}`);
+
+    // white: shown, black: hidden
+    const $all = document.createElementNS(XMLNS, 'rect');
+    $all.setAttributeNS(null, 'x', `${-HOLE_MASK_EXTENT}`);
+    $all.setAttributeNS(null, 'y', `${-HOLE_MASK_EXTENT}`);
+    $all.setAttributeNS(null, 'width', `${2*HOLE_MASK_EXTENT}`);
+    $all.setAttributeNS(null, 'height', `${2*HOLE_MASK_EXTENT}`);
+    $all.setAttributeNS(null, 'fill', 'white');
+    $mask.appendChild($all);
+    g.appendChild($mask);
+
+    const $holes = drawLoopsAsPath($mask, holes, '');
+    $holes?.setAttributeNS(null, 'fill', 'black');
+
+    return HOLE_MASK_ID;
 }
 
 

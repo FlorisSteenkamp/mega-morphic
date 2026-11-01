@@ -14,7 +14,8 @@ import { mapmap } from '../../utils/map-map.js';
 import { pAtIndex } from '../fs/p-at-idx.js';
 import { identityMatchOf } from '../segment-tree/match-seg-trees/identity-match-of.js';
 import { getUnit$ } from '../segment-tree/get-unit.js';
-
+import { matchHoles } from '../holes/match-holes.js';
+import { getComponentLoops } from '../holes/get-component-loops.js';
 
 /**
  * The scale a component without a partner shrinks to in the other frame -
@@ -37,6 +38,20 @@ interface GlyphComponent {
      * tree (`undefined`: matched at `cp`'s scale only)
      */
     readonly coarse: CpNode | undefined;
+    /**
+     * it with its holes split off - `undefined`: never morphed split
+     * (`buildMatchedEntries`)
+     */
+    readonly split: SplitGlyphComponent | undefined;
+}
+
+
+/** A component with its holes split off (see `SplitComponent`). */
+interface SplitGlyphComponent {
+    /** the component with its holes filled */
+    readonly filled: GlyphComponent;
+    /** each hole as a shape, in `getComponentLoops`' order */
+    readonly holes: GlyphComponent[];
 }
 
 
@@ -57,6 +72,9 @@ interface GlyphComponent {
  *
  * * a component pair is matched at one scale, or staggered when both have
  *   a coarse MAT (`buildPairEntries`)
+ *
+ * * a component pair may be morphed split - its filled outlines and its
+ *   holes as separate pairs (`buildMatchedEntries`)
  *
  * @param compsA glyph A's components
  * @param compsB glyph B's components
@@ -79,17 +97,11 @@ function buildGlyphMorphEntries(
             .toSorted(([i1], [i2]) =>
                 calcProcrustes$(loopsA[i1]).scale -
                 calcProcrustes$(loopsA[i2]).scale)
-            .map(([i, j]) => buildPairEntries(
+            .map(([i, j]) => buildMatchedEntries(
                 compsA[i], compsB[j], loopsA[i], loopsB[j], weights))
     ];
 
-    const entries: MorphEntry[] = [];
-    for (const block of blocks) {
-        const offset = entries.length;
-        entries.push(...block.map(e => e.glue === undefined
-            ? e
-            : { ...e, glue: { ...e.glue, e: e.glue.e + offset } }));
-    }
+    const entries = concatBlocks(blocks);
 
     // each component without a partner is tied to the matched shape at
     // the skeleton point nearest its centroid
@@ -102,12 +114,136 @@ function buildGlyphMorphEntries(
         const e = entries[i];
         if (e.lone !== true || e.glue !== undefined) { continue; }
 
-        const side = e.collapsed === 'b' ? 'a' : 'b';
-        const tether = calcTether(entries, centroids[lone++], side);
+        const p = centroids[lone++];
+        const tether = e.collapsed === 'b'
+            ? calcTether(entries, p, undefined)
+            : calcTether(entries, undefined, p);
         if (tether !== undefined) { entries[i] = { ...e, tether }; }
     }
 
     return entries;
+}
+
+
+/**
+ * Returns the blocks of entries concatenated, each block's entry indices
+ * (its glues' and tethers') shifted by the block's offset.
+ */
+function concatBlocks(
+        blocks: MorphEntry[][]): MorphEntry[] {
+
+    const entries: MorphEntry[] = [];
+    for (const block of blocks) {
+        const offset = entries.length;
+        for (const e of block) {
+            const { glue, tether } = e;
+            entries.push({
+                ...e,
+                ...(glue !== undefined ? { glue: { ...glue, e: glue.e + offset } } : {}),
+                ...(tether !== undefined ? { tether: { ...tether, e: tether.e + offset } } : {})
+            });
+        }
+    }
+
+    return entries;
+}
+
+
+/**
+ * Returns the morph entries of a matched component pair:
+ *
+ * * split (both `split`, both with holes, and every hole matched -
+ *   `matchHoles`): the filled components' entries, then each hole pair's
+ *   (marked `hole`, cut out when drawn) - each hole tied to the filled
+ *   skeleton at the point nearest it in both frames (`calcTether`), so it
+ *   moves along with the filled shape instead of on its own straight path
+ *
+ * * else: the pair's entries (`buildPairEntries`)
+ *
+ * @param a the component of A
+ * @param b the component of B
+ * @param loopA its outline loop
+ * @param loopB its outline loop
+ * @param weights the path cost weights
+ */
+function buildMatchedEntries(
+        a: GlyphComponent,
+        b: GlyphComponent,
+        loopA: number[][][],
+        loopB: number[][][],
+        weights: Partial<PathCostWeights>): MorphEntry[] {
+
+    const { split: splitA } = a;
+    const { split: splitB } = b;
+
+    const pairs = splitA !== undefined && splitB !== undefined &&
+        splitA.holes.length > 0 && splitB.holes.length > 0
+        ? getAllHolePairs(a.cp, b.cp)
+        : undefined;
+
+    if (splitA === undefined || splitB === undefined || pairs === undefined) {
+        return buildPairEntries(a, b, loopA, loopB, weights);
+    }
+
+    const filled = buildSplitEntries(splitA.filled, splitB.filled, weights);
+    const holeBlocks = pairs.map(([i, j]) =>
+        buildSplitEntries(splitA.holes[i], splitB.holes[j], weights)
+            .map(e => ({ ...e, hole: true as const })));
+
+    // (the filled block first, so its indices stay put)
+    const entries = concatBlocks([filled, ...holeBlocks]);
+
+    let offset = filled.length;
+    for (let n = 0; n < pairs.length; n++) {
+        const [i, j] = pairs[n];
+        const tether = calcTether(
+            filled,
+            calcProcrustes$(outlineLoopOf(splitA.holes[i].cp)).centroid,
+            calcProcrustes$(outlineLoopOf(splitB.holes[j].cp)).centroid);
+
+        const end = offset + holeBlocks[n].length;
+        for (let k = offset; k < end; k++) {
+            const e = entries[k];
+            if (e.glue === undefined && tether !== undefined) {
+                entries[k] = { ...e, tether };
+            }
+        }
+        offset = end;
+    }
+
+    return entries;
+}
+
+
+/**
+ * Returns the hole pairs of a component pair if every hole of both is
+ * matched (`matchHoles`), else `undefined`.
+ *
+ * @param cpA a `CpNode` of the component of A
+ * @param cpB a `CpNode` of the component of B
+ */
+function getAllHolePairs(
+        cpA: CpNode,
+        cpB: CpNode): [number, number][] | undefined {
+
+    const { match } = matchHoles(getComponentLoops(cpA), getComponentLoops(cpB));
+    const { pairs, onlyA, onlyB } = match;
+
+    return onlyA.length === 0 && onlyB.length === 0 ? pairs : undefined;
+}
+
+
+/**
+ * Returns the morph entries of a split-off pair (filled components or
+ * holes), each a single loop shape.
+ */
+function buildSplitEntries(
+        a: GlyphComponent,
+        b: GlyphComponent,
+        weights: Partial<PathCostWeights>): MorphEntry[] {
+
+    return buildPairEntries(
+        a, b, outlineLoopOf(a.cp), outlineLoopOf(b.cp), weights);
 }
 
 
@@ -151,41 +287,68 @@ function buildPairEntries(
 
 /**
  * Returns the tether (`Tether`) to the skeleton point of the matched
- * entries nearest `p`, in frame `side` - `undefined` if there are no
- * matched entries.
+ * entries nearest the point(s) to tie - `undefined` if there are no matched
+ * entries.
+ *
+ * * a point in one frame (a component without a partner): the nearest
+ *   skeleton point in that frame (`side` 'a' or 'b')
+ *
+ * * a point in each frame (a hole): the skeleton point of the least summed
+ *   distance to both, each in its frame (`side` 'both')
  *
  * * matched entries are the ones neither collapsed nor `lone` - their
- *   skeleton exists in both frames, point for point
+ *   skeleton exists in both frames, point for point - nor `hole` (a hole's
+ *   skeleton lies in empty space)
  *
  * * the skeleton is sampled at `TETHER_SAMPLES` points per segment
  *
  * @param entries the morph entries
- * @param p the point to tie (a component's centroid)
- * @param side the frame `p` is in
+ * @param pA the point to tie in frame A (`undefined`: none)
+ * @param pB the point to tie in frame B (`undefined`: none)
  */
 function calcTether(
         entries: MorphEntry[],
-        p: number[],
-        side: 'a' | 'b'): Tether | undefined {
+        pA: number[] | undefined,
+        pB: number[] | undefined): Tether | undefined {
+
+    const side = pA === undefined ? 'b' : pB === undefined ? 'a' : 'both';
 
     let best: Tether | undefined;
     let bestD = Infinity;
     for (let e = 0; e < entries.length; e++) {
-        const { skelPssA, skelPssB, collapsed, lone } = entries[e];
-        if (collapsed !== undefined || lone === true) { continue; }
+        const { skelPssA, skelPssB, collapsed, lone, hole } = entries[e];
+        if (collapsed !== undefined || lone === true || hole === true) {
+            continue;
+        }
 
-        const pss = side === 'a' ? skelPssA : skelPssB;
-        for (let j = 0; j < pss.length; j++) {
+        for (let j = 0; j < skelPssA.length; j++) {
             for (let s = 0; s <= TETHER_SAMPLES; s++) {
                 const k = j + s/TETHER_SAMPLES;
-                const q = pAtIndex(pss, k);
-                const d = hypot(q[0] - p[0], q[1] - p[1]);
+                const d =
+                    calcDistTo(skelPssA, k, pA) + calcDistTo(skelPssB, k, pB);
                 if (d < bestD) { bestD = d; best = { e, k, side }; }
             }
         }
     }
 
     return best;
+}
+
+
+/**
+ * Returns the distance from the skeleton point at fractional index `k` to
+ * `p` (`0` if there is no `p`).
+ */
+function calcDistTo(
+        pss: number[][][],
+        k: number,
+        p: number[] | undefined): number {
+
+    if (p === undefined) { return 0; }
+
+    const q = pAtIndex(pss, k);
+
+    return hypot(q[0] - p[0], q[1] - p[1]);
 }
 
 

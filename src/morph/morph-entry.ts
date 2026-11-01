@@ -42,6 +42,11 @@ interface MorphEntry {
      */
     readonly lone?: true;
     /**
+     * part of a hole's morph (`splitHoles`) - its outline is cut out of the
+     * others' when drawn, and left out of the pose measurement
+     */
+    readonly hole?: true;
+    /**
      * a free `lone` entry's tie to the matched shape: it is carried along by
      * the drawn motion of a point on a matched entry's skeleton
      */
@@ -50,16 +55,18 @@ interface MorphEntry {
 
 
 /**
- * Where a component without a partner is tied to the matched shape: the
- * point at fractional segment-boundary index `k` of entry `e`'s skeleton
- * (index for index the same point in both frames). Its whole component is
- * translated by how far that point has moved, at the drawn `t`, from where
- * it is in the component's own frame (`side`).
+ * Where a component without a partner (or a hole) is tied to the matched
+ * shape: the point at fractional segment-boundary index `k` of entry `e`'s
+ * skeleton (index for index the same point in both frames). Its whole
+ * component is translated by how far that point has moved, at the drawn
+ * `t`, from where it is in the component's own frame (`side` 'a' or 'b') -
+ * or, for a hole, which exists in both frames (`side` 'both'), from where
+ * it would be on the straight path between its two frames.
  */
 interface Tether {
     readonly e: number;
     readonly k: number;
-    readonly side: 'a' | 'b';
+    readonly side: 'a' | 'b' | 'both';
 }
 
 

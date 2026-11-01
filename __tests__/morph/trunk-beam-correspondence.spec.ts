@@ -3,8 +3,6 @@
 // rank by dp + sway and dedupe reversed twins - else the no-rotation
 // pairing never reaches the recursion and a prong gets deleted + regrown.
 import { describe, test, expect } from '@jest/globals';
-import { readFileSync } from 'node:fs';
-import { resolve } from 'node:path';
 import { findMats, getPathsFromStr, MatOptions } from 'flo-mat';
 import type { Segment } from '../../src/morph/segment-tree/segment.js';
 import type { SegOp } from '../../src/morph/segment-tree/match-seg-trees/seg-op.js';
@@ -19,13 +17,12 @@ import { sampleSegTree } from '../../src/morph/segment-tree/sample-seg-tree.js';
 import { productDtw } from '../../src/morph/segment-tree/product-dtw.js';
 import { matchSegTrees } from '../../src/morph/segment-tree/match-seg-trees/match-seg-trees.js';
 import { calcProcrustes$ } from '../../src/morph/procrustes/calc-procrustes.js';
-import { parseSvgFont } from '../../src/load-svg/load-svg-font.js';
+import { readVectors } from '../helpers/read-vectors.js';
 
 const { sqrt } = Math;
 
 function loadLoops(glyphName: string): number[][][][] {
-    const font = parseSvgFont(
-        readFileSync(resolve('fonts-test/vectors.svg'), 'utf-8'));
+    const font = readVectors();
     const d = font.find(g => g.name === glyphName)!.d;
     return getPathsFromStr(d);
 }

@@ -1,24 +1,28 @@
+import type { VectorSet } from "../../load-svg/vector-sets.js";
 import { loadSvgFont } from "../../load-svg/load-svg-font.js";
+import { vectorSets, vectorSetPath } from "../../load-svg/vector-sets.js";
 
 
-const path = './fonts-test/vectors.svg';
-
-
-const _font = loadSvgFont(path);
+const _fonts = Promise.all(
+    vectorSets.map(set => loadSvgFont(`./${vectorSetPath(set)}`))
+);
 
 
 /** The glyph's SVG path string. */
 async function loadPath(glyphName: string): Promise<string> {
-    const font = await _font;
+    const fonts = await _fonts;
 
-    return font.find(glyph => glyph.name === glyphName)!.d;
+    return fonts.flat().find(glyph => glyph.name === glyphName)!.d;
 }
 
 
-async function getGlyphNames() {
-    const font = await _font;
+/** Returns the glyph names per vector set. */
+async function getGlyphNames(): Promise<Record<VectorSet, string[]>> {
+    const fonts = await _fonts;
 
-    return font.map(glyph => glyph.name);
+    return Object.fromEntries(vectorSets.map((set, i) =>
+        [set, fonts[i].map(glyph => glyph.name)]
+    )) as Record<VectorSet, string[]>;
 }
 
 

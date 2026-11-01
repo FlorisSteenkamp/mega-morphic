@@ -32,10 +32,10 @@ jobs:
       # only what the page loads: the html, styles, bundle and test vectors
       - name: Stage site
         run: |
-          mkdir -p _site/fonts-test
+          mkdir -p _site/vectors
           cp index.html _site/
           cp -r css dist _site/
-          cp fonts-test/vectors.svg _site/fonts-test/
+          cp vectors/vectors-*.svg _site/vectors/
       - uses: actions/configure-pages@v5
       - uses: actions/upload-pages-artifact@v3
         with:

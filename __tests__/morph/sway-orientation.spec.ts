@@ -2,8 +2,6 @@
 // (symmetric bar) - without the anisotropy-scaled sway term the matcher
 // may pick the reversed route and the whole morph rotates ~180°.
 import { describe, test, expect } from '@jest/globals';
-import { readFileSync } from 'node:fs';
-import { resolve } from 'node:path';
 import { findMats, getPathsFromStr, MatOptions } from 'flo-mat';
 import type { Segment } from '../../src/morph/segment-tree/segment.js';
 import { defaultPathWeights } from '../../src/morph/match-paths/path-cost-weights.js';
@@ -15,7 +13,7 @@ import { calcProcrustes$ } from '../../src/morph/procrustes/calc-procrustes.js';
 import { unwrappedChordAngles$ as unwrappedChordAngles } from '../../src/morph/intrinsic-skeleton/unwrapped-chord-angles.js';
 import { wrapAngle } from '../../src/morph/intrinsic-skeleton/wrap-angle.js';
 import { length$ } from '../../src/morph/fs/length.js';
-import { parseSvgFont } from '../../src/load-svg/load-svg-font.js';
+import { readVectors } from '../helpers/read-vectors.js';
 
 const { sqrt, abs, PI: π } = Math;
 
@@ -32,8 +30,7 @@ const options: MatOptions = {
 let SAT = false;
 
 function loadGraph(glyphName: string): Segment[] {
-    const font = parseSvgFont(
-        readFileSync(resolve('fonts-test/vectors.svg'), 'utf-8'));
+    const font = readVectors();
     const d = font.find(g => g.name === glyphName)!.d;
     const mats = findMats(getPathsFromStr(d), { ...options, applySat: SAT });
     return segTreeWithLoop(mats[0].cpNode);

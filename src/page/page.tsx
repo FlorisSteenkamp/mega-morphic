@@ -1,7 +1,7 @@
 declare var _debug_: Debug;
 import type { Debug } from '../debug/debug.js';
 import type { ToDrawKey } from '../state/to-draw.js';
-import { toDrawKeys } from '../state/to-draw.js';
+import { shownToDrawKeys } from '../state/to-draw.js';
 import type { ClickFor } from '../state/click-for.js';
 import { defaultPageState } from '../state/default-state.js';
 import type { Props } from './props.js';
@@ -34,8 +34,11 @@ import { mouseDown } from './mouse/mouse-down.js';
 import { mouseUp } from './mouse/mouse-up.js';
 import { panMouseDown } from './mouse/pan.js';
 import { drawElements } from './fs-consts-types/draw-elems.js';
+import type { VectorSet } from '../load-svg/vector-sets.js';
+import type { SplitComponent } from '../morph/holes/split-component.js';
+import { vectorSets } from '../load-svg/vector-sets.js';
 import { getGlyphNames, loadPath } from './fs-consts-types/load-path.js';
-import { drawOverlay } from './events/draw-overlay.js';
+import { drawOverlay, isOverlayKey } from './events/draw-overlay.js';
 import { NeedleWindow } from './components/needle-window.js';
 import { DtwWindow } from './components/dtw-window.js';
 import { PresetSelect } from './components/preset-select.js';
@@ -50,7 +53,14 @@ const VIEW_TOGGLES: readonly (readonly [number, string])[] = [
 ];
 
 
-const getGlyphNames_ = await getGlyphNames();
+/** the glyph names per vector set */
+const glyphNames = await getGlyphNames();
+
+
+/** Returns the vector set holding the glyph (`'zoo'` if none does). */
+function getVectorSetOf(glyphName: string): VectorSet {
+    return vectorSets.find(set => glyphNames[set].includes(glyphName)) ?? 'zoo';
+}
 
 
 /** cost-class color per weight group (mirrors PathCostWeights grouping) */
@@ -75,7 +85,6 @@ const weightRanges: Record<
     childSway: { max: 10, step: 0.25, group: 'children' },
     sway: { max: 20, step: 0.5, group: 'trunk' }
 };
-// console.log(getGlyphNames_);
 
 /** the morph's playback: one pass, glyph 1 → glyph 2, at speed 1 (seconds) */
 const MORPH_PASS_SECONDS = 3;
@@ -105,12 +114,13 @@ function Page(props: Props) {
     const {
         toDraw, viewbox1, viewbox2, viewbox3, deduced, showSvgs,
         flipH, flipV1, flipV2,
-        showDebug, glyph1Name, glyph2Name, glyphPresets, clickFor,
-        simplify, viewMat, staggeredSat, morphFillOnly, morphPattern,
+        showDebug, glyph1Name, glyph2Name, vectorSet1, vectorSet2,
+        glyphPresets, clickFor,
+        simplify, viewMat, staggeredSat, splitHoles, morphFillOnly, morphPattern,
         showPose, satScale, showDelay, pathWeights,
         morphT, morphSpeed,
     } = pageState;
-    const { mats1, mats2, pathStr1, pathStr2 } = deduced;
+    const { mats1, mats2, splits1, splits2, pathStr1, pathStr2 } = deduced;
 
     // Hooks
     const svgRef1 = useRef<SVGSVGElement>(null);
@@ -215,11 +225,13 @@ function Page(props: Props) {
     function toDrawChanged(key: ToDrawKey) {
         return (shouldDraw: boolean) => {
             upd(pageState.toDraw, { [key]: shouldDraw });
-            if (key === 'match' || key === 'vertexNums') {
+            if (isOverlayKey(key)) {
                 drawOverlay(refPageData, key, shouldDraw);
                 return;
             }
-            redrawElements(refPageData.current!, mats1, mats2, viewbox1, viewbox2);
+            redrawElements(
+                refPageData.current!, mats1, mats2, splits1, splits2,
+                viewbox1, viewbox2);
         }
     }
 
@@ -307,7 +319,12 @@ function Page(props: Props) {
             preset: GlyphPreset) {
 
         const [glyph1Name, glyph2Name] = preset;
-        updAndReload({ glyph1Name, glyph2Name }, true);
+        updAndReload({
+            glyph1Name, glyph2Name,
+            // the menus follow the preset's glyphs
+            vectorSet1: getVectorSetOf(glyph1Name),
+            vectorSet2: getVectorSetOf(glyph2Name)
+        }, true);
     }
 
     /** Save the given glyph pair as a new preset. */
@@ -385,15 +402,27 @@ function Page(props: Props) {
                         onDeleted={onPresetDeleted}
                     />
                     <SimpleSelect
+                        value={vectorSet1}
+                        options={vectorSets}
+                        style={{ minWidth: '80px' }}
+                        onChanged={set => upd(pageState, { vectorSet1: set as VectorSet })}
+                    />
+                    <SimpleSelect
                         value={glyph1Name}
-                        options={getGlyphNames_}
+                        options={glyphNames[vectorSet1]}
                         style={{ minWidth: '140px' }}
                         onChanged={glyph1Name => updAndReload({ glyph1Name }, true)}
                     />
                     <span className="ui-arrow"><ArrowRightIcon /></span>
                     <SimpleSelect
+                        value={vectorSet2}
+                        options={vectorSets}
+                        style={{ minWidth: '80px' }}
+                        onChanged={set => upd(pageState, { vectorSet2: set as VectorSet })}
+                    />
+                    <SimpleSelect
                         value={glyph2Name}
-                        options={getGlyphNames_}
+                        options={glyphNames[vectorSet2]}
                         style={{ minWidth: '140px' }}
                         onChanged={glyph2Name => updAndReload({ glyph2Name }, true)}
                     />
@@ -468,7 +497,7 @@ function Page(props: Props) {
             {showDebug &&
             <section className="ui-debug">
                 <DebugRow label="Draw">
-                    {toDrawKeys.map(key =>
+                    {shownToDrawKeys.map(key =>
                         <Checkbox
                             key={key}
                             checked={toDraw[key]}
@@ -483,13 +512,14 @@ function Page(props: Props) {
                         twoProng: { text: '2-prong' },
                         threeProng: { text: '3-prong' },
                         bezier: { text: 'bezier' },
-                        loopSimplified: { text: 'loop (simplified)' },
-                        loopset: { text: 'loop set' },
+                        // hidden to declutter - re-enable as needed
+                        // loopSimplified: { text: 'loop (simplified)' },
+                        // loopset: { text: 'loop set' },
                         cp: { text: 'cp' },
-                        curvature: { text: 'k'},
+                        // curvature: { text: 'k'},
                         curve: { text: 'curve' },
-                        matCurve: { text: 'mat-curve'},
-                        salience: { text: 'salience' },
+                        // matCurve: { text: 'mat-curve'},
+                        // salience: { text: 'salience' },
                         fatBranch: { text: 'fat branch' },
                         fatTree: { text: 'fat tree' },
                         pathMatchResult: { text: 'path match' },
@@ -506,6 +536,7 @@ function Page(props: Props) {
                     <Checkbox checked={!viewMat} text="SAT enabled" onChanged={satEnabled => updAndReload({ viewMat: !satEnabled }, false)} />
                     <Checkbox checked={staggeredSat} text={`staggered SAT (${STAGGER_COARSE} → ${STAGGER_FINE})`} onChanged={staggeredSat => updAndReload({ staggeredSat }, false)} />
                     <Checkbox checked={showPose} text="pose" onChanged={showPose => updAndRedrawMorph({ showPose })} />
+                    <Checkbox checked={splitHoles} text="split holes" onChanged={splitHoles => updAndReload({ splitHoles }, false)} />
                     <div className="ui-field" style={{ width: '200px' }}>
                         <span className="ui-field-label">SAT scale · {satScale}</span>
                         <Slider
@@ -655,7 +686,7 @@ async function lazyLoadDeduced(
 
     const {
         bezierLoops1, bezierLoops2, mats1, mats2, coarseMats1, coarseMats2,
-        viewbox1, viewbox2, timingAll
+        splits1, splits2, viewbox1, viewbox2, timingAll
     } = loadDeducedProps(stateControl, pathStr1, pathStr2);
 
     upd$(stateControl.state.appState.pageState.deduced, {
@@ -669,12 +700,14 @@ async function lazyLoadDeduced(
         pathStr2: bezierLoops2
             .map(loop => beziersToSvgPathStr(loop)).join(' '),
         mats2,
-        coarseMats1, coarseMats2
+        coarseMats1, coarseMats2,
+        splits1, splits2
     });
 
     if (typeof _debug_ !== 'undefined') { logSomeStuff(timingAll); }
 
-    redrawElements(pageData, mats1, mats2, viewbox1, viewbox2);
+    redrawElements(
+        pageData, mats1, mats2, splits1, splits2, viewbox1, viewbox2);
 
     upd(stateControl.state.appState.pageState, changeViewbox
         ? { viewbox1, viewbox2, viewbox3: unionViewbox(viewbox1, viewbox2) }
@@ -691,6 +724,8 @@ async function lazyLoadDeduced(
  * @param pageData
  * @param mats1 shape 1's MATs
  * @param mats2 shape 2's MATs
+ * @param splits1 shape 1's MATs with their holes split off
+ * @param splits2 shape 2's MATs with their holes split off
  * @param viewbox1 shape 1's viewbox (sets the elements' scale)
  * @param viewbox2 shape 2's viewbox
  */
@@ -698,6 +733,8 @@ function redrawElements(
         pageData: PageData,
         mats1: Mat[],
         mats2: Mat[],
+        splits1: SplitComponent[],
+        splits2: SplitComponent[],
         viewbox1: number[][],
         viewbox2: number[][]) {
 
@@ -706,8 +743,13 @@ function redrawElements(
     const { $svgs, $svgs2 } = transientState;
     const { satScale, toDraw } = appState.pageState;
 
-    drawElements(satScale, mats1, toDraw, svgRef1.current!, $svgs, viewbox1);
-    drawElements(satScale, mats2, toDraw, svgRef2.current!, $svgs2, viewbox2);
+    const filledMats1 = splits1.map(s => s.filled.mat);
+    const filledMats2 = splits2.map(s => s.filled.mat);
+
+    drawElements(
+        satScale, mats1, filledMats1, toDraw, svgRef1.current!, $svgs, viewbox1);
+    drawElements(
+        satScale, mats2, filledMats2, toDraw, svgRef2.current!, $svgs2, viewbox2);
 }
 
 

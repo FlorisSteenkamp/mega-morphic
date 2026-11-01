@@ -85,12 +85,14 @@ const getMorphedSkeleton$ = memoize(function(
         }
 
         // A component without a partner rides its tether point's drawn
-        // motion (zero in its own frame's t).
+        // motion (zero in its own frame's t); a hole rides how far that
+        // motion strays from the point's straight path between the frames
+        // (zero at t=0 and t=1).
         const { tether } = entries[i];
         if (tether !== undefined) {
             const { e, k, side } = tether;
             const { skelPssA: pssA, skelPssB: pssB } = entries[e];
-            const own = pAtIndex(side === 'a' ? pssA : pssB, k);
+            const own = calcTetherOwnPoint(pssA, pssB, k, side, t);
             const now = pAtIndex(getMorphedSkeleton$(entries, t, e).pss, k);
 
             pss = pss.map(ps => translate(ps, [now[0] - own[0], now[1] - own[1]]));
@@ -441,6 +443,34 @@ function meanPoint(pss: number[][][]): number[] {
     return sumL > 0
         ? [x/sumL, y/sumL]
         : [pss[0][0][0], pss[0][0][1]];
+}
+
+
+/**
+ * Returns the tether point's undriven position at `t`: in its own frame
+ * (`side` 'a' or 'b'), or on the straight path between its two frames
+ * (`side` 'both').
+ *
+ * @param pssA the tether entry's skeleton in frame A
+ * @param pssB the tether entry's skeleton in frame B
+ * @param k the point's fractional segment-boundary index
+ * @param side the tethered entry's frame(s)
+ * @param t the morph's t
+ */
+function calcTetherOwnPoint(
+        pssA: number[][][],
+        pssB: number[][][],
+        k: number,
+        side: 'a' | 'b' | 'both',
+        t: number): number[] {
+
+    if (side === 'a') { return pAtIndex(pssA, k); }
+    if (side === 'b') { return pAtIndex(pssB, k); }
+
+    const pA = pAtIndex(pssA, k);
+    const pB = pAtIndex(pssB, k);
+
+    return [pA[0] + t*(pB[0] - pA[0]), pA[1] + t*(pB[1] - pA[1])];
 }
 
 

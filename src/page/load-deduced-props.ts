@@ -1,5 +1,7 @@
 import type { Debug } from '../debug/debug.js';
+import type { SplitComponent } from '../morph/holes/split-component.js';
 import { getPathsFromStr, findMats, Mat } from 'flo-mat';
+import { getSplitComponent } from '../morph/holes/split-component.js';
 import { reverseShapeOrientation } from 'flo-boolean';
 import { StateControl } from '../state-control/state-control';
 import { updDebugGlobal } from './fs-consts-types/upd-debug-global';
@@ -38,6 +40,8 @@ function loadDeducedProps(
     let mats2: Mat[] = [];
     let coarseMats1: Mat[] = [];
     let coarseMats2: Mat[] = [];
+    let splits1: SplitComponent[] = [];
+    let splits2: SplitComponent[] = [];
 
     // Resets _debug_
     updDebugGlobal(stateControl, IS_DEBUG_ON);
@@ -61,6 +65,11 @@ function loadDeducedProps(
             coarseMats1 = mats1.map(prepareStaggered);
             coarseMats2 = mats2.map(prepareStaggered);
         }
+
+        splits1 = mats1.map((m, i) =>
+            getSplitComponent(m, coarseMats1[i], options));
+        splits2 = mats2.map((m, i) =>
+            getSplitComponent(m, coarseMats2[i], options));
     } catch (e) {
         console.log(e);
     } finally {
@@ -69,7 +78,7 @@ function loadDeducedProps(
 
     return {
         bezierLoops1, bezierLoops2, mats1, mats2, coarseMats1, coarseMats2,
-        viewbox1, viewbox2, timingAll
+        splits1, splits2, viewbox1, viewbox2, timingAll
     };
 }
 

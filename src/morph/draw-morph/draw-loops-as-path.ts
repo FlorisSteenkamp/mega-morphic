@@ -7,7 +7,7 @@ import { segD } from "../../draw/seg-d.js";
  * returns it (`undefined` if there is nothing to draw).
  */
 function drawLoopsAsPath(
-        g: SVGGElement,
+        g: SVGElement,
         loops: number[][][][],
         classes: string): SVGPathElement | undefined {
 

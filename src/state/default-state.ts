@@ -36,6 +36,8 @@ const defaultDeduced: DeducedState = {
     mats2: [],
     coarseMats1: [],
     coarseMats2: [],
+    splits1: [],
+    splits2: [],
     bezierLoops1: [],
     bezierLoops2: [],
     morphPose: undefined!
@@ -52,6 +54,9 @@ const defaultPageState: PageState = {
     viewbox3: [[0,0],[1450,1450]],
     glyph1Name: 'zoo-horse',
     glyph2Name: 'zoo-cat',
+    splitHoles: false,
+    vectorSet1: 'zoo',
+    vectorSet2: 'zoo',
     glyphPresets: [
         ['zoo-horse', 'zoo-cat'], ['k', 'x'], ['seven', 'three']
     ],

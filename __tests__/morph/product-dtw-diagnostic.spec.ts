@@ -1,8 +1,6 @@
 // Product-graph DTW diagnostic: scores + routes of the segment matcher's
 // free segment-level routing (score-only trunk DTW + hierarchical match).
 import { describe, test, expect } from '@jest/globals';
-import { readFileSync } from 'node:fs';
-import { resolve } from 'node:path';
 import { findMats, getPathsFromStr, MatOptions } from 'flo-mat';
 import type { Segment } from '../../src/morph/segment-tree/segment.js';
 import { defaultPathWeights } from '../../src/morph/match-paths/path-cost-weights.js';
@@ -16,7 +14,7 @@ import { productDtw } from '../../src/morph/segment-tree/product-dtw.js';
 import { matchSegTrees } from '../../src/morph/segment-tree/match-seg-trees/match-seg-trees.js';
 import { buildMorphEntries } from '../../src/morph/build-morph-entries/build-morph-entries.js';
 import { resolveMorphAt } from '../../src/morph/resolve-morph-at/resolve-morph-at.js';
-import { parseSvgFont } from '../../src/load-svg/load-svg-font.js';
+import { readVectors } from '../helpers/read-vectors.js';
 
 const { sqrt, abs, max, min, hypot } = Math;
 
@@ -38,8 +36,7 @@ function loadGraph(glyphName: string): Segment[] {
 
 function loadGlyph(glyphName: string): {
         g: Segment[]; loops: number[][][][] } {
-    const font = parseSvgFont(
-        readFileSync(resolve('fonts-test/vectors.svg'), 'utf-8'));
+    const font = readVectors();
     const d = font.find(g => g.name === glyphName)!.d;
     const loops = getPathsFromStr(d);
     const mats = findMats(loops, options);

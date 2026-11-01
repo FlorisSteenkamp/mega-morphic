@@ -3,14 +3,12 @@
 // getMorphedSkeleton$). Probe = length-weighted mean material direction,
 // unwrapped over t.
 import { describe, test, expect } from '@jest/globals';
-import { readFileSync } from 'node:fs';
-import { resolve } from 'node:path';
 import { findMats, getPathsFromStr, MatOptions } from 'flo-mat';
 import type { Segment } from '../../src/morph/segment-tree/segment.js';
 import { segTreeWithLoop, loopOf } from '../helpers/seg-tree-with-loop.js';
 import { buildMorphEntries } from '../../src/morph/build-morph-entries/build-morph-entries.js';
 import { resolveMorphAt } from '../../src/morph/resolve-morph-at/resolve-morph-at.js';
-import { parseSvgFont } from '../../src/load-svg/load-svg-font.js';
+import { readVectors } from '../helpers/read-vectors.js';
 
 const { atan2, hypot, PI: π } = Math;
 
@@ -25,8 +23,7 @@ const options: MatOptions = {
 };
 
 function loadGraph(glyphName: string): Segment[] {
-    const font = parseSvgFont(
-        readFileSync(resolve('fonts-test/vectors.svg'), 'utf-8'));
+    const font = readVectors();
     const d = font.find(g => g.name === glyphName)!.d;
     const loops = getPathsFromStr(d);
     const mats = findMats(loops, options);

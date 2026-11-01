@@ -76,11 +76,19 @@ Run the tests with `npx jest`.
 
 ## Test vectors
 
-All the shapes live in a single SVG font, `fonts-test/vectors.svg`.
+The shapes live in SVG fonts, one per set (`vectors/vectors-<set>.svg`). The
+set menu in front of each glyph menu picks the set:
+
+- `zoo`: animal silhouettes (`zoo-…`)
+- `achi`: the Achispado font's letters, digits and punctuation
+- `script`: A, M, k and x from 54 script fonts (`kayla_A`, `butter_x`, …)
+- `mi`: Material icons (`mi_…`)
+- `other`: a few more alphabets (`Q_…`, `an_…`, …) and test shapes
 
 The animal silhouettes come from [PhyloPic](https://www.phylopic.org/). Their
 licenses vary (CC0, PDM, CC BY, CC BY-SA, CC BY-NC, CC BY-NC-SA). Each
-glyph's credit and license are in the comment above it in the file.
+glyph's credit and license are in the comment above it in
+`vectors/vectors-zoo.svg`.
 
 
 ## License

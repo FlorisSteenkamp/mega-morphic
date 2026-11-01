@@ -1,15 +1,13 @@
 // Diagnostic: replicate the full onMorphClicked → drawMorph envelope-union
 // pipeline on real glyphs to find why the union draws nothing in the app.
 import { describe, test, beforeAll, expect } from '@jest/globals';
-import { readFileSync } from 'node:fs';
-import { resolve } from 'node:path';
 import { findMats, getPathsFromStr, MatOptions } from 'flo-mat';
 import { boolean, getShapeArea, enableDebugForBooleanOp } from 'flo-boolean';
 import type { Segment } from '../../src/morph/segment-tree/segment.js';
 import { buildMorphEntries } from '../../src/morph/build-morph-entries/build-morph-entries.js';
 import { resolveMorphAt } from '../../src/morph/resolve-morph-at/resolve-morph-at.js';
 import { segTreeWithLoop, loopOf } from '../helpers/seg-tree-with-loop.js';
-import { parseSvgFont } from '../../src/load-svg/load-svg-font.js';
+import { readVectors } from '../helpers/read-vectors.js';
 
 
 const options: MatOptions = {
@@ -23,8 +21,7 @@ const options: MatOptions = {
 };
 
 function loadGlyph(glyphName: string) {
-    const font = parseSvgFont(
-        readFileSync(resolve('fonts-test/vectors.svg'), 'utf-8'));
+    const font = readVectors();
     const d = font.find(g => g.name === glyphName)!.d;
     const loops = getPathsFromStr(d);
     const mats = findMats(loops, options);

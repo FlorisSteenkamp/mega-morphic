@@ -11,6 +11,7 @@ import type { ToDraw } from "../../state/to-draw.js";
 import type { GeneratedSvgs } from './create-empty-generated-svgs.js';
 import { toDrawKeys } from "../../state/to-draw.js";
 import { deleteSvgs } from './delete-svgs.js';
+import { isOverlayKey } from '../events/draw-overlay.js';
 import { drawLeaves } from '../../draw-elem/draw-leaves.js';
 import { drawFs } from 'flo-draw';
 import { drawBranch } from '../../draw-elem/draw-branch.js';
@@ -45,6 +46,7 @@ const colors = [
 function drawElements(
         satScale: number,
         mats: Mat[],
+        filledMats: Mat[],
         toDraws: ToDraw,
         svg$: SVGElement,
         $svgs: GeneratedSvgs,
@@ -60,8 +62,8 @@ function drawElements(
     // (the key list, not `toDraws`' own keys - a saved state may carry
     // stale ones)
     for (const elemType of toDrawKeys) {
-        // the match's overlays are drawn by `drawOverlay`
-        if (elemType === 'match' || elemType === 'vertexNums') { continue; }
+        // the overlays are drawn by `drawOverlay`
+        if (isOverlayKey(elemType)) { continue; }
 
         const toDraw = toDraws[elemType];
 
@@ -70,7 +72,7 @@ function drawElements(
 
         if (!toDraw) { continue; }
 
-        for (const mat of mats) {
+        for (const [i, mat] of mats.entries()) {
             if (elemType === 'holeCloser') {
                 const holeClosers = getHoleClosers(mat.cpNode);
                 for (const holeCloser of holeClosers) {
@@ -96,6 +98,10 @@ function drawElements(
 
             if (elemType === 'mat') {
                 svgElems.push(drawMat(g, mat));
+            }
+
+            if (elemType === 'matNoHoles' && filledMats[i] !== undefined) {
+                svgElems.push(drawMat(g, filledMats[i]));
             }
 
             if (elemType === 'oneProng') {

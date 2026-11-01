@@ -3,6 +3,7 @@ import type { DeducedState } from './deduced-state.js';
 import type { ClickFor } from './click-for.js';
 import type { PathCostWeights } from '../morph/match-paths/path-cost-weights.js';
 import type { GlyphPreset } from './glyph-preset.js';
+import type { VectorSet } from '../load-svg/vector-sets.js';
 
 
 interface PageState {
@@ -10,6 +11,10 @@ interface PageState {
     readonly deduced: DeducedState;
     readonly glyph1Name: string;
     readonly glyph2Name: string;
+    /** the vector set glyph 1's menu lists */
+    readonly vectorSet1: VectorSet;
+    /** the vector set glyph 2's menu lists */
+    readonly vectorSet2: VectorSet;
     /** saved glyph pairs, selectable from the presets dropdown */
     readonly glyphPresets: readonly GlyphPreset[];
     readonly viewbox1: number[][];
@@ -28,6 +33,12 @@ interface PageState {
      */
     readonly staggeredSat: boolean;
     readonly simplify: boolean;
+    /**
+     * experimental: a component pair whose holes all match is morphed as
+     * its filled outlines plus its hole pairs, the holes cut out when drawn
+     * (`buildGlyphMorphEntries`)
+     */
+    readonly splitHoles: boolean;
     /** Which of the three SVGs are shown (shape 1, shape 2, morph). */
     readonly showSvgs: readonly [boolean, boolean, boolean];
     /** Show the debug controls (debug elements, click-for buttons, MAT
